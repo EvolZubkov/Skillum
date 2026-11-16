@@ -2810,7 +2810,7 @@ HSL-компоненты** (без `hsl(...)`), чтобы их можно бы�
 | `MANIFEST_SCHEMA` | Нарушена схема (нет `id`/`name`/`version`/`contentTemplates` и т.д.) |
 | `ID_PATTERN` | `id` не соответствует `^[a-z0-9-]+$` |
 | `API_VERSION_UNSUPPORTED` | `templateApiVersion` не из поддерживаемых (`1.0`) |
-| `ID_EXISTS` / `ID_MISMATCH` | Конфликт id при создании / несовпадение при обновлении |
+| `ID_EXISTS` / `ID_MISMATCH` | Конфликт id при создании / несовпадение при обновлении. Архив другого шаблона отклоняется, обновляемый шаблон не меняется и невалидным не помечается |
 | `REQUIRED_FIELD_MISSING` | Нет `assets.preview`, `preview`, `params` или `capabilities` |
 | `FILE_MISSING` | Файл, на который ссылается манифест, отсутствует |
 | `LAYOUT_TEMPLATE_SYNTAX` | Макет содержит невалидный DSL (незакрытый блок, `{{{ }}}`, выражение) — не компилируется |
