@@ -157,6 +157,22 @@ function normalizeExternalLinks(input: string): { value: string; removed: number
   return { value, removed };
 }
 
+/**
+ * Gives every external link in stored markup `target="_blank" rel="noopener noreferrer"`.
+ *
+ * Pages saved before the sanitiser started adding the attributes keep the bare `<a href>`
+ * in the database, and a rebuild alone never re-runs the sanitiser over them. The package
+ * exporter calls this so an old page opens its links in a new window instead of replacing
+ * the LMS frame. Attributes the author wrote are kept; a second pass is a no-op.
+ *
+ * @param html Stored markup.
+ * @returns The markup with link attributes settled; the input itself when it has no external link.
+ */
+export function ensureExternalLinkTargets(html: string): string {
+  if (!/<a[\s>]/i.test(html)) return html;
+  return normalizeExternalLinks(html).value;
+}
+
 /** Extracts the concrete event-handler attribute name (e.g. "onclick") from a match. */
 function extractOnAttrName(match: string): string {
   const m = /\s+(on\w+)/i.exec(match);

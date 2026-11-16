@@ -1,5 +1,6 @@
 import type { Test, TestSection, Topic, Question, TopicCourse, TopicEvent, PassRule, AdaptiveTopicSettings, AdaptiveLevel, AdaptiveLevelLink, ContentPage, ResultVariable, Scale, QuestionMeasurement, RetakePolicy, TestQuestionScoring, ReportBlockRow } from "@shared/schema";
 import { sanitizeHtml, placeholderScope } from "../../utils/html-sanitizer";
+import { ensureExternalLinkTargets } from "@shared/security/html-sanitize";
 import { withCurrentScenario } from "@shared/sim/upgrade";
 import { findEligibilityPlugin, findEligibilityConfig } from "@shared/eligibility/registry";
 import { resolveAnswerCommitScope } from "@shared/flow/answer-commit-scope";
@@ -940,7 +941,13 @@ export function buildTestJson(data: ExportData): string {
     };
   }
 
-  return JSON.stringify(test, null, 2);
+  // Stored author markup may predate the sanitiser's link rule: settle `target` for every
+  // external link at bake time so the LMS frame is never navigated away from the attempt.
+  return JSON.stringify(
+    test,
+    (_key, value) => (typeof value === "string" ? ensureExternalLinkTargets(value) : value),
+    2,
+  );
 }
 
 export type { ExportData };
