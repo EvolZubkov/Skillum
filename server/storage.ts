@@ -169,7 +169,7 @@ export interface IStorage {
   getTestFolderGrants(): Promise<TestFolderAccessGrant[]>;
   getTestFolderGrantsForFolder(folderId: string): Promise<TestFolderAccessGrant[]>;
   upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant>;
-  removeTestFolderGrant(folderId: string, userId: string, slot: TestGrantSlot): Promise<boolean>;
+  removeTestFolderGrant(folderId: string, userId: string): Promise<boolean>;
   /** Folder of a test: `null` = root, `undefined` = no such test. */
   getTestFolderIdOfTest(testId: string): Promise<string | null | undefined>;
   getFolderIdsOfTests(testIds: readonly string[]): Promise<Map<string, string | null>>;
@@ -828,8 +828,8 @@ export class DatabaseStorage implements IStorage {
     return this.accessRepo.upsertTestFolderGrant(grant);
   }
 
-  removeTestFolderGrant(folderId: string, userId: string, slot: TestGrantSlot): Promise<boolean> {
-    return this.accessRepo.removeTestFolderGrant(folderId, userId, slot);
+  removeTestFolderGrant(folderId: string, userId: string): Promise<boolean> {
+    return this.accessRepo.removeTestFolderGrant(folderId, userId);
   }
 
   getTestFolderIdOfTest(testId: string): Promise<string | null | undefined> {

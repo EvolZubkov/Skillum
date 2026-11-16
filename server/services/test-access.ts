@@ -105,7 +105,8 @@ export async function canReviewTest(
   if (await canEditTest(roles, userId, test)) return true;
   // The review grant has its own slot, so a manager's `assign` beside it does not hide it.
   if (await storage.getTestReviewGrant(test.id, userId)) return true;
-  // Role-agnostic like the direct grant: a review grant on a folder opens every test below it.
+  // A folder grants no review of its own (review is granted on a test only); `edit` on a
+  // folder of the chain, or owning one, still opens the review of every test below it.
   return (await folderRightsForTest(userId, test)).review;
 }
 

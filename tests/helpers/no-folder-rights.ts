@@ -13,7 +13,10 @@
  * ```
  */
 
-const NONE = { owner: false, edit: false, assign: false, review: false };
+import { vi } from "vitest";
+import type { FolderNode } from "@shared/access";
+
+const NONE ={ owner: false, edit: false, assign: false, review: false };
 
 /** No inherited rights in any folder. */
 export async function folderRights(): Promise<typeof NONE> {
@@ -45,7 +48,8 @@ export async function visibleTestFolders(): Promise<Map<string, "direct" | "tran
   return new Map();
 }
 
-/** Empty folder tree. */
-export async function loadTestFolderNodes(): Promise<Map<string, never>> {
-  return new Map<string, never>();
-}
+/**
+ * Empty folder tree. A mock function, so a suite that needs a chain for one case
+ * (the inherited rows of a test's access answer) can arm it with `mockResolvedValueOnce`.
+ */
+export const loadTestFolderNodes = vi.fn(async (): Promise<Map<string, FolderNode>> => new Map());

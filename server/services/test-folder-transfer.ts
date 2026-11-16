@@ -30,29 +30,19 @@ export interface MaterializedGrant {
 export interface MovePlan {
   /** Grants inherited from the old chain that the subject does not hold directly yet. */
   materialize: MaterializedGrant[];
-  /** Users who reach the subject after the move but do not reach it now. */
-  gainedUserIds: string[];
+  /** People who reach the subject after the move but do not reach it now, with their level there. */
+  gained: MaterializedGrant[];
 }
 
-/** Grant slot of a level: `edit`/`assign` share the working slot, `review` has its own. */
-function slotOf(level: FolderAccessLevel): "work" | "review" {
-  return level === "review" ? "review" : "work";
-}
+/** Rank of a level: `edit` covers `assign`. */
+const RANK: Record<FolderAccessLevel, number> = { assign: 1, edit: 2 };
 
-/** Rank inside the working slot: `edit` covers `assign`. */
-const WORK_RANK: Record<string, number> = { assign: 1, edit: 2 };
-
-/** Per-user, per-slot strongest level among `entries`. */
-function strongest(entries: readonly MaterializedGrant[]): Map<string, Map<"work" | "review", FolderAccessLevel>> {
-  const byUser = new Map<string, Map<"work" | "review", FolderAccessLevel>>();
+/** Per-user strongest level among `entries`, in the order users were first met. */
+function strongest(entries: readonly MaterializedGrant[]): Map<string, FolderAccessLevel> {
+  const byUser = new Map<string, FolderAccessLevel>();
   for (const e of entries) {
-    const slots = byUser.get(e.userId) ?? new Map<"work" | "review", FolderAccessLevel>();
-    const slot = slotOf(e.accessLevel);
-    const current = slots.get(slot);
-    if (!current || (slot === "work" && WORK_RANK[e.accessLevel] > WORK_RANK[current])) {
-      slots.set(slot, e.accessLevel);
-    }
-    byUser.set(e.userId, slots);
+    const current = byUser.get(e.userId);
+    if (!current || RANK[e.accessLevel] > RANK[current]) byUser.set(e.userId, e.accessLevel);
   }
   return byUser;
 }
@@ -76,8 +66,12 @@ async function loadSubject(
   if (subject.kind === "test") {
     const test = await storage.getTest(subject.id);
     if (!test) throw new Error(`Test not found: ${subject.id}`);
-    const direct = (await storage.getTestAccessGrants(subject.id))
-      .map((g) => ({ userId: g.userId, accessLevel: g.accessLevel }));
+    // Only the WORKING grants count: a reviewer of this test is not its working audience,
+    // and a move neither copies nor touches review grants (they live on tests only).
+    const direct: MaterializedGrant[] = [];
+    for (const g of await storage.getTestAccessGrants(subject.id)) {
+      if (g.accessLevel !== "review") direct.push({ userId: g.userId, accessLevel: g.accessLevel });
+    }
     return { ownerId: test.ownerId ?? null, direct, chainStart: test.folderId ?? null };
   }
   const folder = nodes.get(subject.id);
@@ -104,26 +98,21 @@ export async function planMove(subject: MoveSubject, destFolderId: string | null
   const held = strongest(direct);
 
   const materialize: MaterializedGrant[] = [];
-  for (const [userId, slots] of inherited) {
+  for (const [userId, level] of inherited) {
     if (userId === ownerId) continue;
     const own = held.get(userId);
-    const work = slots.get("work");
-    if (work && !(own?.get("work") && WORK_RANK[own.get("work")!] >= WORK_RANK[work])) {
-      materialize.push({ userId, accessLevel: work });
-    }
-    // `edit` (held or inherited) already covers review.
-    const coveredByEdit = work === "edit" || own?.get("work") === "edit";
-    if (slots.get("review") && !own?.get("review") && !coveredByEdit) {
-      materialize.push({ userId, accessLevel: "review" });
-    }
+    // Never downgrade: a direct grant at least as strong already keeps the access.
+    if (!own || RANK[own] < RANK[level]) materialize.push({ userId, accessLevel: level });
   }
 
   const audience = new Set<string>([...inherited.keys(), ...held.keys()]);
   if (ownerId) audience.add(ownerId);
-  const destUsers = new Set(chainEntries(ancestorChain(destFolderId, nodes), grants).map((e) => e.userId));
-  const gainedUserIds = [...destUsers].filter((u) => !audience.has(u));
+  const destination = strongest(chainEntries(ancestorChain(destFolderId, nodes), grants));
+  const gained = [...destination]
+    .filter(([userId]) => !audience.has(userId))
+    .map(([userId, accessLevel]) => ({ userId, accessLevel }));
 
-  return { materialize, gainedUserIds };
+  return { materialize, gained };
 }
 
 /**

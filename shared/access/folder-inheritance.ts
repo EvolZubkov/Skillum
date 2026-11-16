@@ -8,8 +8,11 @@
  * client resolve rights identically.
  */
 
-/** Grant level on a folder; the same vocabulary as grants on tests. */
-export type FolderAccessLevel = "edit" | "assign" | "review";
+/**
+ * Grant level on a folder: the working levels of grants on tests. Review is
+ * granted on a specific test only, never on a folder (owner decision 2026-11-16).
+ */
+export type FolderAccessLevel = "edit" | "assign";
 
 /** A folder reduced to what inheritance needs. */
 export interface FolderNode {
@@ -71,7 +74,8 @@ export function ancestorChain(
 /**
  * Rights of one user on the content of `chain`. The owner of any folder in the
  * chain holds every right; `edit` covers `assign` and `review` (as for grants
- * on tests).
+ * on tests). A folder never grants review on its own: `review` here comes only
+ * from `edit` or ownership.
  *
  * @param chain - Result of {@link ancestorChain}.
  * @param grants - Folder grants; those of other users or folders are ignored.
@@ -93,8 +97,50 @@ export function folderRightsOf(
     owner,
     edit,
     assign: edit || levels.has("assign"),
-    review: edit || levels.has("review"),
+    review: edit,
   };
+}
+
+/** One row of inherited access: who reaches an item through which folder. */
+export interface InheritedAccess {
+  userId: string;
+  accessLevel: FolderAccessLevel;
+  /** The folder the access comes from; the nearest one when several give the same level. */
+  folderId: string;
+}
+
+/** Rank of a level: `edit` covers `assign`. */
+const LEVEL_RANK: Record<FolderAccessLevel, number> = { assign: 1, edit: 2 };
+
+/**
+ * People who reach the content of `chain` through its folders: grants on the
+ * chain plus the owners of chain folders (counted as `edit`, the strongest
+ * level a grant can carry). One row per user with the strongest level; on a
+ * tie the nearest folder wins.
+ *
+ * @param chain - Result of {@link ancestorChain}, nearest folder first.
+ * @param grants - Folder grants; those on folders outside the chain are ignored.
+ * @param exclude - Users not to list (the item's own owner).
+ * @returns Rows in the order users were first met along the chain.
+ */
+export function inheritedAccess(
+  chain: readonly FolderNode[],
+  grants: readonly FolderGrant[],
+  exclude: ReadonlySet<string>,
+): InheritedAccess[] {
+  const byUser = new Map<string, InheritedAccess>();
+  const offer = (userId: string, accessLevel: FolderAccessLevel, folderId: string) => {
+    if (exclude.has(userId)) return;
+    const current = byUser.get(userId);
+    if (!current || LEVEL_RANK[accessLevel] > LEVEL_RANK[current.accessLevel]) {
+      byUser.set(userId, { userId, accessLevel, folderId });
+    }
+  };
+  for (const n of chain) {
+    for (const g of grants) if (g.folderId === n.id) offer(g.userId, g.accessLevel, n.id);
+    if (n.ownerId) offer(n.ownerId, "edit", n.id);
+  }
+  return [...byUser.values()];
 }
 
 /**

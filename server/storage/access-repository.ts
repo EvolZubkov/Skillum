@@ -158,9 +158,8 @@ export class AccessRepository {
     return db.select().from(testFolderAccessGrants).where(eq(testFolderAccessGrants.folderId, folderId));
   }
 
-  /** Writes a folder grant into its slot, exactly as {@link upsertTestAccessGrant} does for tests. */
+  /** Writes the single grant of a user on a folder; a second write changes its level. */
   async upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant> {
-    const isReview = grant.accessLevel === "review";
     const [row] = await db.insert(testFolderAccessGrants).values({
       id: randomUUID(),
       folderId: grant.folderId,
@@ -170,24 +169,15 @@ export class AccessRepository {
       createdAt: new Date(),
     }).onConflictDoUpdate({
       target: [testFolderAccessGrants.folderId, testFolderAccessGrants.userId],
-      targetWhere: isReview
-        ? sql`${testFolderAccessGrants.accessLevel} = 'review'`
-        : sql`${testFolderAccessGrants.accessLevel} <> 'review'`,
       set: { accessLevel: grant.accessLevel, grantedBy: grant.grantedBy ?? null },
     }).returning();
     return row;
   }
 
-  /** Removes one slot of a folder grant. */
-  async removeTestFolderGrant(folderId: string, userId: string, slot: TestGrantSlot): Promise<boolean> {
+  /** Removes the grant of a user on a folder. */
+  async removeTestFolderGrant(folderId: string, userId: string): Promise<boolean> {
     const result = await db.delete(testFolderAccessGrants)
-      .where(and(
-        eq(testFolderAccessGrants.folderId, folderId),
-        eq(testFolderAccessGrants.userId, userId),
-        slot === "review"
-          ? eq(testFolderAccessGrants.accessLevel, "review")
-          : ne(testFolderAccessGrants.accessLevel, "review"),
-      ))
+      .where(and(eq(testFolderAccessGrants.folderId, folderId), eq(testFolderAccessGrants.userId, userId)))
       .returning({ id: testFolderAccessGrants.id });
     return result.length > 0;
   }

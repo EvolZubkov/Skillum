@@ -654,8 +654,7 @@ CREATE UNIQUE INDEX "test_access_grants_review_idx" ON "test_access_grants" USIN
 CREATE INDEX "test_assignments_test_id_idx" ON "test_assignments" USING btree ("test_id");
 CREATE INDEX "test_assignments_user_id_idx" ON "test_assignments" USING btree ("user_id");
 CREATE INDEX "test_assignments_group_id_idx" ON "test_assignments" USING btree ("group_id");
-CREATE UNIQUE INDEX "test_folder_access_grants_work_idx" ON "test_folder_access_grants" USING btree ("folder_id","user_id") WHERE "test_folder_access_grants"."access_level" <> 'review';
-CREATE UNIQUE INDEX "test_folder_access_grants_review_idx" ON "test_folder_access_grants" USING btree ("folder_id","user_id") WHERE "test_folder_access_grants"."access_level" = 'review';
+CREATE UNIQUE INDEX "test_folder_access_grants_user_idx" ON "test_folder_access_grants" USING btree ("folder_id","user_id");
 CREATE UNIQUE INDEX "test_public_links_test_idx" ON "test_public_links" USING btree ("test_id");
 CREATE UNIQUE INDEX "test_public_links_token_idx" ON "test_public_links" USING btree ("token");
 CREATE UNIQUE INDEX "test_question_scoring_test_question_idx" ON "test_question_scoring" USING btree ("test_id","question_id");

@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   ancestorChain,
   folderRightsOf,
+  inheritedAccess,
   visibleFolderMap,
   type FolderNode,
   type FolderGrant,
@@ -46,7 +47,7 @@ describe("folderRightsOf", () => {
     const r = folderRightsOf(ancestorChain("c", t), [grant("a", "u", "assign")], "u");
     expect(r).toEqual({ owner: false, edit: false, assign: true, review: false });
   });
-  it("lets edit cover assign and review", () => {
+  it("lets edit cover assign and review (review comes only from edit on a folder)", () => {
     const r = folderRightsOf(ancestorChain("b", t), [grant("b", "u", "edit")], "u");
     expect(r).toEqual({ owner: false, edit: true, assign: true, review: true });
   });
@@ -86,5 +87,37 @@ describe("visibleFolderMap", () => {
     const m = visibleFolderMap(t, "u", [{ folderId: "d", userId: "u", accessLevel: "assign" }],
       new Set(["edit"]), new Set());
     expect(m.size).toBe(0);
+  });
+});
+
+describe("inheritedAccess", () => {
+  const t = tree(node("top", null, "o-top"), node("mid", "top"), node("leaf", "mid", "o-leaf"));
+  const chain = ancestorChain("mid", t); // mid, top
+
+  it("lists grants and owners of the chain, owners as edit", () => {
+    const grants: FolderGrant[] = [{ folderId: "mid", userId: "u1", accessLevel: "assign" }];
+    expect(inheritedAccess(chain, grants, new Set())).toEqual([
+      { userId: "u1", accessLevel: "assign", folderId: "mid" },
+      { userId: "o-top", accessLevel: "edit", folderId: "top" },
+    ]);
+  });
+  it("keeps the strongest level, the nearest folder on a tie", () => {
+    const grants: FolderGrant[] = [
+      { folderId: "mid", userId: "u1", accessLevel: "assign" },
+      { folderId: "top", userId: "u1", accessLevel: "edit" },
+      { folderId: "mid", userId: "u2", accessLevel: "assign" },
+      { folderId: "top", userId: "u2", accessLevel: "assign" },
+    ];
+    expect(inheritedAccess(chain, grants, new Set(["o-top"]))).toEqual([
+      { userId: "u1", accessLevel: "edit", folderId: "top" },
+      { userId: "u2", accessLevel: "assign", folderId: "mid" },
+    ]);
+  });
+  it("skips excluded users and ignores folders outside the chain", () => {
+    const grants: FolderGrant[] = [{ folderId: "leaf", userId: "u3", accessLevel: "edit" }];
+    expect(inheritedAccess(chain, grants, new Set(["o-top"]))).toEqual([]);
+  });
+  it("is empty for a root item", () => {
+    expect(inheritedAccess([], [], new Set())).toEqual([]);
   });
 });

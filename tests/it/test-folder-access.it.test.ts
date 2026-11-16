@@ -1,9 +1,9 @@
 /**
  * @module tests/it/test-folder-access.it.test
  * @description DAL of test folder access (docs/specs/2026-11-16-folder-access-inheritance-design.md)
- * against a real Postgres (pglite): folder owner on create, the two grant slots
- * per (folder, user), cascade on folder delete and the test/folder lookups the
- * access resolver reads.
+ * against a real Postgres (pglite): folder owner on create, one grant per
+ * (folder, user), cascade on folder delete, the test/folder lookups the access
+ * resolver reads and the rights a move keeps or adds.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { tests, testFolderAccessGrants } from "@shared/schema";
@@ -65,24 +65,22 @@ describe("test folder owner", () => {
 });
 
 describe("test folder grants", () => {
-  it("replaces the working grant and keeps the review grant in its own slot", async () => {
+  it("keeps one grant per user: a second write changes its level", async () => {
     const folder = await storage.createTestFolder({ name: "A", parentId: null, createdBy: "o" });
     await storage.upsertTestFolderGrant({ folderId: folder.id, userId: "u", accessLevel: "edit" });
     await storage.upsertTestFolderGrant({ folderId: folder.id, userId: "u", accessLevel: "assign" });
-    await storage.upsertTestFolderGrant({ folderId: folder.id, userId: "u", accessLevel: "review" });
 
-    const levels = (await storage.getTestFolderGrantsForFolder(folder.id)).map((g) => g.accessLevel).sort();
-    expect(levels).toEqual(["assign", "review"]);
+    const levels = (await storage.getTestFolderGrantsForFolder(folder.id)).map((g) => g.accessLevel);
+    expect(levels).toEqual(["assign"]);
   });
 
-  it("removes one slot only", async () => {
+  it("removes the grant and reports a missing one", async () => {
     const folder = await storage.createTestFolder({ name: "A", parentId: null, createdBy: "o" });
     await storage.upsertTestFolderGrant({ folderId: folder.id, userId: "u", accessLevel: "edit" });
-    await storage.upsertTestFolderGrant({ folderId: folder.id, userId: "u", accessLevel: "review" });
 
-    expect(await storage.removeTestFolderGrant(folder.id, "u", "work")).toBe(true);
-    const levels = (await storage.getTestFolderGrantsForFolder(folder.id)).map((g) => g.accessLevel);
-    expect(levels).toEqual(["review"]);
+    expect(await storage.removeTestFolderGrant(folder.id, "u")).toBe(true);
+    expect(await storage.removeTestFolderGrant(folder.id, "u")).toBe(false);
+    expect(await storage.getTestFolderGrantsForFolder(folder.id)).toEqual([]);
   });
 
   it("returns every grant of the tree", async () => {
@@ -142,14 +140,25 @@ describe("a move keeps the inherited rights", () => {
     const a = await storage.createTestFolder({ name: "A", parentId: null, createdBy: "fo" });
     const b = await storage.createTestFolder({ name: "B", parentId: a.id, createdBy: "fo" });
     await storage.upsertTestFolderGrant({ folderId: a.id, userId: "u", accessLevel: "edit" });
-    await storage.upsertTestFolderGrant({ folderId: b.id, userId: "r", accessLevel: "review" });
+    await storage.upsertTestFolderGrant({ folderId: b.id, userId: "w", accessLevel: "assign" });
     await insertTest("t1", b.id);
 
     const plan = await planMove({ kind: "test", id: "t1" }, null);
-    expect(plan.gainedUserIds).toEqual([]);
+    expect(plan.gained).toEqual([]);
     await materializeInheritedGrants({ kind: "test", id: "t1" }, plan, "actor");
 
-    expect(await testGrants("t1")).toEqual(["fo:edit", "r:review", "u:edit"]);
+    expect(await testGrants("t1")).toEqual(["fo:edit", "u:edit", "w:assign"]);
+  });
+
+  it("leaves a test review grant alone and counts its holder as gained by a working grant", async () => {
+    const to = await storage.createTestFolder({ name: "To", parentId: null, createdBy: null });
+    await storage.upsertTestFolderGrant({ folderId: to.id, userId: "r", accessLevel: "assign" });
+    await insertTest("t1", null);
+    await storage.upsertTestAccessGrant({ testId: "t1", userId: "r", accessLevel: "review" });
+
+    const plan = await planMove({ kind: "test", id: "t1" }, to.id);
+    expect(plan.materialize).toEqual([]);
+    expect(plan.gained).toEqual([{ userId: "r", accessLevel: "assign" }]);
   });
 
   it("is idempotent and never downgrades a direct working grant", async () => {
@@ -165,16 +174,22 @@ describe("a move keeps the inherited rights", () => {
     expect(await testGrants("t1")).toEqual(["u:edit"]);
   });
 
-  it("reports the people a destination folder adds", async () => {
+  it("reports the people a destination folder adds, with their strongest level there", async () => {
     const from = await storage.createTestFolder({ name: "From", parentId: null, createdBy: null });
-    const to = await storage.createTestFolder({ name: "To", parentId: null, createdBy: "boss" });
+    const top = await storage.createTestFolder({ name: "Top", parentId: null, createdBy: "boss" });
+    const to = await storage.createTestFolder({ name: "To", parentId: top.id, createdBy: null });
     await storage.upsertTestFolderGrant({ folderId: from.id, userId: "u", accessLevel: "edit" });
     await storage.upsertTestFolderGrant({ folderId: to.id, userId: "u", accessLevel: "edit" });
     await storage.upsertTestFolderGrant({ folderId: to.id, userId: "v", accessLevel: "assign" });
+    await storage.upsertTestFolderGrant({ folderId: top.id, userId: "v", accessLevel: "edit" });
     await insertTest("t1", from.id);
 
     const plan = await planMove({ kind: "test", id: "t1" }, to.id);
-    expect(plan.gainedUserIds.sort()).toEqual(["boss", "v"]);
+    const gained = [...plan.gained].sort((x, y) => x.userId.localeCompare(y.userId));
+    expect(gained).toEqual([
+      { userId: "boss", accessLevel: "edit" },
+      { userId: "v", accessLevel: "edit" },
+    ]);
   });
 
   it("copies only the ancestors' rights onto a moved folder, not its own", async () => {

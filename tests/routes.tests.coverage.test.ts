@@ -56,6 +56,9 @@ const {
     setTestOwner: vi.fn().mockResolvedValue(undefined),
     // PRD-13 object-scope helpers.
     getTestAccessGrants: vi.fn().mockResolvedValue([]),
+    // Folder access inheritance: the access answer reads the folder tree and its grants.
+    getTestFolders: vi.fn().mockResolvedValue([]),
+    getTestFolderGrants: vi.fn().mockResolvedValue([]),
     getUserTestGrants: vi.fn().mockResolvedValue([]),
     getTestIdsByOwner: vi.fn().mockResolvedValue([]),
     getTestGrantForUser: vi.fn().mockResolvedValue(undefined),
@@ -426,6 +429,24 @@ describe("POST /api/tests — error and permission branches", () => {
     }));
     expect(res.status).toBe(422);
     expect(res.body.error).toBe("flow_policy_invalid");
+  });
+
+  it("403 when an author creates a test inside a folder they may not edit", async () => {
+    storageMock.getUserRoles.mockResolvedValue(["author"]);
+    storageMock.getTopic.mockResolvedValue({ id: "t1", name: "JS", ownerId: null, visibility: "shared" });
+    const res = await asAuthor(request(app).post("/api/tests").send({
+      title: "T", mode: "standard", sections: [{ topicId: "t1", drawCount: 3 }], folderId: "f1",
+    }));
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "forbidden", field: "folderId" });
+    expect(serviceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("lets an administrator create a test in any folder", async () => {
+    await asAdmin(request(app).post("/api/tests").send({
+      title: "T", mode: "standard", sections: [{ topicId: "t1", drawCount: 3 }], folderId: "f1",
+    }));
+    expect(serviceMock.create).toHaveBeenCalled();
   });
 
   it("500 when the create service throws a generic error", async () => {
@@ -951,6 +972,29 @@ describe("GET /api/tests/:id/access", () => {
     ]);
     const res = await asAdmin(request(app).get("/api/tests/test1/access"));
     expect(res.body.grants).toEqual([{ userId: "u2", accessLevel: "assign" }]);
+  });
+
+  it("answers no inherited rows for a test in the root", async () => {
+    storageMock.getTest.mockResolvedValue({ ...dbTest, ownerId: "author1", folderId: null });
+    const res = await asAdmin(request(app).get("/api/tests/test1/access"));
+    expect(res.body.inherited).toEqual([]);
+  });
+
+  it("lists who reaches the test through its folders, without the test owner", async () => {
+    const folderAccess = await import("../server/services/test-folder-access");
+    vi.mocked(folderAccess.loadTestFolderNodes).mockResolvedValueOnce(new Map([
+      ["fB", { id: "fB", parentId: "fA", ownerId: "author1" }],
+      ["fA", { id: "fA", parentId: null, ownerId: "boss" }],
+    ]));
+    storageMock.getTestFolders.mockResolvedValueOnce([{ id: "fA", name: "Охрана труда" }, { id: "fB", name: "Инструктажи" }]);
+    storageMock.getTestFolderGrants.mockResolvedValueOnce([{ folderId: "fB", userId: "u2", accessLevel: "assign" }]);
+    storageMock.getTest.mockResolvedValue({ ...dbTest, ownerId: "author1", folderId: "fB" });
+    const res = await asAdmin(request(app).get("/api/tests/test1/access"));
+    expect(res.status).toBe(200);
+    expect(res.body.inherited).toEqual([
+      { userId: "u2", accessLevel: "assign", folderId: "fB", folderName: "Инструктажи" },
+      { userId: "boss", accessLevel: "edit", folderId: "fA", folderName: "Охрана труда" },
+    ]);
   });
 
   it("500 when loading grants throws", async () => {

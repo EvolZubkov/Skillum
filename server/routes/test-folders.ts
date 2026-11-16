@@ -10,16 +10,26 @@
  *   folders without rights are hidden;
  * - creating inside, renaming, moving and "folder only" deletion need `edit` on
  *   the folder; deletion together with the tests needs the folder owner;
- * - grants on a folder are managed by its owner or an administrator;
+ * - grants on a folder (`edit` or `assign`; review is granted on a test only)
+ *   are managed by its owner or an administrator; `GET /:id/access/users` names
+ *   the people the access panel offers, behind the same gate;
+ * - the folder owner is changed with `tests.owner.change`, as a test owner;
  * - a move of a test or a folder keeps the rights inherited from the old chain
- *   (copied as direct grants) and answers `409 access_gain` when the
- *   destination would add people, until the client repeats it with
- *   `confirmGain: true`. `POST /move-preview` reports that count in advance.
+ *   (copied as direct grants) and answers `409 access_gain` with the people it
+ *   would add, until the client repeats it with `confirmGain: true`.
+ *   `POST /move-preview` reports those people in advance.
  *
  * Administrators and the superadmin bypass the folder scope, as for tests.
  */
 import { Router, type Request, type Response } from "express";
-import { hasAuthoringRole, ROLES, type FolderAccessLevel, type Role } from "@shared/access";
+import {
+  ancestorChain,
+  hasAuthoringRole,
+  inheritedAccess,
+  ROLES,
+  type FolderAccessLevel,
+  type Role,
+} from "@shared/access";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { requirePermission } from "../middleware/auth";
@@ -28,13 +38,27 @@ import {
   folderRights,
   folderRightsMap,
   isInSubtree,
+  loadTestFolderNodes,
   visibleTestFolders,
 } from "../services/test-folder-access";
-import { planMove, materializeInheritedGrants, type MoveSubject } from "../services/test-folder-transfer";
+import {
+  planMove,
+  materializeInheritedGrants,
+  type MaterializedGrant,
+  type MoveSubject,
+} from "../services/test-folder-transfer";
 
 const router = Router();
 
-const LEVELS: readonly FolderAccessLevel[] = ["edit", "assign", "review"];
+const LEVELS: readonly FolderAccessLevel[] = ["edit", "assign"];
+
+/** Gained people with display names: the author may lack `users.read`, so the server names them. */
+async function namedGain(gained: readonly MaterializedGrant[]) {
+  return Promise.all(gained.map(async (g) => {
+    const user = await storage.getUser(g.userId);
+    return { userId: g.userId, name: user?.name?.trim() || user?.email || null, accessLevel: g.accessLevel };
+  }));
+}
 
 /** Caller identity resolved by `requirePermission`. */
 function who(req: Request): { roles: readonly Role[]; userId: string } {
@@ -73,8 +97,8 @@ async function moveKeepingRights(
   apply: () => Promise<void>,
 ): Promise<boolean> {
   const plan = await planMove(subject, destFolderId);
-  if (plan.gainedUserIds.length > 0 && req.body?.confirmGain !== true) {
-    res.status(409).json({ error: "access_gain", gained: plan.gainedUserIds.length });
+  if (plan.gained.length > 0 && req.body?.confirmGain !== true) {
+    res.status(409).json({ error: "access_gain", gained: await namedGain(plan.gained) });
     return false;
   }
   await materializeInheritedGrants(subject, plan, req.currentUser?.id ?? null);
@@ -262,7 +286,7 @@ router.patch("/move/:testId", requirePermission("folders.manage"), async (req, r
   }
 });
 
-// POST /api/test-folders/move-preview — { kind, id, destFolderId }: how many people a move adds.
+// POST /api/test-folders/move-preview — { kind, id, destFolderId }: the people a move adds.
 router.post("/move-preview", requirePermission("folders.manage"), async (req, res) => {
   try {
     const { roles, userId } = who(req);
@@ -279,29 +303,32 @@ router.post("/move-preview", requirePermission("folders.manage"), async (req, re
       if (!allowOr403(res, await canEditFolder(roles, userId, id))) return;
     }
     const plan = await planMove({ kind, id }, destFolderId ?? null);
-    res.json({ gained: plan.gainedUserIds.length });
+    res.json({ gained: await namedGain(plan.gained) });
   } catch (error) {
     logger.error("Move preview error: " + (error as Error).message);
     res.status(500).json({ error: "Failed to preview move" });
   }
 });
 
-// GET /api/test-folders/:id/access — owner, own grants and grants inherited from ancestors.
+// GET /api/test-folders/:id/access — owner, own grants and access inherited from ancestors.
 router.get("/:id/access", requirePermission("folders.manage"), async (req, res) => {
   try {
     const { roles, userId } = who(req);
     const folder = await folderOr404(res, req.params.id);
     if (!folder) return;
     if (!allowOr403(res, await canManageFolder(roles, userId, folder.id))) return;
-    const all = await storage.getTestFolders();
-    const byId = new Map(all.map((f) => [f.id, f]));
-    const ancestorIds = new Set<string>();
-    for (let p = folder.parentId; p && !ancestorIds.has(p); p = byId.get(p)?.parentId ?? null) ancestorIds.add(p);
-    const grants = await storage.getTestFolderGrants();
+    const [all, nodes, grants] = await Promise.all([
+      storage.getTestFolders(),
+      loadTestFolderNodes(),
+      storage.getTestFolderGrants(),
+    ]);
+    const names = new Map(all.map((f) => [f.id, f.name]));
+    const exclude = new Set(folder.ownerId ? [folder.ownerId] : []);
     res.json({
       ownerId: folder.ownerId,
       grants: grants.filter((g) => g.folderId === folder.id),
-      inherited: grants.filter((g) => ancestorIds.has(g.folderId)),
+      inherited: inheritedAccess(ancestorChain(folder.parentId, nodes), grants, exclude)
+        .map((row) => ({ ...row, folderName: names.get(row.folderId) ?? "" })),
     });
   } catch (error) {
     logger.error("Get test folder access error: " + (error as Error).message);
@@ -309,7 +336,45 @@ router.get("/:id/access", requirePermission("folders.manage"), async (req, res) 
   }
 });
 
-// PUT /api/test-folders/:id/access — { userId, accessLevel }: write one grant slot.
+// GET /api/test-folders/:id/access/users — the people the folder access panel names and offers.
+// Behind the panel's own gate, not `users.read`: a folder owner grants access yet holds no
+// registry right. Only what the panel shows leaves: id, name, email and roles.
+router.get("/:id/access/users", requirePermission("folders.manage"), async (req, res) => {
+  try {
+    const { roles, userId } = who(req);
+    const folder = await folderOr404(res, req.params.id);
+    if (!folder) return;
+    if (!allowOr403(res, await canManageFolder(roles, userId, folder.id))) return;
+    const users = await storage.getUsers();
+    const userRoles = await Promise.all(users.map((user) => storage.getUserRoles(user.id)));
+    res.json(users.map((user, i) => ({ id: user.id, name: user.name, email: user.email, roles: userRoles[i] })));
+  } catch (error) {
+    logger.error("Get test folder access users error: " + (error as Error).message);
+    res.status(500).json({ error: "Failed to get users" });
+  }
+});
+
+// PATCH /api/test-folders/:id/owner — change the folder owner; the same right as for a test.
+router.patch("/:id/owner", requirePermission("tests.owner.change"), async (req, res) => {
+  try {
+    const folder = await folderOr404(res, req.params.id);
+    if (!folder) return;
+    const { ownerId } = req.body ?? {};
+    if (ownerId !== null && typeof ownerId !== "string") {
+      return res.status(400).json({ error: "ownerId must be a string or null" });
+    }
+    if (ownerId && !(await storage.getUser(ownerId))) {
+      return res.status(404).json({ error: "Owner user not found" });
+    }
+    await storage.setTestFolderOwner(folder.id, ownerId ?? null);
+    res.json({ folderId: folder.id, ownerId: ownerId ?? null });
+  } catch (error) {
+    logger.error("Change test folder owner error: " + (error as Error).message);
+    res.status(500).json({ error: "Failed to change folder owner" });
+  }
+});
+
+// PUT /api/test-folders/:id/access — { userId, accessLevel }: write the user's grant (`edit` | `assign`).
 router.put("/:id/access", requirePermission("folders.manage"), async (req, res) => {
   try {
     const { roles, userId } = who(req);
@@ -336,18 +401,14 @@ router.put("/:id/access", requirePermission("folders.manage"), async (req, res) 
   }
 });
 
-// DELETE /api/test-folders/:id/access/:userId/:slot — slot is `work` or `review`.
-router.delete("/:id/access/:userId/:slot", requirePermission("folders.manage"), async (req, res) => {
+// DELETE /api/test-folders/:id/access/:userId — revoke a user's grant on the folder.
+router.delete("/:id/access/:userId", requirePermission("folders.manage"), async (req, res) => {
   try {
     const { roles, userId } = who(req);
-    const { slot } = req.params;
-    if (slot !== "work" && slot !== "review") {
-      return res.status(400).json({ error: "invalid_slot" });
-    }
     const folder = await folderOr404(res, req.params.id);
     if (!folder) return;
     if (!allowOr403(res, await canManageFolder(roles, userId, folder.id))) return;
-    const removed = await storage.removeTestFolderGrant(folder.id, req.params.userId, slot);
+    const removed = await storage.removeTestFolderGrant(folder.id, req.params.userId);
     if (!removed) return res.status(404).json({ error: "Grant not found" });
     res.status(204).end();
   } catch (error) {

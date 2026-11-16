@@ -1,5 +1,5 @@
 {
-  "id": "70a2df5f-1c0d-4bdb-871d-c0601b48ac35",
+  "id": "53bbd689-28ef-4c4b-bd12-e1dc36940b91",
   "prevId": "010803c1-42b9-45e2-8e59-7c1e947a38d5",
   "version": "7",
   "dialect": "postgresql",
@@ -3226,8 +3226,8 @@
         }
       },
       "indexes": {
-        "test_folder_access_grants_work_idx": {
-          "name": "test_folder_access_grants_work_idx",
+        "test_folder_access_grants_user_idx": {
+          "name": "test_folder_access_grants_user_idx",
           "columns": [
             {
               "expression": "folder_id",
@@ -3243,29 +3243,6 @@
             }
           ],
           "isUnique": true,
-          "where": "\"test_folder_access_grants\".\"access_level\" <> 'review'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "test_folder_access_grants_review_idx": {
-          "name": "test_folder_access_grants_review_idx",
-          "columns": [
-            {
-              "expression": "folder_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"test_folder_access_grants\".\"access_level\" = 'review'",
           "concurrently": false,
           "method": "btree",
           "with": {}

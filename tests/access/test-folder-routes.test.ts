@@ -18,7 +18,12 @@ vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://fake/test";
 });
 
-const { storageMock, state } = vi.hoisted(() => {
+const { storageMock, state, rolesByUser } = vi.hoisted(() => {
+  const rolesByUserHoisted: Record<string, string[]> = {
+    author1: ["author"],
+    author2: ["author"],
+    admin1: ["administrator"],
+  };
   const state = {
     folders: [] as Array<{ id: string; name: string; parentId: string | null; ownerId: string | null }>,
     grants: [] as Array<{ id: string; folderId: string; userId: string; accessLevel: string }>,
@@ -33,18 +38,21 @@ const { storageMock, state } = vi.hoisted(() => {
     getTestFolderGrants: vi.fn(async () => state.grants),
     getTestFolderGrantsForFolder: vi.fn(async (id: string) => state.grants.filter((g) => g.folderId === id)),
     upsertTestFolderGrant: vi.fn(async (g: { folderId: string; userId: string; accessLevel: string }) => {
-      state.grants = state.grants.filter((x) =>
-        !(x.folderId === g.folderId && x.userId === g.userId && slotOf(x.accessLevel) === slotOf(g.accessLevel)));
+      state.grants = state.grants.filter((x) => !(x.folderId === g.folderId && x.userId === g.userId));
       const row = { id: `g${state.grants.length + 1}`, ...g };
       state.grants.push(row);
       return row;
     }),
-    removeTestFolderGrant: vi.fn(async (folderId: string, userId: string, slot: string) => {
+    removeTestFolderGrant: vi.fn(async (folderId: string, userId: string) => {
       const before = state.grants.length;
-      state.grants = state.grants.filter((x) =>
-        !(x.folderId === folderId && x.userId === userId && slotOf(x.accessLevel) === slot));
+      state.grants = state.grants.filter((x) => !(x.folderId === folderId && x.userId === userId));
       return state.grants.length < before;
     }),
+    setTestFolderOwner: vi.fn(async (folderId: string, ownerId: string | null) => {
+      const f = state.folders.find((x) => x.id === folderId);
+      if (f) f.ownerId = ownerId;
+    }),
+    getUsers: vi.fn(async () => Object.keys(rolesByUserHoisted).map((id) => ({ id, name: id, email: `${id}@x` }))),
     createTestFolder: vi.fn(async (f: { name: string; parentId: string | null; createdBy: string | null }) => {
       const row = { id: "new", name: f.name, parentId: f.parentId, ownerId: f.createdBy };
       state.folders.push(row);
@@ -86,7 +94,7 @@ const { storageMock, state } = vi.hoisted(() => {
     }),
     isTestAssignedToUser: vi.fn(async () => false),
   };
-  return { storageMock, state };
+  return { storageMock, state, rolesByUser: rolesByUserHoisted };
 });
 
 vi.mock("../../server/storage", () => ({ storage: storageMock }));
@@ -96,12 +104,6 @@ vi.mock("../../server/logger", () => ({
 }));
 
 import testFoldersRouter from "../../server/routes/test-folders";
-
-const rolesByUser: Record<string, string[]> = {
-  author1: ["author"],
-  author2: ["author"],
-  admin1: ["administrator"],
-};
 
 function makeApp() {
   const app = express();
@@ -221,7 +223,7 @@ describe("a move keeps rights and asks before widening access", () => {
     state.grants = [{ id: "g1", folderId: "E", userId: "u9", accessLevel: "assign" }];
     const ask = await request(app).patch("/api/test-folders/move/tB").use(as("author2")).send({ folderId: "E" });
     expect(ask.status).toBe(409);
-    expect(ask.body).toEqual({ error: "access_gain", gained: 1 });
+    expect(ask.body).toEqual({ error: "access_gain", gained: [{ userId: "u9", name: "u9", accessLevel: "assign" }] });
     expect(storageMock.moveTestToFolder).not.toHaveBeenCalled();
 
     const ok = await request(app).patch("/api/test-folders/move/tB").use(as("author2"))
@@ -244,7 +246,7 @@ describe("a move keeps rights and asks before widening access", () => {
     const res = await request(app).post("/api/test-folders/move-preview").use(as("author2"))
       .send({ kind: "test", id: "tB", destFolderId: "E" });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ gained: 1 });
+    expect(res.body).toEqual({ gained: [{ userId: "u9", name: "u9", accessLevel: "assign" }] });
     expect(storageMock.upsertTestAccessGrant).not.toHaveBeenCalled();
     expect(storageMock.moveTestToFolder).not.toHaveBeenCalled();
   });
@@ -262,10 +264,62 @@ describe("folder grants", () => {
       .send({ userId: "author1", accessLevel: "edit" });
     expect(put.status).toBe(200);
     const list = await request(app).get("/api/test-folders/B/access").use(as("author2"));
-    expect(list.body.inherited).toEqual([expect.objectContaining({ folderId: "A", userId: "author1" })]);
-    const del = await request(app).delete("/api/test-folders/A/access/author1/work").use(as("author2"));
+    // The owner of «A» owns «B» too, so only the grant is inherited.
+    expect(list.body.inherited).toEqual([
+      { userId: "author1", accessLevel: "edit", folderId: "A", folderName: "A" },
+    ]);
+    const del = await request(app).delete("/api/test-folders/A/access/author1").use(as("author2"));
     expect(del.status).toBe(204);
     expect(state.grants).toEqual([]);
+    const again = await request(app).delete("/api/test-folders/A/access/author1").use(as("author2"));
+    expect(again.status).toBe(404);
+  });
+
+  it("lists the owner of an ancestor folder as inherited edit", async () => {
+    state.folders[1].ownerId = "author1"; // «B» now belongs to author1, «A» still to author2
+    const res = await request(app).get("/api/test-folders/B/access").use(as("author1"));
+    expect(res.body.inherited).toEqual([
+      { userId: "author2", accessLevel: "edit", folderId: "A", folderName: "A" },
+    ]);
+  });
+
+  it("refuses the review level on a folder", async () => {
+    const res = await request(app).put("/api/test-folders/A/access").use(as("author2"))
+      .send({ userId: "author1", accessLevel: "review" });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "invalid_grant" });
+  });
+
+  it("names the people of the access panel for the folder owner only", async () => {
+    const ok = await request(app).get("/api/test-folders/A/access/users").use(as("author2"));
+    expect(ok.status).toBe(200);
+    expect(ok.body).toContainEqual({ id: "author1", name: "author1", email: "author1@x", roles: ["author"] });
+    const denied = await request(app).get("/api/test-folders/A/access/users").use(as("author1"));
+    expect(denied.status).toBe(403);
+  });
+});
+
+describe("folder owner", () => {
+  it("lets an administrator change the owner", async () => {
+    const res = await request(app).patch("/api/test-folders/A/owner").use(as("admin1")).send({ ownerId: "author1" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ folderId: "A", ownerId: "author1" });
+    expect(state.folders[0].ownerId).toBe("author1");
+  });
+
+  it("refuses the folder owner without the owner-change right", async () => {
+    const res = await request(app).patch("/api/test-folders/A/owner").use(as("author2")).send({ ownerId: "author1" });
+    expect(res.status).toBe(403);
+    expect(storageMock.setTestFolderOwner).not.toHaveBeenCalled();
+  });
+
+  it("validates the new owner", async () => {
+    expect((await request(app).patch("/api/test-folders/A/owner").use(as("admin1"))
+      .send({ ownerId: 5 })).status).toBe(400);
+    expect((await request(app).patch("/api/test-folders/A/owner").use(as("admin1"))
+      .send({ ownerId: "ghost" })).status).toBe(404);
+    expect((await request(app).patch("/api/test-folders/Z/owner").use(as("admin1"))
+      .send({ ownerId: null })).status).toBe(404);
   });
 
   it("refuses grants from someone who only edits the folder", async () => {

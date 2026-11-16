@@ -17,7 +17,9 @@ import { colorParamKeys } from "@shared/template/theme-params";
 import { resolveTemplateDir, resolveSystemScreenDir } from "../services/template-dir";
 import { requirePermission, requireUserContext } from "../middleware/auth";
 import { requireTestScope } from "../middleware/test-scope";
-import { readableTestScope, canGrantAccess, canAssignTest } from "../services/test-access";
+import { readableTestScope, canGrantAccess, canAssignTest, isAdminOrSuper } from "../services/test-access";
+import { folderRights, loadTestFolderNodes } from "../services/test-folder-access";
+import { ancestorChain, inheritedAccess } from "@shared/access";
 import { visibleTopic } from "../services/topic-access";
 import { assessTestPublish, type PublishCheckFinding } from "../services/draw-feasibility";
 import { planScormPublication, publishTest } from "../services/test-publish";
@@ -845,6 +847,13 @@ router.post("/", requirePermission("tests.create"), async (req, res) => {
         message: "Тест ссылается на недоступную тему",
         topicId: invisible,
       });
+    }
+
+    // Folder access inheritance: a test is created inside a folder only by someone who may
+    // edit that folder — the same rule as creating a sub-folder or moving a test into it.
+    if (folderId && !isAdminOrSuper(req.effectiveRoles ?? [])
+      && !(await folderRights(req.currentUser?.id ?? "", folderId)).edit) {
+      return res.status(403).json({ error: "forbidden", field: "folderId" });
     }
 
     // Выбранный шаблон проверяется ровно тем же правилом, что и в `PUT /:id/design`:
@@ -1893,7 +1902,20 @@ router.get("/:id/access", requirePermission("tests.access.grant"), async (req, r
     // dialog (PRD-52, 14.8) and would show here with a level the panel cannot set.
     const grants = (await storage.getTestAccessGrants(test.id))
       .filter((grant) => grant.accessLevel !== "review");
-    res.json({ testId: test.id, ownerId: test.ownerId ?? null, grants });
+    // Folder access inheritance: who reaches the test through its folder chain (read-only
+    // in the panel; such access is removed in the source folder).
+    const [nodes, folders, folderGrants] = await Promise.all([
+      loadTestFolderNodes(),
+      storage.getTestFolders(),
+      storage.getTestFolderGrants(),
+    ]);
+    const names = new Map(folders.map((f) => [f.id, f.name]));
+    const inherited = inheritedAccess(
+      ancestorChain(test.folderId ?? null, nodes),
+      folderGrants,
+      new Set(test.ownerId ? [test.ownerId] : []),
+    ).map((row) => ({ ...row, folderName: names.get(row.folderId) ?? "" }));
+    res.json({ testId: test.id, ownerId: test.ownerId ?? null, grants, inherited });
   } catch (error) {
     logger.error("Get test access error: " + (error as Error).message, "tests");
     res.status(500).json({ error: "Failed to get test access" });

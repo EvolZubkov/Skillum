@@ -876,24 +876,19 @@ export const testAccessGrants = pgTable("test_access_grants", {
 /**
  * Grants on a TEST FOLDER (docs/specs/2026-11-16-folder-access-inheritance-design.md).
  * Inherited by every test and sub-folder below it, as a union with the grants on the
- * item itself. Same two independent slots per (folder, user) as `test_access_grants`:
- * the working grant (`edit` or `assign`) and the review grant.
+ * item itself. One grant per (folder, user): `edit` or `assign`. Review is granted on
+ * a specific test only, never on a folder (owner decision 2026-11-16).
  */
 export const testFolderAccessGrants = pgTable("test_folder_access_grants", {
   id: varchar("id", { length: 36 }).primaryKey(),
   folderId: varchar("folder_id", { length: 36 }).notNull()
     .references(() => testFolders.id, { onDelete: "cascade" }),
   userId: varchar("user_id", { length: 36 }).notNull(),
-  accessLevel: text("access_level", { enum: ["edit", "assign", "review"] }).notNull(),
+  accessLevel: text("access_level", { enum: ["edit", "assign"] }).notNull(),
   grantedBy: varchar("granted_by", { length: 36 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
-  workIdx: uniqueIndex("test_folder_access_grants_work_idx")
-    .on(table.folderId, table.userId)
-    .where(sql`${table.accessLevel} <> 'review'`),
-  reviewIdx: uniqueIndex("test_folder_access_grants_review_idx")
-    .on(table.folderId, table.userId)
-    .where(sql`${table.accessLevel} = 'review'`),
+  userIdx: uniqueIndex("test_folder_access_grants_user_idx").on(table.folderId, table.userId),
 }));
 
 /**

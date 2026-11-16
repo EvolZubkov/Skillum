@@ -55,6 +55,10 @@ const { storageMock, testSettingsMock } = vi.hoisted(() => ({
     // by name the same way).
     getTestFolders: vi.fn().mockResolvedValue([]),
     createTestFolder: vi.fn(),
+    // Folder access inheritance: a «Папка» that moves the test keeps its inherited rights.
+    getTestFolderGrants: vi.fn().mockResolvedValue([]),
+    getTestAccessGrants: vi.fn().mockResolvedValue([]),
+    upsertTestAccessGrant: vi.fn(),
     // PRD-15 block D: «Оценка» sheet (per-test scoring overrides).
     getTestQuestionScoring: vi.fn().mockResolvedValue([]),
     replaceTestQuestionScoring: vi.fn().mockResolvedValue([]),
@@ -252,6 +256,8 @@ beforeEach(() => {
   storageMock.replaceTestQuestionScoring.mockResolvedValue([]);
   storageMock.getTestFolders.mockResolvedValue([]);
   storageMock.createTestFolder.mockResolvedValue({ id: "folder-new", name: "Папка", parentId: null });
+  storageMock.getTestFolderGrants.mockResolvedValue([]);
+  storageMock.getTestAccessGrants.mockResolvedValue([]);
   // Разделы приёмника: импорт «Структуры» читает их, чтобы не стереть обратную связь
   // раздела, которого книга не назвала. По умолчанию тест-приёмник разделов не имеет.
   storageMock.getTestSections.mockResolvedValue([]);
@@ -3733,6 +3739,67 @@ describe("POST /:id/workbook/import — «Настройки»: папка те�
     expect(res.status).toBe(200);
     expect(storageMock.createTestFolder).not.toHaveBeenCalled();
     expect(testSettingsMock.save).not.toHaveBeenCalled();
+  });
+
+  // Folder access inheritance: the author of the book is not an administrator here.
+  describe("права на папку", () => {
+    beforeEach(() => {
+      storageMock.getUserRoles.mockResolvedValue(["author"]);
+      storageMock.getTest.mockResolvedValue({ ...baseTest, ownerId: "user-1", folderId: null });
+    });
+
+    it("чужая папка с тем же именем не используется: ошибка, папка теста не меняется", async () => {
+      storageMock.getTestFolders.mockResolvedValue([
+        { id: "f1", name: "Аттестация", parentId: null, ownerId: "someone" },
+      ]);
+
+      const res = await postWorkbook(await folderBook("Аттестация"));
+
+      expect(res.body.errors).toContain("Лист «Настройки», «Папка»: Нет прав на папку «Аттестация»");
+      expect(storageMock.createTestFolder).not.toHaveBeenCalled();
+      expect(testSettingsMock.save).not.toHaveBeenCalledWith(
+        "test-1",
+        expect.objectContaining({ test: expect.objectContaining({ folderId: expect.anything() }) }),
+      );
+    });
+
+    it("своя папка принимает тест, и импорт сообщает, кому папка добавляет доступ", async () => {
+      storageMock.getTestFolders.mockResolvedValue([
+        { id: "f1", name: "Аттестация", parentId: null, ownerId: "user-1" },
+      ]);
+      storageMock.getTestFolderGrants.mockResolvedValue([
+        { folderId: "f1", userId: "u7", accessLevel: "assign" },
+        { folderId: "f1", userId: "u8", accessLevel: "edit" },
+      ]);
+
+      const res = await postWorkbook(await folderBook("Аттестация"));
+
+      expect(res.body.errors).toEqual([]);
+      expect(res.body.warnings).toContain(
+        "Лист «Настройки», «Папка»: в новой папке доступ к тесту получат ещё 2 человека",
+      );
+      expect(testSettingsMock.save).toHaveBeenCalledWith(
+        "test-1",
+        expect.objectContaining({ test: expect.objectContaining({ folderId: "f1" }) }),
+      );
+    });
+
+    it("перенос из папки сохраняет унаследованные права на тесте", async () => {
+      storageMock.getTest.mockResolvedValue({ ...baseTest, ownerId: "user-1", folderId: "old" });
+      storageMock.getTestFolders.mockResolvedValue([
+        { id: "old", name: "Старая", parentId: null, ownerId: "user-1" },
+        { id: "f1", name: "Аттестация", parentId: null, ownerId: "user-1" },
+      ]);
+      storageMock.getTestFolderGrants.mockResolvedValue([
+        { folderId: "old", userId: "u7", accessLevel: "assign" },
+      ]);
+
+      await postWorkbook(await folderBook("Аттестация"));
+
+      expect(storageMock.upsertTestAccessGrant).toHaveBeenCalledWith(
+        expect.objectContaining({ testId: "test-1", userId: "u7", accessLevel: "assign" }),
+      );
+    });
   });
 });
 

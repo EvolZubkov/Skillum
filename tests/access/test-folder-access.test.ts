@@ -122,9 +122,13 @@ describe("union with test-access checks", () => {
     expect(await canAssignTest(manager, "m", testInB)).toBe(true);
     expect(await canEditTest(manager, "m", testInB)).toBe(false);
   });
-  it("lets a review grant on the folder open the review of the test", async () => {
-    setTree([{ folderId: "a", userId: "r", accessLevel: "review" }]);
+  it("lets an edit grant on the folder open the review of the test", async () => {
+    setTree([{ folderId: "a", userId: "r", accessLevel: "edit" }]);
     expect(await canReviewTest([ROLES.LEARNER], "r", testInB)).toBe(true);
+  });
+  it("does not open the review through an assign grant on the folder", async () => {
+    setTree([{ folderId: "a", userId: "r", accessLevel: "assign" }]);
+    expect(await canReviewTest([ROLES.LEARNER], "r", testInB)).toBe(false);
   });
   it("lets the folder owner delete a test inside", async () => {
     expect(await canDeleteTest(author, "fo", testInB)).toBe(true);
