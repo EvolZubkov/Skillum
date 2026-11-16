@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.58.1](https://github.com/vvlad1973/Fullstack-MVP-testing/compare/v2.58.0...v2.58.1)
+
+### Fixes
+
+- **fix**(tests): удаление папки вместе с тестами не оставляет их гранты и историю (2026-11-16) [`35aabb955eaff0222a453ed55642a0ad0b7be2ae`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/35aabb955eaff0222a453ed55642a0ad0b7be2ae)
+  deleteTestFolderCascade удалял одни строки tests: прямые гранты, назначения,
+  ссылки доступа, попытки, снимки и след LMS удалённых тестов оставались в базе.
+  Тело удаления теста вынесено в purgeTest(tx, id); его вызывают и deleteTest,
+  и каскад папки — для каждого теста удаляемых папок в одной транзакции.
+
 ## [2.58.0](https://github.com/vvlad1973/Fullstack-MVP-testing/compare/v2.57.0...v2.58.0)
 
 ### Features
