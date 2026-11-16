@@ -203,3 +203,33 @@ describe("ensureExternalLinkTargets", () => {
     expect(ensureExternalLinkTargets(src)).toBe(src);
   });
 });
+
+describe("исправление адреса ссылки", () => {
+  const href = (html: string) => /href="([^"]*)"/.exec(sanitizeHtml(html))?.[1];
+
+  it("схлопывает задвоенную схему", () => {
+    expect(href('<a href="https://https://x.ru/a">к</a>')).toBe("https://x.ru/a");
+    expect(href('<a href="http://https://x.ru">к</a>')).toBe("https://x.ru");
+  });
+
+  it("обрезает пробелы вокруг адреса", () => {
+    expect(href('<a href="  https://x.ru/a \n">к</a>')).toBe("https://x.ru/a");
+  });
+
+  it("достраивает второй слэш и выравнивает регистр схемы", () => {
+    expect(href('<a href="https:/x.ru">к</a>')).toBe("https://x.ru");
+    expect(href('<a href="HTTPS://x.ru/Path">к</a>')).toBe("https://x.ru/Path");
+  });
+
+  it("не трогает относительные адреса, mailto и якоря", () => {
+    expect(href('<a href="report.pdf">к</a>')).toBe("report.pdf");
+    expect(href('<a href="www.x.ru">к</a>')).toBe("www.x.ru");
+    expect(href('<a href="mailto:a@b.c">к</a>')).toBe("mailto:a@b.c");
+  });
+
+  it("исправляет и сохранённую ссылку при экспорте", () => {
+    expect(ensureExternalLinkTargets('<a href="https://https://x.ru">к</a>')).toBe(
+      '<a href="https://x.ru" target="_blank" rel="noopener noreferrer">к</a>',
+    );
+  });
+});
