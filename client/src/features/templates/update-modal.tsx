@@ -3,7 +3,9 @@
  * @description Re-upload a new ZIP version for an existing uploaded template
  * (PRD-3 §5.5–5.6). The package id must match. A passing validation refreshes the
  * manifest/version (re-run the health check afterwards to re-activate); a failing
- * one flags the template `invalid` and lists the blocking errors.
+ * one flags the template `invalid` and lists the blocking errors. A package of
+ * another template (`ID_MISMATCH`) is rejected without touching the template, so
+ * the banner says the template is unchanged instead of claiming it was invalidated.
  */
 import { useEffect, useState } from "react";
 import { Banner, Button, FileUploader, ModalDialog } from "@skillum/ui-kit";
@@ -41,6 +43,7 @@ export function UpdateModal({ open, onClose, template }: UpdateModalProps) {
   const accepted = outcome?.ok && outcome.template;
   const rejected = outcome && !outcome.ok;
   const blocking = outcome?.report?.blocking ?? [];
+  const foreignPackage = blocking.some((it) => it.code === "ID_MISMATCH");
 
   return (
     <ModalDialog
@@ -90,11 +93,19 @@ export function UpdateModal({ open, onClose, template }: UpdateModalProps) {
 
         {rejected && (
           <>
-            <Banner
-              tone="error"
-              title="Обновление не прошло проверку — шаблон помечен невалидным"
-              description={outcome?.error ?? "Устраните ошибки и загрузите архив повторно."}
-            />
+            {foreignPackage ? (
+              <Banner
+                tone="error"
+                title="Выбран архив другого шаблона"
+                description={outcome?.error ?? `Загрузите ZIP шаблона ${template.id}. Шаблон не изменён.`}
+              />
+            ) : (
+              <Banner
+                tone="error"
+                title="Обновление не прошло проверку — шаблон помечен невалидным"
+                description={outcome?.error ?? "Устраните ошибки и загрузите архив повторно."}
+              />
+            )}
             {blocking.length > 0 && (
               <ul className="tpl-upload-result-list">
                 {blocking.map((it, i) => (
