@@ -6,7 +6,7 @@
  * resolver reads and the rights a move keeps or adds.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
-import { tests, testFolderAccessGrants } from "@shared/schema";
+import { tests, testAccessGrants, testFolderAccessGrants } from "@shared/schema";
 import { createHarness, type Harness } from "./db-harness";
 
 const h = vi.hoisted(() => ({ current: null as Harness | null }));
@@ -89,6 +89,24 @@ describe("test folder grants", () => {
     await storage.upsertTestFolderGrant({ folderId: a.id, userId: "u", accessLevel: "edit" });
     await storage.upsertTestFolderGrant({ folderId: b.id, userId: "v", accessLevel: "assign" });
     expect((await storage.getTestFolderGrants()).length).toBe(2);
+  });
+
+  it("deleting a folder with its tests takes the tests' own grants too", async () => {
+    const a = await storage.createTestFolder({ name: "A", parentId: null, createdBy: "o" });
+    const b = await storage.createTestFolder({ name: "B", parentId: a.id, createdBy: "o" });
+    await insertTest("t1", a.id);
+    await insertTest("t2", b.id);
+    await insertTest("t3", null);
+    await storage.upsertTestAccessGrant({ testId: "t1", userId: "u", accessLevel: "edit" });
+    await storage.upsertTestAccessGrant({ testId: "t2", userId: "u", accessLevel: "review" });
+    await storage.upsertTestAccessGrant({ testId: "t3", userId: "u", accessLevel: "assign" });
+
+    expect(await storage.deleteTestFolderCascade(a.id)).toBe(true);
+
+    const left = await h.current!.db.select().from(testAccessGrants);
+    expect(left.map((g) => g.testId)).toEqual(["t3"]);
+    expect((await h.current!.db.select().from(tests)).map((t) => t.id)).toEqual(["t3"]);
+    expect(await storage.getTestFolders()).toEqual([]);
   });
 
   it("deletes the grants together with the folder", async () => {

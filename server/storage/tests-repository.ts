@@ -24,7 +24,7 @@ import {
   assignmentAccessTokens, analyticsSlices, questionExposure, testPublicLinks,
   type Test, type TestPublicLink, type InsertTest, type TestSection, type TestScenario, type TestSnapshot,
 } from "@shared/schema";
-import { countTestLmsTrail, purgeTestLmsData, type TestLmsTrailCounts } from "./scorm-repository";
+import { countTestLmsTrail, purgeTestLmsData, type DbTx, type TestLmsTrailCounts } from "./scorm-repository";
 
 /** What deleting a test takes with it (PRD-15 FR-07a): web attempts plus the LMS trail. */
 export interface TestDeleteImpact extends TestLmsTrailCounts {
@@ -55,6 +55,50 @@ function mapLegacyTest(row: Test): Test {
   const published = status === "published";
   if (status === row.status && published === row.published) return row;
   return { ...row, status: status as Test["status"], published };
+}
+
+/**
+ * Deletes one test with every row that has no meaning without it, inside the
+ * caller's transaction. The single body of test deletion: {@link TestsRepository.deleteTest}
+ * runs it for one test, the folder cascade (`deleteTestFolderCascade`) for each test
+ * of the deleted folders — so deleting a folder "with its tests" leaves no orphan
+ * grants, assignments, attempts or LMS trail behind.
+ *
+ * @param tx - The open transaction.
+ * @param id - The test to delete.
+ * @returns Whether the test row existed.
+ */
+export async function purgeTest(tx: DbTx, id: string): Promise<boolean> {
+  // Adaptive config: links carry no testId, so resolve them via their levels.
+  await tx.delete(adaptiveLevelLinks).where(
+    sql`${adaptiveLevelLinks.levelId} IN (SELECT ${adaptiveLevels.id} FROM ${adaptiveLevels} WHERE ${adaptiveLevels.testId} = ${id})`,
+  );
+  await tx.delete(adaptiveLevels).where(eq(adaptiveLevels.testId, id));
+  await tx.delete(adaptiveTopicSettings).where(eq(adaptiveTopicSettings.testId, id));
+
+  // Structural dependents.
+  await tx.delete(testSections).where(eq(testSections.testId, id));
+  await tx.delete(testScenarios).where(eq(testScenarios.testId, id));
+  await tx.delete(testAssignments).where(eq(testAssignments.testId, id));
+  // Personal access links (attempt and review) lead nowhere without the test.
+  await tx.delete(assignmentAccessTokens).where(eq(assignmentAccessTokens.testId, id));
+  await tx.delete(testAccessGrants).where(eq(testAccessGrants.testId, id));
+  // Saved analytics slices are bound to exactly one test (PRD-56); filters carry none.
+  await tx.delete(analyticsSlices).where(eq(analyticsSlices.testId, id));
+
+  // Delivery history. A hard delete is not restorable (archive is the
+  // retention path), so attempts and snapshots go too. Attempts pin
+  // snapshots, so drop attempts first.
+  await tx.delete(attempts).where(eq(attempts.testId, id));
+  await tx.delete(testSnapshots).where(eq(testSnapshots.testId, id));
+  await tx.delete(questionExposure).where(eq(questionExposure.testId, id));
+
+  // LMS trail. AFTER assignments and web attempts: the batch rollback keeps a
+  // participant it created while anything still refers to them.
+  await purgeTestLmsData(tx, id);
+
+  const result = await tx.delete(tests).where(eq(tests.id, id)).returning();
+  return result.length > 0;
 }
 
 /** Repository for the test aggregate (tests, sections, snapshots, lifecycle). */
@@ -280,38 +324,7 @@ export class TestsRepository {
    * the LMS keeps its own record, and archive is the retention path.
    */
   async deleteTest(id: string): Promise<boolean> {
-    return db.transaction(async (tx) => {
-      // Adaptive config: links carry no testId, so resolve them via their levels.
-      await tx.delete(adaptiveLevelLinks).where(
-        sql`${adaptiveLevelLinks.levelId} IN (SELECT ${adaptiveLevels.id} FROM ${adaptiveLevels} WHERE ${adaptiveLevels.testId} = ${id})`,
-      );
-      await tx.delete(adaptiveLevels).where(eq(adaptiveLevels.testId, id));
-      await tx.delete(adaptiveTopicSettings).where(eq(adaptiveTopicSettings.testId, id));
-
-      // Structural dependents.
-      await tx.delete(testSections).where(eq(testSections.testId, id));
-      await tx.delete(testScenarios).where(eq(testScenarios.testId, id));
-      await tx.delete(testAssignments).where(eq(testAssignments.testId, id));
-      // Personal access links (attempt and review) lead nowhere without the test.
-      await tx.delete(assignmentAccessTokens).where(eq(assignmentAccessTokens.testId, id));
-      await tx.delete(testAccessGrants).where(eq(testAccessGrants.testId, id));
-      // Saved analytics slices are bound to exactly one test (PRD-56); filters carry none.
-      await tx.delete(analyticsSlices).where(eq(analyticsSlices.testId, id));
-
-      // Delivery history. A hard delete is not restorable (archive is the
-      // retention path), so attempts and snapshots go too. Attempts pin
-      // snapshots, so drop attempts first.
-      await tx.delete(attempts).where(eq(attempts.testId, id));
-      await tx.delete(testSnapshots).where(eq(testSnapshots.testId, id));
-      await tx.delete(questionExposure).where(eq(questionExposure.testId, id));
-
-      // LMS trail. AFTER assignments and web attempts: the batch rollback keeps a
-      // participant it created while anything still refers to them.
-      await purgeTestLmsData(tx, id);
-
-      const result = await tx.delete(tests).where(eq(tests.id, id)).returning();
-      return result.length > 0;
-    });
+    return db.transaction((tx) => purgeTest(tx, id));
   }
 
   /**
