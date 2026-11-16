@@ -10,10 +10,20 @@
  * both shapes: a manifest directly in the directory and one a `template/` level deeper.
  * Its preview is written back into ITS OWN repository — that is where the file belongs.
  *
+ * VENDORED-OUT TEMPLATES ONLY ON REQUEST (`--external`). By default the script writes the
+ * previews of the built-in templates alone. `npm run build` starts with this script, and
+ * the vendored-out repositories sit at ONE path shared by every worktree: a default run
+ * used to rewrite their previews from whatever branch was being built, the product commit
+ * never took those files, and they hung modified in the template repositories with nobody
+ * to commit them. A vendored-out preview is regenerated when THAT template releases a
+ * version, and goes into the template's own commit.
+ *
  * The directory holding those repositories comes from SKILLUM_TEMPLATES_DIR, falling back
  * to the agreed location next to the product.
  *
- * Usage: node scripts/docs/generate-prd1-template-previews.mjs
+ * Usage:
+ *   node scripts/docs/generate-prd1-template-previews.mjs             built-in templates
+ *   node scripts/docs/generate-prd1-template-previews.mjs --external  plus vendored-out ones
  */
 
 import fs from "node:fs";
@@ -28,10 +38,16 @@ const externalTemplatesDir =
     ? process.env.SKILLUM_TEMPLATES_DIR
     : path.join("C:", "Repositories", "skill'um", "templates");
 
-/** Roots scanned for template packages: the built-in dir and the vendored-out repos. */
+/** Whether the vendored-out template repositories are regenerated too (`--external`). */
+const includeExternal = process.argv.slice(2).includes("--external");
+
+/**
+ * Roots scanned for template packages: the built-in dir, plus the vendored-out repos when
+ * `--external` is given.
+ */
 const TEMPLATE_ROOTS = [
   path.join(root, "server", "scorm", "templates"),
-  externalTemplatesDir,
+  ...(includeExternal ? [externalTemplatesDir] : []),
 ];
 const runtimeDir    = path.join(root, "server", "scorm", "template", "app");
 
