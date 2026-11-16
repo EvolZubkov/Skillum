@@ -19,6 +19,13 @@ const { storageMock } = vi.hoisted(() => ({
     updateTestFolder: vi.fn(),
     deleteTestFolder: vi.fn(),
     moveTestToFolder: vi.fn(),
+    // The routes resolve the folder and the test before acting on them (folder access inheritance).
+    getTest: vi.fn(),
+    getTestFolderGrants: vi.fn(),
+    getTestAccessGrants: vi.fn(),
+    getTestIdsInFolders: vi.fn(),
+    upsertTestAccessGrant: vi.fn(),
+    upsertTestFolderGrant: vi.fn(),
     getUser: vi.fn(),
     getUserRoles: vi.fn().mockResolvedValue(["administrator"]),
   },
@@ -63,6 +70,13 @@ beforeEach(() => {
     if (id === "learner1") return Promise.resolve(learnerUser);
     return Promise.resolve(undefined);
   });
+  storageMock.getTestFolders.mockResolvedValue([folder1, folder2, childFolder]);
+  storageMock.getTest.mockImplementation((id: string) =>
+    Promise.resolve(id === "nonexistent" ? undefined : { id, ownerId: null, folderId: null }));
+  // No folder grants in this suite: a move copies nothing and adds nobody.
+  storageMock.getTestFolderGrants.mockResolvedValue([]);
+  storageMock.getTestAccessGrants.mockResolvedValue([]);
+  storageMock.getTestIdsInFolders.mockResolvedValue([]);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

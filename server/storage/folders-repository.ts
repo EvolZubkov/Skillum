@@ -2,8 +2,9 @@
  * @module server/storage/folders-repository
  * @description Data access for the two organizational folder trees: content
  * folders (`folders`, holding topics) and test folders (`test_folders`, holding
- * tests). Folders are purely organizational and carry no permissions, so no
- * content-guard is involved. Delete variants relocate or cascade the folder's
+ * tests). Test folders carry an owner (`owner_id` = creator on create); their
+ * grants and the resolution of inherited rights live in the access repository
+ * and `server/services/test-folder-access.ts`. No content-guard is involved. Delete variants relocate or cascade the folder's
  * contents as one unit: the "folder only" deletes reparent topics/tests and
  * child folders to a destination (root by default), while
  * `deleteTestFolderCascade` removes every test in the subtree together with the
@@ -99,6 +100,8 @@ export class FoldersRepository {
       name: folder.name,
       parentId: folder.parentId || null,
       createdBy: folder.createdBy || null,
+      // The creator owns the folder (folder access inheritance design).
+      ownerId: folder.createdBy || null,
     }).returning();
     return newFolder;
   }

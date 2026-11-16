@@ -51,6 +51,8 @@ const { storageMock, sendEmailMock, decryptEmailMock, hashEmailMock } = vi.hoist
   hashEmailMock: vi.fn(),
 }));
 
+// The storage mock does not model the test folder tree: folders give no right here.
+vi.mock("../server/services/test-folder-access", () => import("./helpers/no-folder-rights"));
 vi.mock("../server/storage", () => ({ storage: storageMock }));
 vi.mock("../server/email", () => ({ sendAssignmentEmail: sendEmailMock }));
 // `../utils/crypto` is reached via dynamic import inside the router; mock it so

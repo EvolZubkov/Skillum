@@ -384,12 +384,22 @@ CREATE TABLE "test_assignments" (
 	"assigned_by" varchar(36) NOT NULL
 );
 
+CREATE TABLE "test_folder_access_grants" (
+	"id" varchar(36) PRIMARY KEY NOT NULL,
+	"folder_id" varchar(36) NOT NULL,
+	"user_id" varchar(36) NOT NULL,
+	"access_level" text NOT NULL,
+	"granted_by" varchar(36),
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "test_folders" (
 	"id" varchar(36) PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"parent_id" varchar(36),
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"created_by" varchar(36)
+	"created_by" varchar(36),
+	"owner_id" varchar(36)
 );
 
 CREATE TABLE "test_public_links" (
@@ -600,6 +610,7 @@ ALTER TABLE "report_blocks" ADD CONSTRAINT "report_blocks_test_id_tests_id_fk" F
 ALTER TABLE "result_variables" ADD CONSTRAINT "result_variables_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "saved_list_filters" ADD CONSTRAINT "saved_list_filters_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "scales" ADD CONSTRAINT "scales_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "test_folder_access_grants" ADD CONSTRAINT "test_folder_access_grants_folder_id_test_folders_id_fk" FOREIGN KEY ("folder_id") REFERENCES "public"."test_folders"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "test_public_links" ADD CONSTRAINT "test_public_links_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "test_question_scoring" ADD CONSTRAINT "test_question_scoring_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "test_question_scoring" ADD CONSTRAINT "test_question_scoring_question_id_questions_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE cascade ON UPDATE no action;
@@ -643,6 +654,8 @@ CREATE UNIQUE INDEX "test_access_grants_review_idx" ON "test_access_grants" USIN
 CREATE INDEX "test_assignments_test_id_idx" ON "test_assignments" USING btree ("test_id");
 CREATE INDEX "test_assignments_user_id_idx" ON "test_assignments" USING btree ("user_id");
 CREATE INDEX "test_assignments_group_id_idx" ON "test_assignments" USING btree ("group_id");
+CREATE UNIQUE INDEX "test_folder_access_grants_work_idx" ON "test_folder_access_grants" USING btree ("folder_id","user_id") WHERE "test_folder_access_grants"."access_level" <> 'review';
+CREATE UNIQUE INDEX "test_folder_access_grants_review_idx" ON "test_folder_access_grants" USING btree ("folder_id","user_id") WHERE "test_folder_access_grants"."access_level" = 'review';
 CREATE UNIQUE INDEX "test_public_links_test_idx" ON "test_public_links" USING btree ("test_id");
 CREATE UNIQUE INDEX "test_public_links_token_idx" ON "test_public_links" USING btree ("token");
 CREATE UNIQUE INDEX "test_question_scoring_test_question_idx" ON "test_question_scoring" USING btree ("test_id","question_id");

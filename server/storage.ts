@@ -88,6 +88,7 @@ import type {
   Group, InsertGroup,
   UserGroup,
   TestAccessGrant, InsertTestAccessGrant, TestGrantSlot,
+  TestFolderAccessGrant, InsertTestFolderAccessGrant,
   TestSnapshot,
   TestPublicLink,
   TopicAccessGrant,
@@ -161,6 +162,18 @@ export interface IStorage {
   getTestReviewGrant(testId: string, userId: string): Promise<TestAccessGrant | undefined>;
   upsertTestAccessGrant(grant: InsertTestAccessGrant): Promise<TestAccessGrant>;
   removeTestAccessGrant(testId: string, userId: string, slot: TestGrantSlot): Promise<boolean>;
+
+  // Test folder ownership + grants, inherited by the folder content
+  // (docs/specs/2026-11-16-folder-access-inheritance-design.md).
+  setTestFolderOwner(folderId: string, ownerId: string | null): Promise<void>;
+  getTestFolderGrants(): Promise<TestFolderAccessGrant[]>;
+  getTestFolderGrantsForFolder(folderId: string): Promise<TestFolderAccessGrant[]>;
+  upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant>;
+  removeTestFolderGrant(folderId: string, userId: string, slot: TestGrantSlot): Promise<boolean>;
+  /** Folder of a test: `null` = root, `undefined` = no such test. */
+  getTestFolderIdOfTest(testId: string): Promise<string | null | undefined>;
+  getFolderIdsOfTests(testIds: readonly string[]): Promise<Map<string, string | null>>;
+  getTestIdsInFolders(folderIds: readonly string[]): Promise<string[]>;
 
   // "Where used" lookups (PRD-15 FR-03): tests depending on shared content.
   getTestsUsingTopic(topicId: string): Promise<TestUsageRef[]>;
@@ -797,6 +810,38 @@ export class DatabaseStorage implements IStorage {
 
   removeTestAccessGrant(testId: string, userId: string, slot: TestGrantSlot): Promise<boolean> {
     return this.accessRepo.removeTestAccessGrant(testId, userId, slot);
+  }
+
+  setTestFolderOwner(folderId: string, ownerId: string | null): Promise<void> {
+    return this.accessRepo.setTestFolderOwner(folderId, ownerId);
+  }
+
+  getTestFolderGrants(): Promise<TestFolderAccessGrant[]> {
+    return this.accessRepo.getTestFolderGrants();
+  }
+
+  getTestFolderGrantsForFolder(folderId: string): Promise<TestFolderAccessGrant[]> {
+    return this.accessRepo.getTestFolderGrantsForFolder(folderId);
+  }
+
+  upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant> {
+    return this.accessRepo.upsertTestFolderGrant(grant);
+  }
+
+  removeTestFolderGrant(folderId: string, userId: string, slot: TestGrantSlot): Promise<boolean> {
+    return this.accessRepo.removeTestFolderGrant(folderId, userId, slot);
+  }
+
+  getTestFolderIdOfTest(testId: string): Promise<string | null | undefined> {
+    return this.accessRepo.getTestFolderIdOfTest(testId);
+  }
+
+  getFolderIdsOfTests(testIds: readonly string[]): Promise<Map<string, string | null>> {
+    return this.accessRepo.getFolderIdsOfTests(testIds);
+  }
+
+  getTestIdsInFolders(folderIds: readonly string[]): Promise<string[]> {
+    return this.accessRepo.getTestIdsInFolders(folderIds);
   }
 
   // ============================================

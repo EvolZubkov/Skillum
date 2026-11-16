@@ -98,6 +98,8 @@ const {
   dbState: { templates: [] as Array<Record<string, unknown>> },
 }));
 
+// The storage mock does not model the test folder tree: folders give no right here.
+vi.mock("../server/services/test-folder-access", () => import("./helpers/no-folder-rights"));
 vi.mock("../server/storage", () => ({ storage: storageMock }));
 // Configurable Drizzle chain: `db.select().from(t).where(cond)` resolves to
 // dbState.templates (the design route reads the active template row this way).

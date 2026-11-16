@@ -32,6 +32,8 @@ const { storageMock } = vi.hoisted(() => ({
   },
 }));
 
+// The storage mock does not model the test folder tree: folders give no right here.
+vi.mock("../server/services/test-folder-access", () => import("./helpers/no-folder-rights"));
 vi.mock("../server/storage", () => ({ storage: storageMock }));
 
 // FR-17: правила оценивания проверены тестами сбора ответов; здесь важна проводка условия.

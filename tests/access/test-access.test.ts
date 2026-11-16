@@ -21,6 +21,11 @@ const { storageMock } = vi.hoisted(() => ({
   },
 }));
 vi.mock("../../server/storage", () => ({ storage: storageMock }));
+// Folder inheritance is covered by test-folder-access.test.ts; here no folder gives any right.
+vi.mock("../../server/services/test-folder-access", () => ({
+  folderRightsForTest: vi.fn(async () => ({ owner: false, edit: false, assign: false, review: false })),
+  testIdsByFolderRights: vi.fn(async () => []),
+}));
 
 import {
   isAdminOrSuper,

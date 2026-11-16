@@ -415,6 +415,10 @@ export const testFolders = pgTable("test_folders", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   // PRD-15 FR-01: creation audit. NULL = legacy row (destructive ops admin-only).
   createdBy: varchar("created_by", { length: 36 }),
+  // Folder owner (docs/specs/2026-11-16-folder-access-inheritance-design.md): holds
+  // every right on the folder content. NULL = legacy folder, managed by administrators
+  // only. Backfilled from `created_by` by migration 0066.
+  ownerId: varchar("owner_id", { length: 36 }),
 });
 
 // ─── PRD-6: retake gate / cooldown (ограничение повторного прохождения) ──────
@@ -870,6 +874,29 @@ export const testAccessGrants = pgTable("test_access_grants", {
 }));
 
 /**
+ * Grants on a TEST FOLDER (docs/specs/2026-11-16-folder-access-inheritance-design.md).
+ * Inherited by every test and sub-folder below it, as a union with the grants on the
+ * item itself. Same two independent slots per (folder, user) as `test_access_grants`:
+ * the working grant (`edit` or `assign`) and the review grant.
+ */
+export const testFolderAccessGrants = pgTable("test_folder_access_grants", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  folderId: varchar("folder_id", { length: 36 }).notNull()
+    .references(() => testFolders.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  accessLevel: text("access_level", { enum: ["edit", "assign", "review"] }).notNull(),
+  grantedBy: varchar("granted_by", { length: 36 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  workIdx: uniqueIndex("test_folder_access_grants_work_idx")
+    .on(table.folderId, table.userId)
+    .where(sql`${table.accessLevel} <> 'review'`),
+  reviewIdx: uniqueIndex("test_folder_access_grants_review_idx")
+    .on(table.folderId, table.userId)
+    .where(sql`${table.accessLevel} = 'review'`),
+}));
+
+/**
  * Public link of a test (stage 1: at most one per test). Kept out of `tests` on purpose:
  * the test row is copied into publication snapshots and spread into `/api/learner/tests`,
  * so a token column there would leak to every learner of the test.
@@ -1290,6 +1317,12 @@ export type InsertTestAccessGrant = z.infer<typeof insertTestAccessGrantSchema>;
 /** Which of the two grant slots of a (test, user) pair: `edit`/`assign` or `review`. */
 export type TestGrantSlot = "work" | "review";
 export type TestAccessGrant = typeof testAccessGrants.$inferSelect;
+/** A grant on a test folder, inherited by the folder content. */
+export type TestFolderAccessGrant = typeof testFolderAccessGrants.$inferSelect;
+/** Fields the caller supplies when writing a test folder grant. */
+export type InsertTestFolderAccessGrant = Pick<
+  TestFolderAccessGrant, "folderId" | "userId" | "accessLevel"
+> & { grantedBy?: string | null };
 
 export type InsertFolder = z.infer<typeof insertFolderSchema>;
 export type Folder = typeof folders.$inferSelect;
