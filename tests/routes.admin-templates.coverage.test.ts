@@ -380,6 +380,20 @@ describe("PUT /:id/update", () => {
     expect(res.body.report.ok).toBe(false);
   });
 
+  it("422 leaves the template untouched when the ZIP belongs to another template", async () => {
+    const row = { id: "certification", isBuiltin: false, sourceType: "uploaded", status: "active", isActive: true };
+    dbMock.__state.selectResult = [row];
+    const buf = await validZip(); // manifest id "acme"
+    const res = await asAdmin(
+      request(makeApp()).put("/api/admin/templates/certification/update").attach("file", buf, "t.zip"),
+    );
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain("«acme» вместо «certification»");
+    expect(res.body.report.blocking.map((i: { code: string }) => i.code)).toContain("ID_MISMATCH");
+    expect(res.body.template).toMatchObject({ status: "active", isActive: true });
+    expect(dbMock.update).not.toHaveBeenCalled();
+  });
+
   it("200 replaces files and refreshes on a valid re-upload", async () => {
     dbMock.__state.selectResult = [{ id: "acme", isBuiltin: false, sourceType: "uploaded" }];
     dbMock.__state.returningResult = [{ id: "acme", version: "1.0.0", status: "draft" }];
