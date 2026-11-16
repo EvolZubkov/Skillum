@@ -33,9 +33,6 @@
     .wf-state > .ou-drawer-root,
     .wf-state > .ou-modal-root { top: var(--wf-nav-offset, var(--wf-size-52)); }
     .wf-sprite { display: none; }
-    /* Copy of the rule plan 2 adds to client/src/styles/tb-tests-list.css: the prod menu has
-       no disabled item yet. Delete from here once it lands in prod CSS. */
-    .tb-tests-list .dropdown-item:disabled { color: var(--ou-fg-disabled); cursor: not-allowed; background: none; }
   </style>
 </head>
 <body class="ou ou--light ou--normal">
@@ -582,7 +579,7 @@
     <table>
       <thead><tr><th>Элемент</th><th>DS-компонент</th><th>Токены</th><th>Примечания</th></tr></thead>
       <tbody>
-        <tr><td>Дерево, строки папок и тестов, меню папки</td><td>Без изменений: <code>tb-tests-list.css</code> (<code>.tree-folder</code>, <code>.dropdown-menu</code>)</td><td>—</td><td>Новые: пункт меню «Общий доступ» и неактивное состояние пункта — правило <code>.dropdown-item:disabled</code> (<code>--ou-fg-disabled</code>, <code>cursor: not-allowed</code>, без подсветки) добавляется в <code>tb-tests-list.css</code> в плане 2; в эскизе пока его копия</td></tr>
+        <tr><td>Дерево, строки папок и тестов, меню папки</td><td>Без изменений: <code>tb-tests-list.css</code> (<code>.tree-folder</code>, <code>.dropdown-menu</code>)</td><td>—</td><td>Новые: пункт меню «Общий доступ» и неактивное состояние пункта — правило <code>.dropdown-item:disabled</code> (<code>--ou-fg-disabled</code>, <code>cursor: not-allowed</code>, без подсветки) в <code>tb-tests-list.css</code></td></tr>
         <tr><td>Окно «Общий доступ» папки</td><td><code>Drawer</code> size="wide"</td><td>—</td><td>Та же раскладка, что <code>TestAccessPanel</code>: <code>Stack gap=6</code> / <code>Stack gap=3</code> / <code>Cluster</code></td></tr>
         <tr><td>Подписи разделов «Владелец», «Унаследовано»</td><td><code>Text</code> body-s semibold muted + <code>tb-caps</code></td><td>—</td><td>Как «Владелец» в панели теста</td></tr>
         <tr><td>Добавление гранта</td><td><code>Combobox</code> + <code>Select</code> + <code>Button</code> primary</td><td>—</td><td>Без изменений против панели теста</td></tr>

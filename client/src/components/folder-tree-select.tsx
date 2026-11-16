@@ -32,10 +32,20 @@ interface FolderTreeSelectProps {
   rootLabel?: string;
   /** Folder id (with its whole subtree) to omit — e.g. when moving a folder. */
   excludeId?: string;
+  /**
+   * Folders shown but not selectable — e.g. a test folder the reader may not put
+   * tests in (folder access inheritance). The root is always selectable.
+   */
+  isDisabled?: (folderId: string) => boolean;
 }
 
 /** Build DS Tree nodes: the folder hierarchy under one synthetic root. */
-function buildNodes(folders: FolderNode[], rootLabel: string, excludeId?: string): TreeNodeData[] {
+function buildNodes(
+  folders: FolderNode[],
+  rootLabel: string,
+  excludeId?: string,
+  isDisabled?: (folderId: string) => boolean,
+): TreeNodeData[] {
   const byParent = new Map<string | null, FolderNode[]>();
   for (const f of folders) {
     if (excludeId && f.id === excludeId) continue;
@@ -43,11 +53,24 @@ function buildNodes(folders: FolderNode[], rootLabel: string, excludeId?: string
     (byParent.get(key) ?? byParent.set(key, []).get(key)!).push(f);
   }
   const build = (parentId: string | null): TreeNodeData[] =>
-    (byParent.get(parentId) ?? []).map((f) => ({ id: f.id, label: f.name, folder: true, children: build(f.id) }));
+    (byParent.get(parentId) ?? []).map((f) => ({
+      id: f.id,
+      label: f.name,
+      folder: true,
+      disabled: isDisabled?.(f.id) ?? false,
+      children: build(f.id),
+    }));
   return [{ id: FOLDER_ROOT, label: rootLabel, folder: true, defaultExpanded: true, children: build(null) }];
 }
 
-export function FolderTreeSelect({ folders, value, onChange, rootLabel = "Без папки (корень)", excludeId }: FolderTreeSelectProps) {
+export function FolderTreeSelect({
+  folders,
+  value,
+  onChange,
+  rootLabel = "Без папки (корень)",
+  excludeId,
+  isDisabled,
+}: FolderTreeSelectProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -76,7 +99,10 @@ export function FolderTreeSelect({ folders, value, onChange, rootLabel = "Без
     };
   }, [open]);
 
-  const nodes = useMemo(() => buildNodes(folders, rootLabel, excludeId), [folders, rootLabel, excludeId]);
+  const nodes = useMemo(
+    () => buildNodes(folders, rootLabel, excludeId, isDisabled),
+    [folders, rootLabel, excludeId, isDisabled],
+  );
   const expandedKeys = useMemo(() => [FOLDER_ROOT, ...folders.map((f) => f.id)], [folders]);
   const triggerLabel = value === null ? rootLabel : (folders.find((f) => f.id === value)?.name ?? rootLabel);
 

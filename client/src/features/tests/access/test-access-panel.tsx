@@ -6,6 +6,10 @@
  * or revoke grants, and applies every change at once on an explicit "Сохранить".
  * The panel is admin/superadmin only — the caller gates the trigger by the
  * `tests.access.grant` capability; the server enforces it on every endpoint.
+ *
+ * Folder access inheritance: below the grants, the read-only «Унаследовано»
+ * section lists who reaches the test through its folder chain; a source folder
+ * opens its own panel, where that access is removed.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,53 +18,34 @@ import { Drawer, Button, IconButton, Avatar, Select, Combobox, EmptyState, Table
 import { Trash2, KeyRound } from "lucide-react";
 import { formatRoles } from "@/lib/roles";
 import type { Role } from "@shared/access";
-
-type AccessLevel = "edit" | "assign";
+import { LEVEL_OPTIONS, displayName, initials, type AccessLevel, type AccessUser } from "./access-people";
+import { InheritedAccessTable, type InheritedRow } from "./inherited-access-table";
 
 interface GrantRow {
   userId: string;
   accessLevel: AccessLevel;
 }
 
-interface AccessUser {
-  id: string;
-  name: string | null;
-  email: string | null;
-  roles?: string[];
-}
-
 interface AccessResponse {
   testId: string;
   ownerId: string | null;
   grants: GrantRow[];
-}
-
-/** Access level options for both the add-row and the per-grant selects. */
-const LEVEL_OPTIONS: { value: AccessLevel; label: string }[] = [
-  { value: "edit", label: "Редактирование" },
-  { value: "assign", label: "Назначение" },
-];
-
-function displayName(u?: AccessUser): string {
-  if (!u) return "—";
-  return u.name?.trim() || u.email || "—";
-}
-
-function initials(u?: AccessUser): string {
-  const name = u?.name?.trim();
-  if (name) {
-    const parts = name.split(/\s+/);
-    return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return (u?.email?.[0] ?? "?").toUpperCase();
+  /** Access through the folder chain; absent in an answer older than folder access. */
+  inherited?: InheritedRow[];
 }
 
 export function TestAccessPanel({
   test,
   onClose,
+  manageableFolderIds,
+  onOpenFolder,
 }: {
   test: { id: string; title: string } | null;
   onClose: () => void;
+  /** Folders whose access panel the reader may open from «Унаследовано». */
+  manageableFolderIds?: ReadonlySet<string>;
+  /** Opens the access panel of a source folder; without it folders show as text. */
+  onOpenFolder?: (folder: { id: string; name: string }) => void;
 }) {
   const { push: toast } = useToast();
   const queryClient = useQueryClient();
@@ -302,6 +287,13 @@ export function TestAccessPanel({
             />
           )}
         </Stack>
+
+        <InheritedAccessTable
+          rows={access?.inherited ?? []}
+          usersById={usersById}
+          manageableFolderIds={manageableFolderIds}
+          onOpenFolder={onOpenFolder}
+        />
       </Stack>
     </Drawer>
   );

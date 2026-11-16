@@ -682,12 +682,13 @@ async function resolveFolderPath(
   return { folderId: parentId };
 }
 
-/** «человек» in the form the number asks for. */
-function peopleWord(n: number): string {
+/** «получит/получат ещё N человек(а)» with the forms the number asks for. */
+function gainPhrase(n: number): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "человека";
-  return "человек";
+  const one = mod10 === 1 && mod100 !== 11;
+  const few = mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14);
+  return `${one ? "получит" : "получат"} ещё ${n} ${few ? "человека" : "человек"}`;
 }
 
 // ─── «Страницы» + «Поля страниц» (PRD-48 FR-14/FR-15) ────────────────────────
@@ -2026,9 +2027,8 @@ export async function importWorkbook(
         const plan = await planMove(subject, resolved.folderId);
         await materializeInheritedGrants(subject, plan, actor?.id ?? null);
         if (plan.gained.length > 0) {
-          const n = plan.gained.length;
           result.warnings.push(
-            `Лист «Настройки», «Папка»: в новой папке доступ к тесту ${n === 1 ? "получит" : "получат"} ещё ${n} ${peopleWord(n)}`,
+            `Лист «Настройки», «Папка»: в новой папке доступ к тесту ${gainPhrase(plan.gained.length)}`,
           );
         }
       }

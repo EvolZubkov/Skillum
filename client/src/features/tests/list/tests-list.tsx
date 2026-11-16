@@ -23,7 +23,7 @@
  * supplied by the layout; this component only renders the toolbar, tree
  * content, modals and the FAB.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { testHref } from "@/features/analytics/levels/analytics-routes";
@@ -104,6 +104,8 @@ import { describeDeleteImpact, type TestDeleteImpact } from "./delete-impact";
 import { SaveAsDialog } from "@/features/tests/export/save-as-dialog";
 import type { EditorTabKey } from "@/features/tests/editor/use-test-editor";
 import { TestAccessPanel } from "@/features/tests/access/test-access-panel";
+import { FolderAccessPanel } from "@/features/tests/access/folder-access-panel";
+import { MoveGainBanner, type GainedPerson } from "./move-gain-banner";
 import { PublicLinkModal } from "./public-link-modal";
 import { AssignTestDialog } from "@/components/assign-test-dialog";
 import { useAuth } from "@/lib/auth";
@@ -175,7 +177,10 @@ async function fetchJson<T>(url: string): Promise<T> {
  * loop).
  */
 const EMPTY_TESTS: ApiTestRow[] = [];
-const EMPTY_FOLDERS: TestFolder[] = [];
+/** A folder row of `GET /api/test-folders`, with the reader's rights on it. */
+type ApiFolderRow = TestFolder & Pick<FolderEntry, "canEdit" | "canManageAccess" | "visibility">;
+
+const EMPTY_FOLDERS: ApiFolderRow[] = [];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -193,7 +198,7 @@ export function TestsListPage(): React.JSX.Element {
     queryKey: ["/api/tests"],
     queryFn: () => fetchJson("/api/tests"),
   });
-  const { data: rawFolders = EMPTY_FOLDERS } = useQuery<TestFolder[]>({
+  const { data: rawFolders = EMPTY_FOLDERS } = useQuery<ApiFolderRow[]>({
     queryKey: ["/api/test-folders"],
     queryFn: () => fetchJson("/api/test-folders"),
   });
@@ -203,9 +208,24 @@ export function TestsListPage(): React.JSX.Element {
     [rawTests],
   );
   const folders: FolderEntry[] = useMemo(
-    () => rawFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId ?? null })),
+    () => rawFolders.map((f) => ({
+      id: f.id,
+      name: f.name,
+      parentId: f.parentId ?? null,
+      canEdit: f.canEdit,
+      canManageAccess: f.canManageAccess,
+      visibility: f.visibility,
+    })),
     [rawFolders],
   );
+  const foldersById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  /** Folders whose access panel the reader may open (owner or administrator). */
+  const manageableFolderIds = useMemo(
+    () => new Set(folders.filter((f) => f.canManageAccess !== false).map((f) => f.id)),
+    [folders],
+  );
+  /** Folders the reader may not put tests in: shown in the pickers, not selectable. */
+  const isFolderLocked = useCallback((id: string) => foldersById.get(id)?.canEdit === false, [foldersById]);
 
   // Local UI state ------------------------------------------------------------
   const [searchQuery, setSearchQuery] = useState("");
@@ -357,7 +377,14 @@ export function TestsListPage(): React.JSX.Element {
   // disabled as a no-op), `selected` is the user's pick.
   const [moveFolderPick, setMoveFolderPick] = useState<
     | null
-    | { testId: string; testTitle: string; current: string | null; selected: string | null }
+    | {
+      testId: string;
+      testTitle: string;
+      current: string | null;
+      selected: string | null;
+      /** People a `409 access_gain` named when the preview did not answer. */
+      refused?: GainedPerson[];
+    }
   >(null);
 
   // Existing dialogs (assign / export) --------------------------------------
@@ -368,6 +395,13 @@ export function TestsListPage(): React.JSX.Element {
 
   // Access panel (PRD-13 / PRD-15 BRC-27) — admin on any test, author on owned.
   const [accessTest, setAccessTest] = useState<{ id: string; title: string } | null>(null);
+  // Folder access inheritance: the «Общий доступ» panel of a folder.
+  const [accessFolder, setAccessFolder] = useState<{ id: string; name: string } | null>(null);
+  /** Opens the access panel of a source folder from an «Унаследовано» row. */
+  const openFolderAccess = (folder: { id: string; name: string }) => {
+    setAccessTest(null);
+    setAccessFolder(folder);
+  };
   const [publicLinkTest, setPublicLinkTest] = useState<{ id: string; title: string } | null>(null);
   const canGrantAccessCap = can("tests.access.grant");
   const isAdmin = hasRole(ROLES.ADMINISTRATOR) || hasRole(ROLES.SUPERADMIN);
@@ -472,10 +506,58 @@ export function TestsListPage(): React.JSX.Element {
     },
   });
 
+  // Folder access inheritance: before a move, the server names the people the
+  // destination folder adds; the dialog shows them and the move then confirms.
+  const movePreviewEnabled = moveFolderPick !== null && moveFolderPick.selected !== moveFolderPick.current;
+  const { data: movePreview } = useQuery<{ gained: GainedPerson[] }>({
+    queryKey: ["/api/test-folders/move-preview", moveFolderPick?.testId, moveFolderPick?.selected],
+    queryFn: async () => {
+      const res = await fetch("/api/test-folders/move-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ kind: "test", id: moveFolderPick?.testId, destFolderId: moveFolderPick?.selected ?? null }),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: movePreviewEnabled,
+    retry: false,
+    staleTime: 0,
+  });
+  /** People the move adds: the 409 answer wins over a preview that did not come. */
+  const moveGained: GainedPerson[] = !movePreviewEnabled
+    ? []
+    : (moveFolderPick?.refused ?? movePreview?.gained ?? []);
+
   const moveMutation = useMutation({
-    mutationFn: async (args: { testId: string; folderId: string | null }) =>
-      apiRequest("PATCH", `/api/test-folders/move/${args.testId}`, { folderId: args.folderId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/tests"] }),
+    mutationFn: async (args: { testId: string; folderId: string | null; confirmGain: boolean }) => {
+      const res = await fetch(`/api/test-folders/move/${args.testId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(args.confirmGain
+          ? { folderId: args.folderId, confirmGain: true }
+          : { folderId: args.folderId }),
+      });
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        throw Object.assign(new Error("access_gain"), { gained: (body.gained ?? []) as GainedPerson[] });
+      }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Не удалось переместить тест");
+    },
+    onSuccess: () => {
+      setMoveFolderPick(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/tests"] });
+    },
+    onError: (error: Error & { gained?: GainedPerson[] }) => {
+      if (error.gained) {
+        // The preview did not answer: show the people now, the next click confirms.
+        setMoveFolderPick((s) => (s ? { ...s, refused: error.gained } : s));
+        return;
+      }
+      toast({ tone: "error", title: "Ошибка", description: error.message });
+    },
   });
 
   const deleteTestMutation = useMutation({
@@ -710,6 +792,7 @@ export function TestsListPage(): React.JSX.Element {
           folderMenu={folderMenu}
           renderTestMenu={renderTestMenu}
           renderFolderMenu={renderFolderMenu}
+          foldersById={foldersById}
         />
       )}
 
@@ -731,6 +814,7 @@ export function TestsListPage(): React.JSX.Element {
       {fabFolderPick?.kind === "new-test" && (
         <FabFolderPickModal
           folders={folders}
+          isDisabled={isFolderLocked}
           selected={fabFolderPick.selected}
           onSelect={(id) =>
             setFabFolderPick({ kind: "new-test", selected: id })
@@ -752,18 +836,25 @@ export function TestsListPage(): React.JSX.Element {
       {moveFolderPick !== null && (
         <MoveFolderPickModal
           folders={folders}
+          isDisabled={isFolderLocked}
           testTitle={moveFolderPick.testTitle}
           current={moveFolderPick.current}
           selected={moveFolderPick.selected}
+          gained={moveGained}
+          moving={moveMutation.isPending}
           onSelect={(id) =>
-            setMoveFolderPick((s) => (s ? { ...s, selected: id } : s))
+            setMoveFolderPick((s) => (s ? { ...s, selected: id, refused: undefined } : s))
           }
           onCancel={() => setMoveFolderPick(null)}
           onMove={() => {
             if (!moveFolderPick) return;
-            const folderId = moveFolderPick.selected;
-            moveMutation.mutate({ testId: moveFolderPick.testId, folderId });
-            setMoveFolderPick(null);
+            moveMutation.mutate({
+              testId: moveFolderPick.testId,
+              folderId: moveFolderPick.selected,
+              // Confirm only what the dialog has shown: without a shown gain the
+              // server answers 409 if there is one, and the dialog then shows it.
+              confirmGain: moveGained.length > 0,
+            });
           }}
         />
       )}
@@ -929,7 +1020,18 @@ export function TestsListPage(): React.JSX.Element {
       />
 
       {/* Access panel (PRD-13, WF-2) ---------------------------------------- */}
-      <TestAccessPanel test={accessTest} onClose={() => setAccessTest(null)} />
+      <TestAccessPanel
+        test={accessTest}
+        onClose={() => setAccessTest(null)}
+        manageableFolderIds={manageableFolderIds}
+        onOpenFolder={openFolderAccess}
+      />
+      <FolderAccessPanel
+        folder={accessFolder}
+        onClose={() => setAccessFolder(null)}
+        manageableFolderIds={manageableFolderIds}
+        onOpenFolder={openFolderAccess}
+      />
 
       {/* Public link of a published test ---------------------------------- */}
       <PublicLinkModal test={publicLinkTest} onClose={() => setPublicLinkTest(null)} />
@@ -1231,7 +1333,14 @@ export function TestsListPage(): React.JSX.Element {
     );
   }
 
+  /**
+   * Menu of a folder row. Every item is always listed; one the reader has no right to
+   * is disabled, not hidden (folder access, 2026-11-16) — a transit folder therefore
+   * opens a menu of disabled items.
+   */
   function renderFolderMenu(folder: FolderEntry) {
+    const canEditFolder = folder.canEdit !== false;
+    const canManageFolder = folder.canManageAccess !== false;
     return (
       <div
         className="dropdown-menu"
@@ -1243,6 +1352,7 @@ export function TestsListPage(): React.JSX.Element {
           type="button"
           className="dropdown-item"
           role="menuitem"
+          disabled={!canEditFolder}
           onClick={() => {
             setFolderMenu(null);
             setRenameFolder({ id: folder.id, value: folder.name });
@@ -1252,11 +1362,26 @@ export function TestsListPage(): React.JSX.Element {
           <Pencil size={14} />
           Переименовать
         </button>
+        <button
+          type="button"
+          className="dropdown-item"
+          role="menuitem"
+          disabled={!canManageFolder}
+          onClick={() => {
+            setFolderMenu(null);
+            setAccessFolder({ id: folder.id, name: folder.name });
+          }}
+          data-testid={`folder-menu-access-${folder.id}`}
+        >
+          <KeyRound size={14} />
+          Общий доступ
+        </button>
         <hr className="dropdown-sep" />
         <button
           type="button"
           className="dropdown-item danger"
           role="menuitem"
+          disabled={!canEditFolder}
           onClick={() => {
             setFolderMenu(null);
             setDeleteFolderState({
@@ -1309,6 +1434,8 @@ function DefaultTree(props: {
   folderMenu: { id: string } | null;
   renderTestMenu: (test: TestListEntry) => React.JSX.Element;
   renderFolderMenu: (folder: FolderEntry) => React.JSX.Element;
+  /** Folder rows with the reader's rights, for the folder menu. */
+  foldersById: ReadonlyMap<string, FolderEntry>;
 }) {
   return (
     <div className="tree-area" role="tree" aria-label="Список тестов" data-testid="tests-list-tree">
@@ -1340,7 +1467,9 @@ function DefaultTree(props: {
                 props.onOpenFolderMore(row.id);
               }}
               menuOpen={props.folderMenu?.id === row.id}
-              menu={props.folderMenu?.id === row.id ? props.renderFolderMenu({ id: row.id, name: row.name, parentId: null }) : null}
+              menu={props.folderMenu?.id === row.id
+                ? props.renderFolderMenu(props.foldersById.get(row.id) ?? { id: row.id, name: row.name, parentId: row.parentId })
+                : null}
             />
           );
         }
@@ -2165,6 +2294,8 @@ function DeleteFolderModal(props: {
                           ...otherFolders.map((f) => ({
                             value: f.id,
                             label: f.name,
+                            // Folder access: tests go only where the reader may edit.
+                            disabled: f.canEdit === false,
                           })),
                         ]}
                         onChange={(value) =>
@@ -2243,12 +2374,20 @@ function DeleteFolderModal(props: {
  * but binds to an existing test: pre-selects the current folder, disables
  * «Переместить» until the user picks a different folder, then fires the move
  * mutation. Replaces the legacy `window.prompt("ID папки для перемещения")`.
+ *
+ * Folder access inheritance: folders the reader may not edit are shown but not
+ * selectable, and when the chosen folder adds people to the test the dialog
+ * names them under «Текущая» before the move. The dialog closes when the move
+ * succeeds, not on the click: a refused move (409) keeps it open with the people.
  */
 function MoveFolderPickModal(props: {
   folders: FolderEntry[];
+  isDisabled?: (folderId: string) => boolean;
   testTitle: string;
   current: string | null;
   selected: string | null;
+  gained: readonly GainedPerson[];
+  moving: boolean;
   onSelect: (id: string | null) => void;
   onCancel: () => void;
   onMove: () => void;
@@ -2275,6 +2414,7 @@ function MoveFolderPickModal(props: {
             variant="primary"
             onClick={props.onMove}
             disabled={noChange}
+            loading={props.moving}
             title={noChange ? "Тест уже в этой папке" : undefined}
             data-testid="move-folder-pick-submit"
           >
@@ -2290,10 +2430,12 @@ function MoveFolderPickModal(props: {
           value={props.selected}
           onChange={props.onSelect}
           rootLabel="Корень (без папки)"
+          isDisabled={props.isDisabled}
         />
         <Text variant="body-xs" tone="muted">
           Текущая: {props.current === null ? "Корень (без папки)" : (props.folders.find((f) => f.id === props.current)?.name ?? "—")}
         </Text>
+        <MoveGainBanner gained={props.gained} />
       </Stack>
     </ModalDialog>
   );
@@ -2301,6 +2443,8 @@ function MoveFolderPickModal(props: {
 
 function FabFolderPickModal(props: {
   folders: FolderEntry[];
+  /** Folders the reader may not create tests in: shown, not selectable. */
+  isDisabled?: (folderId: string) => boolean;
   selected: string | null;
   onSelect: (id: string | null) => void;
   onCancel: () => void;
@@ -2335,6 +2479,7 @@ function FabFolderPickModal(props: {
           value={props.selected}
           onChange={props.onSelect}
           rootLabel="Корень (без папки)"
+          isDisabled={props.isDisabled}
         />
       </Stack>
     </ModalDialog>

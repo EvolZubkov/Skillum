@@ -60,6 +60,15 @@ export type FolderEntry = {
   id: string;
   name: string;
   parentId: string | null;
+  /**
+   * Folder access inheritance: may the reader change the folder (rename, delete,
+   * put tests in)? Absent means «an older answer» and keeps the actions.
+   */
+  canEdit?: boolean;
+  /** May the reader manage the folder's grants (owner or administrator)? Absent = yes. */
+  canManageAccess?: boolean;
+  /** `transit`: shown only as the path to an accessible test. */
+  visibility?: "direct" | "transit";
 };
 
 /** Row produced by the tree builder. The page renders these in order. */

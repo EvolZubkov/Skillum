@@ -29,7 +29,12 @@ const users = () => [
   { id: "u3", name: "Пётр Смирнов", email: "petr@t.ru", roles: ["author"] },
 ];
 
-type Access = { testId: string; ownerId: string | null; grants: { userId: string; accessLevel: "edit" | "assign" }[] };
+type Access = {
+  testId: string;
+  ownerId: string | null;
+  grants: { userId: string; accessLevel: "edit" | "assign" }[];
+  inherited?: { userId: string; accessLevel: "edit" | "assign"; folderId: string; folderName: string }[];
+};
 
 let access: Access;
 let ownerPatchOk: boolean;
@@ -62,7 +67,12 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function renderPanel(props?: { test?: { id: string; title: string } | null; onClose?: () => void }) {
+function renderPanel(props?: {
+  test?: { id: string; title: string } | null;
+  onClose?: () => void;
+  manageableFolderIds?: ReadonlySet<string>;
+  onOpenFolder?: (folder: { id: string; name: string }) => void;
+}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, queryFn: getQueryFn({ on401: "throw" }) } },
   });
@@ -70,7 +80,12 @@ function renderPanel(props?: { test?: { id: string; title: string } | null; onCl
   const test = props && "test" in props ? props.test ?? null : { id: "t1", title: "Тест по финансам" };
   const utils = render(
     <QueryClientProvider client={client}>
-      <TestAccessPanel test={test} onClose={onClose} />
+      <TestAccessPanel
+        test={test}
+        onClose={onClose}
+        manageableFolderIds={props?.manageableFolderIds}
+        onOpenFolder={props?.onOpenFolder}
+      />
     </QueryClientProvider>,
   );
   return { ...utils, onClose };
@@ -186,6 +201,44 @@ describe("<TestAccessPanel />", () => {
     await waitFor(() =>
       expect(calls.some((c) => c.url === "/api/tests/t1/access/u2" && c.method === "DELETE")).toBe(true),
     );
+  });
+
+  describe("«Унаследовано» (folder access inheritance)", () => {
+    const inherited = [
+      { userId: "u3", accessLevel: "edit" as const, folderId: "fA", folderName: "Охрана труда" },
+      { userId: "u1", accessLevel: "assign" as const, folderId: "fB", folderName: "Чужая папка" },
+    ];
+
+    it("is absent for an older answer without the field", async () => {
+      await renderLoaded();
+      expect(screen.queryByText("Унаследовано")).not.toBeInTheDocument();
+    });
+
+    it("is absent when nothing is inherited", async () => {
+      access = { ...access, inherited: [] };
+      await renderLoaded();
+      expect(screen.queryByText("Унаследовано")).not.toBeInTheDocument();
+    });
+
+    it("lists who reaches the test through its folders, with level and folder", async () => {
+      access = { ...access, inherited };
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Унаследовано")).toBeInTheDocument());
+      const row = screen.getByText("Охрана труда").closest("tr")!;
+      expect(within(row).getByText("Пётр Смирнов")).toBeInTheDocument();
+      expect(within(row).getByText("Редактирование")).toBeInTheDocument();
+    });
+
+    it("opens a manageable source folder and shows any other as text", async () => {
+      access = { ...access, inherited };
+      const onOpenFolder = vi.fn();
+      await renderLoaded({ manageableFolderIds: new Set(["fA"]), onOpenFolder });
+      await waitFor(() => expect(screen.getByText("Унаследовано")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Охрана труда" }));
+      expect(onOpenFolder).toHaveBeenCalledWith({ id: "fA", name: "Охрана труда" });
+      expect(screen.queryByRole("button", { name: "Чужая папка" })).not.toBeInTheDocument();
+      expect(screen.getByText("Чужая папка")).toBeInTheDocument();
+    });
   });
 
   it("surfaces a failed owner change via a destructive toast (no close)", async () => {
