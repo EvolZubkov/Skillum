@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wireframe: права на папки тестов</title>
+  <!--
+  Эскиз к docs/specs/2026-11-16-folder-access-inheritance-design.md, план 2 (интерфейс).
+  Серверная часть — docs/plans/PLAN_test_folder_access_backend.md.
+
+  Разметка 1:1 с продом, а не с устаревшим approved/prd7-tests-list.html:
+  - дерево — client/src/features/tests/list/tests-list.tsx (TreeHeader, FolderRow, TestRow,
+    renderFolderMenu, MoveFolderPickModal);
+  - окно доступа — client/src/features/tests/access/test-access-panel.tsx (Drawer «Общий доступ»);
+  - классы компонентов — то, что выводит vendor/ui-kit (Drawer, Table = .ou-tbl, Select,
+    Combobox, Avatar, EmptyState, Banner, ModalDialog, Stack/Cluster = .ou-stack).
+
+  DS подключён из client/src/styles (preflight, vendor/skillum-ds.css, tb-components.css,
+  tb-tests-list.css), как в magic-scope-required.html: docs-копия DS отстала от рабочей,
+  а дерево тестов живёт только в tb-tests-list.css.
+  -->
+  <link rel="stylesheet" href="/client/src/styles/preflight.css" />
+  <link rel="stylesheet" href="/client/src/styles/vendor/skillum-ds.css" />
+  <link rel="stylesheet" href="/client/src/styles/tb-components.css" />
+  <link rel="stylesheet" href="/client/src/styles/tb-tests-list.css" />
+  <link rel="stylesheet" href="/docs/wireframes/prd7-shared.css" />
+  <script defer src="/docs/wireframes/prd7-shared.js"></script>
+  <link rel="stylesheet" href="/docs/wireframes/ds/wf-utils.css" />
+  <style>
+    /* Каркас ТОЛЬКО эскиза: показ состояний и подложка-страница. Ничего из UI. */
+    .wf-state.active { display: block; }
+    .wf-page-frame { height: calc(100vh - var(--wf-nav-offset, var(--wf-size-52))); display: flex; flex-direction: column; }
+    .wf-state > .ou-drawer-root,
+    .wf-state > .ou-modal-root { top: var(--wf-nav-offset, var(--wf-size-52)); }
+    .wf-sprite { display: none; }
+    /* Copy of the rule plan 2 adds to client/src/styles/tb-tests-list.css: the prod menu has
+       no disabled item yet. Delete from here once it lands in prod CSS. */
+    .tb-tests-list .dropdown-item:disabled { color: var(--ou-fg-disabled); cursor: not-allowed; background: none; }
+  </style>
+</head>
+<body class="ou ou--light ou--normal">
+
+<svg class="wf-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- lucide-react: X, Trash2, KeyRound, Folder, FolderOpen, ChevronRight, MoreHorizontal, Pencil, Users, BarChart3, Layers, TriangleAlert -->
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></symbol>
+  <symbol id="i-key-round" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+</svg>
+
+<nav class="wf-nav" aria-label="Wireframe state switcher">
+  <span class="wf-nav-title">Права на папки тестов:</span>
+  <button class="wf-btn active" type="button" onclick="showState(this,'s-tree')">Список</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-folder-menu')">Меню папки</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-transit-menu')">Меню: нет прав</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-folder-access')">Доступ к папке</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-folder-access-empty')">Доступ к папке: пусто</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-test-access')">Доступ к тесту</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-move-gain')">Перенос: доступ шире</button>
+  <button class="wf-btn" type="button" onclick="showState(this,'s-notes')">Пояснения</button>
+  <div class="wf-nav-sep"></div>
+  <button class="wf-btn" type="button" onclick="toggleTheme(this)">Dark</button>
+  <button class="wf-btn" type="button" onclick="toggleDensity(this)">Compact</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-tree: список автора Дмитрия Орлова.
+     «Охрана труда» — его папка (есть меню). «Информационная безопасность» — транзитная:
+     прав на папку нет, но внутри тест с прямым грантом; меню у папки нет.
+     Чужие пустые папки в список не попадают.
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state active" id="s-tree">
+  <div class="wf-page-frame">
+    <div class="tb-tests-list">
+      <div class="tree-area" role="tree" aria-label="Список тестов">
+        <div class="tree-header" aria-hidden="true">
+          <div>Название</div><div>Владелец</div><div>Статус</div><div>Режим</div><div>Сценарий</div><div>Тем</div><div>Вопросов</div><div>Назначений</div><div></div>
+        </div>
+        <div class="tree-root" role="treeitem" aria-expanded="true" aria-level="1">
+          <div class="tree-root-label">
+            <svg class="folder-icon" width="14" height="14" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Все тесты <span class="folder-count">&nbsp;(2)</span>
+          </div>
+        </div>
+
+        <div class="tree-folder" role="treeitem" aria-expanded="true" aria-level="2">
+          <div class="tree-folder-name">
+            <span class="chevron open" aria-hidden="true"><svg width="12" height="12"><use href="#i-chevron-right"/></svg></span>
+            <svg class="folder-icon" width="15" height="15" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Охрана труда
+            <span class="folder-count">(1)</span>
+          </div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div class="tree-folder-actions">
+            <div class="more-btn-wrap">
+              <button type="button" class="action-btn" aria-label="Действия с папкой" onclick="showState(document.querySelector('.wf-btn[onclick*=s-folder-menu]'),'s-folder-menu')"><svg width="14" height="14"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="tree-test indent-1" role="treeitem" aria-level="3">
+          <div class="tree-test-name">
+            <span class="indent-line" aria-hidden="true"></span>
+            <div class="test-info"><div class="test-name">Вводный инструктаж</div></div>
+          </div>
+          <div class="tree-test-owner"><span>Дмитрий Орлов</span></div>
+          <div class="tb-status-cell"><span class="tb-status-stack"><span class="ou-tag ou-tag--success" aria-label="Статус: опубликован">Опубликован</span></span></div>
+          <div><span class="mode-badge standard" title="Стандартный режим">Стандарт</span></div>
+          <div><span class="flow-chip" title="Линейный по темам"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>По темам</span></div>
+          <div class="tree-num">3</div>
+          <div class="tree-num">24</div>
+          <div class="tree-num">2</div>
+          <div class="tree-test-actions">
+            <button type="button" class="action-btn" title="Редактировать" aria-label="Редактировать"><svg width="14" height="14"><use href="#i-pencil"/></svg></button>
+            <button type="button" class="action-btn" title="Аналитика" aria-label="Аналитика"><svg width="14" height="14"><use href="#i-bar-chart"/></svg></button>
+            <div class="more-btn-wrap"><button type="button" class="action-btn" aria-label="Ещё действия"><svg width="14" height="14"><use href="#i-more"/></svg></button></div>
+          </div>
+        </div>
+
+        <!-- Транзитная папка: меню есть, все пункты в нём неактивны (s-transit-menu). -->
+        <div class="tree-folder" role="treeitem" aria-expanded="true" aria-level="2">
+          <div class="tree-folder-name">
+            <span class="chevron open" aria-hidden="true"><svg width="12" height="12"><use href="#i-chevron-right"/></svg></span>
+            <svg class="folder-icon" width="15" height="15" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Информационная безопасность
+            <span class="folder-count">(1)</span>
+          </div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div class="tree-folder-actions">
+            <div class="more-btn-wrap">
+              <button type="button" class="action-btn" aria-label="Действия с папкой" onclick="showState(document.querySelector('.wf-btn[onclick*=s-transit-menu]'),'s-transit-menu')"><svg width="14" height="14"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="tree-test indent-1" role="treeitem" aria-level="3">
+          <div class="tree-test-name">
+            <span class="indent-line" aria-hidden="true"></span>
+            <div class="test-info"><div class="test-name">Фишинг: базовый курс</div></div>
+          </div>
+          <div class="tree-test-owner"><span>Марина Иванова</span></div>
+          <div class="tb-status-cell"><span class="ou-tag ou-tag--neutral" aria-label="Статус: черновик">Черновик</span></div>
+          <div><span class="mode-badge standard" title="Стандартный режим">Стандарт</span></div>
+          <div><span class="flow-chip" title="Линейный по темам"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>По темам</span></div>
+          <div class="tree-num">2</div>
+          <div class="tree-num">18</div>
+          <div class="tree-num">0</div>
+          <div class="tree-test-actions">
+            <button type="button" class="action-btn" title="Редактировать" aria-label="Редактировать"><svg width="14" height="14"><use href="#i-pencil"/></svg></button>
+            <button type="button" class="action-btn" title="Аналитика" aria-label="Аналитика"><svg width="14" height="14"><use href="#i-bar-chart"/></svg></button>
+            <div class="more-btn-wrap"><button type="button" class="action-btn" aria-label="Ещё действия"><svg width="14" height="14"><use href="#i-more"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-folder-menu: меню своей папки — новый пункт «Общий доступ» (как у теста).
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-folder-menu">
+  <div class="wf-page-frame">
+    <div class="tb-tests-list">
+      <div class="tree-area" role="tree" aria-label="Список тестов">
+        <div class="tree-header" aria-hidden="true">
+          <div>Название</div><div>Владелец</div><div>Статус</div><div>Режим</div><div>Сценарий</div><div>Тем</div><div>Вопросов</div><div>Назначений</div><div></div>
+        </div>
+        <div class="tree-root" role="treeitem" aria-expanded="true" aria-level="1">
+          <div class="tree-root-label">
+            <svg class="folder-icon" width="14" height="14" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Все тесты <span class="folder-count">&nbsp;(2)</span>
+          </div>
+        </div>
+        <div class="tree-folder" role="treeitem" aria-expanded="true" aria-level="2">
+          <div class="tree-folder-name">
+            <span class="chevron open" aria-hidden="true"><svg width="12" height="12"><use href="#i-chevron-right"/></svg></span>
+            <svg class="folder-icon" width="15" height="15" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Охрана труда
+            <span class="folder-count">(1)</span>
+          </div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div class="tree-folder-actions is-open">
+            <div class="more-btn-wrap">
+              <button type="button" class="action-btn" aria-label="Действия с папкой"><svg width="14" height="14"><use href="#i-more"/></svg></button>
+              <div class="dropdown-menu" role="menu" aria-label="Действия с папкой">
+                <button type="button" class="dropdown-item" role="menuitem"><svg width="14" height="14"><use href="#i-pencil"/></svg>Переименовать</button>
+                <button type="button" class="dropdown-item" role="menuitem" onclick="showState(document.querySelector('.wf-btn[onclick*=s-folder-access]'),'s-folder-access')"><svg width="14" height="14"><use href="#i-key-round"/></svg>Общий доступ</button>
+                <hr class="dropdown-sep">
+                <button type="button" class="dropdown-item danger" role="menuitem"><svg width="14" height="14"><use href="#i-trash"/></svg>Удалить папку...</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tree-test indent-1" role="treeitem" aria-level="3">
+          <div class="tree-test-name">
+            <span class="indent-line" aria-hidden="true"></span>
+            <div class="test-info"><div class="test-name">Вводный инструктаж</div></div>
+          </div>
+          <div class="tree-test-owner"><span>Дмитрий Орлов</span></div>
+          <div class="tb-status-cell"><span class="tb-status-stack"><span class="ou-tag ou-tag--success" aria-label="Статус: опубликован">Опубликован</span></span></div>
+          <div><span class="mode-badge standard" title="Стандартный режим">Стандарт</span></div>
+          <div><span class="flow-chip" title="Линейный по темам"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>По темам</span></div>
+          <div class="tree-num">3</div>
+          <div class="tree-num">24</div>
+          <div class="tree-num">2</div>
+          <div class="tree-test-actions">
+            <button type="button" class="action-btn" title="Редактировать" aria-label="Редактировать"><svg width="14" height="14"><use href="#i-pencil"/></svg></button>
+            <button type="button" class="action-btn" title="Аналитика" aria-label="Аналитика"><svg width="14" height="14"><use href="#i-bar-chart"/></svg></button>
+            <div class="more-btn-wrap"><button type="button" class="action-btn" aria-label="Ещё действия"><svg width="14" height="14"><use href="#i-more"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-transit-menu: меню транзитной папки — те же пункты, все неактивны.
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-transit-menu">
+  <div class="wf-page-frame">
+    <div class="tb-tests-list">
+      <div class="tree-area" role="tree" aria-label="Список тестов">
+        <div class="tree-header" aria-hidden="true">
+          <div>Название</div><div>Владелец</div><div>Статус</div><div>Режим</div><div>Сценарий</div><div>Тем</div><div>Вопросов</div><div>Назначений</div><div></div>
+        </div>
+        <div class="tree-root" role="treeitem" aria-expanded="true" aria-level="1">
+          <div class="tree-root-label">
+            <svg class="folder-icon" width="14" height="14" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Все тесты <span class="folder-count">&nbsp;(2)</span>
+          </div>
+        </div>
+        <div class="tree-folder" role="treeitem" aria-expanded="true" aria-level="2">
+          <div class="tree-folder-name">
+            <span class="chevron open" aria-hidden="true"><svg width="12" height="12"><use href="#i-chevron-right"/></svg></span>
+            <svg class="folder-icon" width="15" height="15" aria-hidden="true"><use href="#i-folder-open"/></svg>
+            Информационная безопасность
+            <span class="folder-count">(1)</span>
+          </div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div class="tree-folder-actions is-open">
+            <div class="more-btn-wrap">
+              <button type="button" class="action-btn" aria-label="Действия с папкой"><svg width="14" height="14"><use href="#i-more"/></svg></button>
+              <div class="dropdown-menu" role="menu" aria-label="Действия с папкой">
+                <button type="button" class="dropdown-item" role="menuitem" disabled><svg width="14" height="14"><use href="#i-pencil"/></svg>Переименовать</button>
+                <button type="button" class="dropdown-item" role="menuitem" disabled><svg width="14" height="14"><use href="#i-key-round"/></svg>Общий доступ</button>
+                <hr class="dropdown-sep">
+                <button type="button" class="dropdown-item danger" role="menuitem" disabled><svg width="14" height="14"><use href="#i-trash"/></svg>Удалить папку...</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tree-test indent-1" role="treeitem" aria-level="3">
+          <div class="tree-test-name">
+            <span class="indent-line" aria-hidden="true"></span>
+            <div class="test-info"><div class="test-name">Фишинг: базовый курс</div></div>
+          </div>
+          <div class="tree-test-owner"><span>Марина Иванова</span></div>
+          <div class="tb-status-cell"><span class="ou-tag ou-tag--neutral" aria-label="Статус: черновик">Черновик</span></div>
+          <div><span class="mode-badge standard" title="Стандартный режим">Стандарт</span></div>
+          <div><span class="flow-chip" title="Линейный по темам"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>По темам</span></div>
+          <div class="tree-num">2</div>
+          <div class="tree-num">18</div>
+          <div class="tree-num">0</div>
+          <div class="tree-test-actions">
+            <button type="button" class="action-btn" title="Редактировать" aria-label="Редактировать"><svg width="14" height="14"><use href="#i-pencil"/></svg></button>
+            <button type="button" class="action-btn" title="Аналитика" aria-label="Аналитика"><svg width="14" height="14"><use href="#i-bar-chart"/></svg></button>
+            <div class="more-btn-wrap"><button type="button" class="action-btn" aria-label="Ещё действия"><svg width="14" height="14"><use href="#i-more"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-folder-access: Drawer «Общий доступ» папки «Инструктажи» (вложена в «Охрана труда»).
+     Свои гранты правятся; унаследованные — только просмотр со ссылкой на папку-источник.
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-folder-access">
+  <div class="ou-drawer-root ou-drawer-root--right" role="dialog" aria-modal="true" aria-labelledby="fa-title">
+    <div class="ou-drawer__backdrop"></div>
+    <aside class="ou-drawer ou-drawer--wide ou-drawer--right">
+      <header class="ou-drawer__head">
+        <div class="ou-drawer__head-text">
+          <h2 id="fa-title" class="ou-drawer__title">Общий доступ</h2>
+          <p class="ou-drawer__desc">Папка «Инструктажи»</p>
+        </div>
+        <button type="button" class="ou-drawer__close" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="ou-drawer__body">
+        <div class="ou-stack ou-stack--gap-6">
+          <section class="ou-stack ou-stack--gap-3">
+            <span class="ou-text ou-text--body-s ou-text--w-semibold ou-text--tone-muted tb-caps">Владелец</span>
+            <div class="ou-stack ou-stack--row ou-stack--gap-3 ou-stack--ai-center">
+              <span class="ou-avatar ou-avatar--s ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ДО</span></span></span>
+              <span>Дмитрий Орлов</span>
+              <span class="ou-grow"></span>
+              <button type="button" class="ou-btn ou-btn--secondary ou-btn--s">Сменить владельца</button>
+            </div>
+          </section>
+
+          <section class="ou-stack ou-stack--gap-3">
+            <div class="ou-stack ou-stack--row ou-stack--gap-3 ou-stack--ai-end ou-stack--wrap">
+              <div class="ou-select ou-field--m ou-field--default">
+                <button type="button" class="ou-field__box ou-select__trigger" aria-label="Выбрать пользователя" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="ou-select__value is-placeholder">Выберите пользователя…</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
+              <div class="ou-select ou-field--m ou-field--default">
+                <button type="button" class="ou-field__box ou-select__trigger" aria-label="Уровень доступа" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="ou-select__value">Редактирование</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
+              <button type="button" class="ou-btn ou-btn--primary ou-btn--m" disabled>Добавить</button>
+            </div>
+
+            <div class="ou-tbl ou-tbl--normal tb-tbl--menus">
+              <table>
+                <thead><tr>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Пользователь</span></th>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Уровень</span></th>
+                  <th class="is-align-right"><span class="ou-tbl__th-inner">Действия</span></th>
+                </tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ПС</span></span></span><span>Павел Сорокин</span></span></td>
+                    <td><div class="ou-select ou-field--m ou-field--default"><button type="button" class="ou-field__box ou-select__trigger" aria-label="Уровень доступа"><span class="ou-select__value">Редактирование</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button></div></td>
+                    <td class="is-align-right"><button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Отозвать доступ"><span class="ou-iconbtn__ico"><svg width="14" height="14"><use href="#i-trash"/></svg></span></button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center"><span class="ou-avatar ou-avatar--xs ou-avatar--c-amber"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ЕК</span></span></span><span>Елена Кравцова</span></span></td>
+                    <td><div class="ou-select ou-field--m ou-field--default"><button type="button" class="ou-field__box ou-select__trigger" aria-label="Уровень доступа"><span class="ou-select__value">Назначение</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button></div></td>
+                    <td class="is-align-right"><button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Отозвать доступ"><span class="ou-iconbtn__ico"><svg width="14" height="14"><use href="#i-trash"/></svg></span></button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="ou-stack ou-stack--gap-3">
+            <span class="ou-text ou-text--body-s ou-text--w-semibold ou-text--tone-muted tb-caps">Унаследовано</span>
+            <div class="ou-tbl ou-tbl--normal">
+              <table>
+                <thead><tr>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Пользователь</span></th>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Уровень</span></th>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Папка</span></th>
+                </tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center"><span class="ou-avatar ou-avatar--xs ou-avatar--c-purple"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АЛ</span></span></span><span>Анна Лебедева</span></span></td>
+                    <td>Назначение</td>
+                    <td><button type="button" class="ou-btn ou-btn--ghost ou-btn--s">Охрана труда</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+      <footer class="ou-drawer__foot">
+        <div class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center ou-stack--jc-end">
+          <button type="button" class="ou-btn ou-btn--ghost ou-btn--m">Отмена</button>
+          <button type="button" class="ou-btn ou-btn--primary ou-btn--m">Сохранить</button>
+        </div>
+      </footer>
+    </aside>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-folder-access-empty: своих грантов нет, унаследованных нет (папка в корне).
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-folder-access-empty">
+  <div class="ou-drawer-root ou-drawer-root--right" role="dialog" aria-modal="true" aria-labelledby="fae-title">
+    <div class="ou-drawer__backdrop"></div>
+    <aside class="ou-drawer ou-drawer--wide ou-drawer--right">
+      <header class="ou-drawer__head">
+        <div class="ou-drawer__head-text">
+          <h2 id="fae-title" class="ou-drawer__title">Общий доступ</h2>
+          <p class="ou-drawer__desc">Папка «Охрана труда»</p>
+        </div>
+        <button type="button" class="ou-drawer__close" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="ou-drawer__body">
+        <div class="ou-stack ou-stack--gap-6">
+          <section class="ou-stack ou-stack--gap-3">
+            <span class="ou-text ou-text--body-s ou-text--w-semibold ou-text--tone-muted tb-caps">Владелец</span>
+            <div class="ou-stack ou-stack--row ou-stack--gap-3 ou-stack--ai-center">
+              <span class="ou-avatar ou-avatar--s ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ДО</span></span></span>
+              <span>Дмитрий Орлов</span>
+              <span class="ou-grow"></span>
+              <button type="button" class="ou-btn ou-btn--secondary ou-btn--s">Сменить владельца</button>
+            </div>
+          </section>
+          <section class="ou-stack ou-stack--gap-3">
+            <div class="ou-stack ou-stack--row ou-stack--gap-3 ou-stack--ai-end ou-stack--wrap">
+              <div class="ou-select ou-field--m ou-field--default">
+                <button type="button" class="ou-field__box ou-select__trigger" aria-label="Выбрать пользователя"><span class="ou-select__value is-placeholder">Выберите пользователя…</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+              </div>
+              <div class="ou-select ou-field--m ou-field--default">
+                <button type="button" class="ou-field__box ou-select__trigger" aria-label="Уровень доступа"><span class="ou-select__value">Редактирование</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+              </div>
+              <button type="button" class="ou-btn ou-btn--primary ou-btn--m" disabled>Добавить</button>
+            </div>
+            <div class="ou-empty ou-empty--well" role="status">
+              <div class="ou-empty__art"><svg width="24" height="24" aria-hidden="true"><use href="#i-key-round"/></svg></div>
+              <div class="ou-empty__content"><h2 class="ou-empty__title">Доступ ещё никому не выдан</h2></div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <footer class="ou-drawer__foot">
+        <div class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center ou-stack--jc-end">
+          <button type="button" class="ou-btn ou-btn--ghost ou-btn--m">Отмена</button>
+          <button type="button" class="ou-btn ou-btn--primary ou-btn--m">Сохранить</button>
+        </div>
+      </footer>
+    </aside>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-test-access: существующая панель «Общий доступ» теста + раздел «Унаследовано».
+     Всё выше раздела — без изменений против test-access-panel.tsx.
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-test-access">
+  <div class="ou-drawer-root ou-drawer-root--right" role="dialog" aria-modal="true" aria-labelledby="ta-title">
+    <div class="ou-drawer__backdrop"></div>
+    <aside class="ou-drawer ou-drawer--wide ou-drawer--right">
+      <header class="ou-drawer__head">
+        <div class="ou-drawer__head-text">
+          <h2 id="ta-title" class="ou-drawer__title">Общий доступ</h2>
+          <p class="ou-drawer__desc">Вводный инструктаж</p>
+        </div>
+        <button type="button" class="ou-drawer__close" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="ou-drawer__body">
+        <div class="ou-stack ou-stack--gap-6">
+          <section class="ou-stack ou-stack--gap-3">
+            <span class="ou-text ou-text--body-s ou-text--w-semibold ou-text--tone-muted tb-caps">Владелец</span>
+            <div class="ou-stack ou-stack--row ou-stack--gap-3 ou-stack--ai-center">
+              <span class="ou-avatar ou-avatar--s ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ДО</span></span></span>
+              <span>Дмитрий Орлов</span>
+              <span class="ou-grow"></span>
+              <button type="button" class="ou-btn ou-btn--secondary ou-btn--s">Сменить владельца</button>
+            </div>
+          </section>
+          <section class="ou-stack ou-stack--gap-3">
+            <div class="ou-stack ou-stack--row ou-stack--gap-3 ou-stack--ai-end ou-stack--wrap">
+              <div class="ou-select ou-field--m ou-field--default">
+                <button type="button" class="ou-field__box ou-select__trigger" aria-label="Выбрать пользователя"><span class="ou-select__value is-placeholder">Выберите пользователя…</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+              </div>
+              <div class="ou-select ou-field--m ou-field--default">
+                <button type="button" class="ou-field__box ou-select__trigger" aria-label="Уровень доступа"><span class="ou-select__value">Редактирование</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+              </div>
+              <button type="button" class="ou-btn ou-btn--primary ou-btn--m" disabled>Добавить</button>
+            </div>
+            <div class="ou-tbl ou-tbl--normal tb-tbl--menus">
+              <table>
+                <thead><tr>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Пользователь</span></th>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Уровень</span></th>
+                  <th class="is-align-right"><span class="ou-tbl__th-inner">Действия</span></th>
+                </tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center"><span class="ou-avatar ou-avatar--xs ou-avatar--c-teal"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИС</span></span></span><span>Игорь Смирнов</span></span></td>
+                    <td><div class="ou-select ou-field--m ou-field--default"><button type="button" class="ou-field__box ou-select__trigger" aria-label="Уровень доступа"><span class="ou-select__value">Редактирование</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button></div></td>
+                    <td class="is-align-right"><button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Отозвать доступ"><span class="ou-iconbtn__ico"><svg width="14" height="14"><use href="#i-trash"/></svg></span></button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="ou-stack ou-stack--gap-3">
+            <span class="ou-text ou-text--body-s ou-text--w-semibold ou-text--tone-muted tb-caps">Унаследовано</span>
+            <div class="ou-tbl ou-tbl--normal">
+              <table>
+                <thead><tr>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Пользователь</span></th>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Уровень</span></th>
+                  <th class="is-align-left"><span class="ou-tbl__th-inner">Папка</span></th>
+                </tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ПС</span></span></span><span>Павел Сорокин</span></span></td>
+                    <td>Редактирование</td>
+                    <td><button type="button" class="ou-btn ou-btn--ghost ou-btn--s" onclick="showState(document.querySelector('.wf-btn[onclick*=s-folder-access]'),'s-folder-access')">Охрана труда</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center"><span class="ou-avatar ou-avatar--xs ou-avatar--c-amber"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ЕК</span></span></span><span>Елена Кравцова</span></span></td>
+                    <td>Назначение</td>
+                    <td><button type="button" class="ou-btn ou-btn--ghost ou-btn--s" onclick="showState(document.querySelector('.wf-btn[onclick*=s-folder-access]'),'s-folder-access')">Охрана труда</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+      <footer class="ou-drawer__foot">
+        <div class="ou-stack ou-stack--row ou-stack--gap-2 ou-stack--ai-center ou-stack--jc-end">
+          <button type="button" class="ou-btn ou-btn--ghost ou-btn--m">Отмена</button>
+          <button type="button" class="ou-btn ou-btn--primary ou-btn--m">Сохранить</button>
+        </div>
+      </footer>
+    </aside>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-move-gain: в существующем окне «Переместить в папку» после выбора папки, где
+     доступ шире, — предупреждение с числом людей; кнопка остаётся «Переместить».
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-move-gain">
+  <div class="ou-modal-root" role="dialog" aria-modal="true" aria-labelledby="mg-title">
+    <div class="ou-modal__backdrop"></div>
+    <div class="ou-modal ou-modal--s">
+      <header class="ou-modal__head">
+        <div class="ou-modal__head-text">
+          <h2 id="mg-title" class="ou-modal__title">Переместить в папку</h2>
+          <p class="ou-modal__desc">Выберите папку для теста «Фишинг: базовый курс»</p>
+        </div>
+        <button type="button" class="ou-modal__close" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="ou-modal__body">
+        <div class="ou-stack ou-stack--gap-2">
+          <label class="ou-field__lbl">Папка назначения</label>
+          <div class="ou-select ou-field--m ou-field--default ou-field--full">
+            <button type="button" class="ou-field__box ou-select__trigger" aria-label="Папка назначения"><span class="ou-select__value">Охрана труда</span><svg class="ou-select__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+          </div>
+          <span class="ou-text ou-text--body-xs ou-text--tone-muted">Текущая: Информационная безопасность</span>
+          <div class="ou-banner ou-banner--subtle ou-banner--warning" role="alert">
+            <span class="ou-banner__ico"><svg width="16" height="16" aria-hidden="true"><use href="#i-triangle-alert"/></svg></span>
+            <div class="ou-banner__body">
+              <div class="ou-banner__title">В новой папке доступ к тесту получат ещё 3 человека</div>
+              <div class="ou-banner__desc">Павел Сорокин (редактирование), Елена Кравцова (назначение), Анна Лебедева (назначение)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="ou-modal__foot">
+        <button type="button" class="ou-btn ou-btn--secondary ou-btn--m">Отмена</button>
+        <button type="button" class="ou-btn ou-btn--primary ou-btn--m">Переместить</button>
+      </footer>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     s-notes: пояснения и DS Mapping (вне холста экранов).
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="wf-state" id="s-notes">
+  <section class="wf-notes">
+    <h3 class="wf-notes-title">Пояснения — Wireframe</h3>
+    <table>
+      <thead><tr><th>Элемент</th><th>Поле API / условие</th><th>Примечание</th></tr></thead>
+      <tbody>
+        <tr><td>Список: какие папки видны</td><td><code>GET /api/test-folders</code> отдаёт только видимые папки; <code>visibility</code> = <code>direct</code> | <code>transit</code></td><td>Чужие папки без доступного содержимого, в том числе пустые, в ответ не попадают — клиенту прятать нечего</td></tr>
+        <tr><td>Меню «Действия с папкой»</td><td>Выводится у каждой папки; «Переименовать» и «Удалить папку...» активны при <code>canEdit</code> = true</td><td>У транзитной папки (<code>visibility: transit</code>) <code>canEdit</code> = false — меню открывается, все пункты неактивны (<code>s-transit-menu</code>)</td></tr>
+        <tr><td>Пункт «Общий доступ» в меню папки</td><td>Активен при <code>canManageAccess</code> = true (владелец папки или администратор), иначе неактивен</td><td>Иконка и подпись — как у пункта меню теста (<code>KeyRound</code>, «Общий доступ»)</td></tr>
+        <tr><td>Окно «Общий доступ» папки: владелец</td><td><code>GET /api/test-folders/:id/access</code> → <code>ownerId</code></td><td>«Сменить владельца» — как у теста: кнопка заменяет строку селектом пользователей, запись по «Сохранить» через новый <code>PATCH /api/test-folders/:id/owner</code> (план 2). Кнопка выводится тем, у кого есть <code>tests.owner.change</code>, как у теста</td></tr>
+        <tr><td>Свои гранты папки</td><td><code>grants</code>; запись — <code>PUT /:id/access</code> <code>{ userId, accessLevel }</code>, отзыв — <code>DELETE /:id/access/:userId/:slot</code></td><td>Как у теста: изменения копятся и применяются по «Сохранить»</td></tr>
+        <tr><td>Уровни в селекте</td><td><code>edit</code> «Редактирование», <code>assign</code> «Назначение»</td><td>Только два уровня. «Рецензирование» выдаётся на конкретный тест, на папку — нет: сервер в плане 2 перестаёт принимать <code>review</code> для папки</td></tr>
+        <tr><td>Раздел «Унаследовано»</td><td>Папка: <code>inherited</code>; тест: нужен новый ответ сервера с грантами цепочки папок (в плане 1 его нет)</td><td>Только просмотр. Кнопка с именем папки открывает «Общий доступ» той папки; снять унаследованное можно только там. Раздел не выводится, если унаследованного нет (<code>s-folder-access-empty</code>)</td></tr>
+        <tr><td>Предупреждение в «Переместить в папку»</td><td><code>POST /api/test-folders/move-preview</code> при выборе папки → <code>gained</code></td><td>Баннер выводится только при непустом списке. Заголовок — число, текст — имена с уровнем через запятую; больше 10 человек — первые 10 и «и ещё N». Превью должно отдавать список (<code>gained: [{ userId, accessLevel }]</code>), а не число — правка сервера в плане 2. «Переместить» шлёт <code>PATCH /move/:testId</code> с <code>confirmGain: true</code>; без него сервер отвечает <code>409 access_gain</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="wf-mapping">
+    <h2 class="wf-mapping-title">DS Mapping</h2>
+    <table>
+      <thead><tr><th>Элемент</th><th>DS-компонент</th><th>Токены</th><th>Примечания</th></tr></thead>
+      <tbody>
+        <tr><td>Дерево, строки папок и тестов, меню папки</td><td>Без изменений: <code>tb-tests-list.css</code> (<code>.tree-folder</code>, <code>.dropdown-menu</code>)</td><td>—</td><td>Новые: пункт меню «Общий доступ» и неактивное состояние пункта — правило <code>.dropdown-item:disabled</code> (<code>--ou-fg-disabled</code>, <code>cursor: not-allowed</code>, без подсветки) добавляется в <code>tb-tests-list.css</code> в плане 2; в эскизе пока его копия</td></tr>
+        <tr><td>Окно «Общий доступ» папки</td><td><code>Drawer</code> size="wide"</td><td>—</td><td>Та же раскладка, что <code>TestAccessPanel</code>: <code>Stack gap=6</code> / <code>Stack gap=3</code> / <code>Cluster</code></td></tr>
+        <tr><td>Подписи разделов «Владелец», «Унаследовано»</td><td><code>Text</code> body-s semibold muted + <code>tb-caps</code></td><td>—</td><td>Как «Владелец» в панели теста</td></tr>
+        <tr><td>Добавление гранта</td><td><code>Combobox</code> + <code>Select</code> + <code>Button</code> primary</td><td>—</td><td>Без изменений против панели теста</td></tr>
+        <tr><td>Таблица своих грантов</td><td><code>Table</code> + <code>tb-tbl--menus</code></td><td>—</td><td>Колонки «Пользователь / Уровень / Действия», как у теста</td></tr>
+        <tr><td>Таблица унаследованных</td><td><code>Table</code></td><td>—</td><td>Колонки «Пользователь / Уровень / Папка»; уровень — текстом, папка — <code>Button</code> ghost s</td></tr>
+        <tr><td>Пусто</td><td><code>EmptyState</code> well + <code>KeyRound</code></td><td>—</td><td>Текст как у теста</td></tr>
+        <tr><td>Предупреждение при переносе</td><td><code>Banner</code> tone="warning" (subtle)</td><td>—</td><td>Внутри существующего <code>MoveFolderPickModal</code>, под строкой «Текущая: …»</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<script>
+  /* Wireframe-only state switcher, theme and density toggles (same as magic-scope-required.html). */
+  window.showState = function showState(btn, id) {
+    var target = document.getElementById('wf-' + id) || document.getElementById(id);
+    document.querySelectorAll('.wf-state').forEach(function (el) { el.classList.toggle('active', el === target); });
+    document.querySelectorAll('.wf-nav button[onclick*="showState"]').forEach(function (button) { button.classList.toggle('active', button === btn); });
+    window.scrollTo(0, 0);
+  };
+  window.toggleTheme = function toggleTheme(btn) {
+    var dark = document.body.classList.toggle('ou--dark');
+    document.body.classList.toggle('ou--light', !dark);
+    btn.textContent = dark ? 'Light' : 'Dark';
+    btn.classList.toggle('active', dark);
+  };
+  window.toggleDensity = function toggleDensity(btn) {
+    var compact = document.body.classList.toggle('ou--compact');
+    document.body.classList.toggle('ou--normal', !compact);
+    btn.textContent = compact ? 'Normal' : 'Compact';
+    btn.classList.toggle('active', compact);
+  };
+</script>
+</body>
+</html>
