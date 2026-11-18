@@ -90,8 +90,22 @@ var TrustedNow = (function () {
   /**
    * Resolve epoch-ms of the portal clock, falling back to the machine clock on any
    * degradation. Never rejects: a verdict is always reachable.
+   *
+   * `preferredHeader` is the `Date` header of a response the caller ALREADY holds —
+   * the PRD-6 gate passes the one of its learning-records POST, the freshest server
+   * stamp it has, so the day is decided without waiting on anything else. When it is
+   * empty or unparseable the portal chrome at `endpoint` is read exactly as before.
    */
-  function resolveNowMs(endpoint) {
+  function resolveNowMs(endpoint, preferredHeader) {
+    var preferredMs = preferredHeader ? Date.parse(preferredHeader) : NaN;
+    if (preferredMs && isFinite(preferredMs)) {
+      var nowClientMs = Date.now();
+      lastSource = 'network';
+      glog('date source: network (records response) | server:', preferredHeader,
+        '| client:', new Date(nowClientMs).toUTCString(),
+        '| skew sec:', Math.round((preferredMs - nowClientMs) / 1000));
+      return Promise.resolve(preferredMs);
+    }
     var work = fetchPortalChrome(endpoint || '/');
     var timeout = new Promise(function (resolve) {
       setTimeout(function () { resolve(TIMEOUT); }, DATE_TIMEOUT_MS);

@@ -208,7 +208,25 @@ app.post("/api/mock-webtutor", express.json(), (req, res) => {
 // learning records here (all attempts, any outcome) and picks the latest FINISHED one
 // by the filter. Mirrors the live shape {success,total,results:[…]}: the record's
 // `name` echoes sSearchWord (the course title) so the nameField match selects it.
+// PRD-6 NFR-06 acceptance: a learner with a long learning history makes WebTutor
+// answer the records query slowly. `--records-delay-ms=` (or the env var) holds the
+// mocked answer back that long, so the gate's waiting indicator and its budget
+// (`timeoutMs`) can be watched locally.
+const RECORDS_DELAY_MS = Number(
+  (process.argv.find((a) => a.startsWith("--records-delay-ms=")) || "").split("=")[1] ||
+    process.env.SCORM_PLAYER_RECORDS_DELAY_MS ||
+    0,
+);
+
 function serveCollection(req, res) {
+  if (RECORDS_DELAY_MS > 0) {
+    setTimeout(() => serveCollectionNow(req, res), RECORDS_DELAY_MS);
+    return;
+  }
+  serveCollectionNow(req, res);
+}
+
+function serveCollectionNow(req, res) {
   const body = typeof req.body === "string" ? req.body : "";
   const params = decodeURIComponent((body.match(/(?:^|&)parameters=([^&]*)/) || [])[1] || "");
   const search = (params.match(/sSearchWord=([^;]*)/) || [])[1] || "Демо-курс";

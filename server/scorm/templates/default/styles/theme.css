@@ -1385,6 +1385,24 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
 .retake-wall__date { margin: 12px 0 0; font-size: 16px; color: var(--ou-fg-default); }
 .retake-wall__note { margin: 12px 0 0; color: var(--ou-error-default); }
 
+/* Waiting indicator of the retake gate (gate.js showWaiting) — replaces the
+   «Загрузка теста...» line while the eligibility check runs, before any layout of the
+   template is loaded. Approved wireframe: docs/wireframes/approved/prd6-gate-waiting.html.
+   The element carries `.ou.ou--light.ou--normal` itself (the DS tokens resolve only under
+   `.ou`, and <html> gets it from the template later); `.container > #app > *` stretches it
+   over the whole mount, so the content is centred in the window. */
+.tb-gate-wait {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--ou-space-3); padding: var(--ou-space-8) var(--ou-space-4); text-align: center;
+}
+.tb-gate-wait__spinner {
+  width: 32px; height: 32px; color: var(--ou-accent-default);
+  animation: tb-gate-spin 0.9s linear infinite; transform-origin: 50% 50%;
+}
+.tb-gate-wait__text { margin: 0; max-width: 400px; color: var(--ou-fg-default); }
+.tb-gate-wait__hint { margin: 0; max-width: 400px; color: var(--ou-fg-muted); }
+@keyframes tb-gate-spin { to { transform: rotate(360deg); } }
+
 /* ── Generic card + content-page skeleton (shared builders) ─────────
    The generic `content` layout is a `page-content` shell the runtime fills with a
    per-template placeholder skeleton (content-page.ts) — and the router hub fills it

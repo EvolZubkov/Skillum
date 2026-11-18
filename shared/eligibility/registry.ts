@@ -78,6 +78,10 @@ export const ELIGIBILITY_PLUGINS: EligibilityPluginEntry[] = [
           // «/»); it is not in SCORM pre-Initialize. No personIdSource — session-scoped.
           secidSource: { endpoint: "/", pattern: "[A-F0-9]{32}" },
           limit: 500,
+          // NFR-06: the whole gate budget, ms. WebTutor needs well over the old fixed
+          // 5 s to answer the records query for a learner with a long learning history;
+          // the package falls back to the same 30 s when the field is absent.
+          timeoutMs: 30000,
           attemptFilter: {
             // A record is a FINISHED attempt (any outcome) when state is «Пройден» OR
             // «Не пройден» — the RT grid uses these for pass/fail; BOTH start the
