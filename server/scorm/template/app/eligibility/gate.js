@@ -153,32 +153,83 @@ var RetakeGate = (function () {
       .replace(/\{\{\s*personId\s*\}\}/g, personId || '');
   }
 
-  // Scrape the session SECID (32-hex) the collection POST requires. It is present in
-  // the portal chrome; `secidSource.endpoint` (default "/") is fetched same-origin.
-  // The fetch itself is TrustedNow's — memoized there, so SECID, person id and the
-  // clock still cost ONE request per URL between them.
+  // The portal windows around the course frame, nearest first: the parent chain up to
+  // `top`, then the window that opened the player. They share the course's origin
+  // (confirmed 2026-08-01), so their HTML is readable with no request at all. A window
+  // of another origin throws on `.document` and is skipped.
+  function portalWindows() {
+    var out = [];
+    if (typeof window === 'undefined') return out;
+    function add(w) { if (w && w !== window && out.indexOf(w) === -1) out.push(w); }
+    var w = window;
+    for (var i = 0; i < 10; i++) {
+      var p = null;
+      try { p = w.parent; } catch (e) { p = null; }
+      if (!p || p === w) break;
+      add(p);
+      w = p;
+    }
+    try { add(window.top && window.top.opener); } catch (e) { /* cross-origin opener */ }
+    try { add(window.opener); } catch (e) { /* cross-origin opener */ }
+    return out;
+  }
+
+  /** First match of `pattern` in the HTML of an already loaded portal window, or null. */
+  function scanPortalWindows(pattern) {
+    var re = new RegExp(pattern);
+    var wins = portalWindows();
+    for (var i = 0; i < wins.length; i++) {
+      var html = '';
+      try { html = wins[i].document.documentElement.outerHTML || ''; } catch (e) { html = ''; }
+      var m = re.exec(html);
+      if (m) return m;
+    }
+    return null;
+  }
+
+  function secidPattern(config) {
+    return (config.secidSource && config.secidSource.pattern) || '[A-F0-9]{32}';
+  }
+
+  // Scrape the session SECID (32-hex) the collection POST requires. It is taken from
+  // the portal page ALREADY LOADED around the course first. Fetching the portal home
+  // page (`secidSource.endpoint`, default "/") is the fallback only: that page lists the
+  // learner's learnings, and for a learner with a long list WebTutor rendered it longer
+  // than the whole gate budget (live log 2026-11-18: the page never answered within
+  // 30 s, while the records query itself took 62 ms).
   function resolveSecid(config) {
+    var local = scanPortalWindows(secidPattern(config));
+    if (local) return Promise.resolve({ value: local[0], source: 'portal window' });
     var src = config.secidSource || {};
-    var pattern = src.pattern || '[A-F0-9]{32}';
     return TrustedNow.fetchPortalChrome(src.endpoint || '/').then(function (page) {
-      var m = new RegExp(pattern).exec(page.text || '');
-      return m ? m[0] : '';
+      var m = new RegExp(secidPattern(config)).exec(page.text || '');
+      return { value: m ? m[0] : '', source: 'GET ' + (src.endpoint || '/') };
     });
   }
 
   // Resolve cur_person_id. WebTutor's collection query is scoped to the learner by
-  // `cur_person_id`; it is not in SCORM (pre-Initialize) so it is scraped from the
-  // portal chrome via `personIdSource.pattern`, with an optional config override.
+  // `cur_person_id`; it is not in SCORM (pre-Initialize) so it is scraped — from the
+  // loaded portal windows first, then from the portal page — via
+  // `personIdSource.pattern`, with an optional config override.
   // NOTE: the live contract allows an EMPTY value (the endpoint is session-scoped),
   // so a miss here is not an error.
   function resolvePersonId(config) {
     if (config.personId) return Promise.resolve(String(config.personId));
     var src = config.personIdSource || {};
     if (!src.pattern) return Promise.resolve('');
+    var local = scanPortalWindows(src.pattern);
+    if (local) return Promise.resolve(local[1] || local[0]);
     return TrustedNow.fetchPortalChrome(src.endpoint || '/').then(function (page) {
       var m = new RegExp(src.pattern).exec(page.text || '');
       return m ? (m[1] || m[0]) : '';
     });
+  }
+
+  /** Whether the gate can do without the portal page: SECID (and person id) are local. */
+  function portalPageNeeded(config) {
+    if (!scanPortalWindows(secidPattern(config))) return true;
+    var pid = config.personIdSource || {};
+    return !!(pid.pattern && !config.personId && !scanPortalWindows(pid.pattern));
   }
 
   function formEncode(obj) {
@@ -213,8 +264,9 @@ var RetakeGate = (function () {
     var endpoint = config.collectionEndpoint || '';
     if (!endpoint) return Promise.reject(new Error('collection_endpoint_not_configured'));
     return Promise.all([resolveSecid(config), resolvePersonId(config)]).then(function (ids) {
-      var secid = ids[0], personId = ids[1];
-      glog('secid:', secid ? 'found' : '(NOT FOUND)', '| cur_person_id:', personId || '(session-scoped)');
+      var secid = ids[0].value, personId = ids[1];
+      glog('secid:', secid ? 'found (' + ids[0].source + ')' : '(NOT FOUND, ' + ids[0].source + ')',
+        '| cur_person_id:', personId || '(session-scoped)');
       if (!secid) throw new Error('secid_not_resolved');
       var refererUrl = typeof location !== 'undefined' ? location.href : '';
       var body = formEncode({
@@ -292,12 +344,15 @@ var RetakeGate = (function () {
     // `run` attaches the real handler later; this keeps an early failure from being
     // reported as an unhandled rejection in the meantime.
     work.catch(function () {});
-    // The fallback day, started NOW rather than after a failure: it reads the portal
-    // chrome the records request is built on anyway, under TrustedNow's own 2500 ms
-    // sub-budget, so by the time the gate budget runs out it has long settled and the
-    // whole gate stays inside `timeoutMs` even when the portal never answers.
-    var fallbackToday = resolveToday(ctx.config, '');
-    glog('records request started | budget:', gateTimeoutMs(td), 'ms');
+    // The fallback day. When the portal page has to be fetched anyway (SECID not found in
+    // the loaded windows), it is started NOW: it reads that same page's headers under
+    // TrustedNow's own 2500 ms sub-budget, so it has long settled when the gate budget
+    // runs out and the whole gate stays inside `timeoutMs`. When SECID is local, the
+    // portal page is NOT requested up front at all — it is the slow request — and the
+    // day is asked for only if the records response carries no usable `Date`.
+    var fallbackToday = portalPageNeeded(ctx.config) ? resolveToday(ctx.config, '') : null;
+    glog('records request started | budget:', gateTimeoutMs(td), 'ms | portal page:',
+      fallbackToday ? 'requested (SECID not in the loaded portal windows)' : 'not needed');
     pending = { td: td, ctx: ctx, startedAt: startedAt, work: work, fallbackToday: fallbackToday };
     showWaiting(td, startedAt);
     return pending;
@@ -319,7 +374,9 @@ var RetakeGate = (function () {
     });
     function withDay(header) {
       var headerMs = header ? Date.parse(header) : NaN;
-      var day = (headerMs && isFinite(headerMs)) ? resolveToday(config, header) : p.fallbackToday;
+      var day = (headerMs && isFinite(headerMs))
+        ? resolveToday(config, header)
+        : (p.fallbackToday || resolveToday(config, ''));
       return day.then(function (todayDate) {
         ctx.runtime.todayDate = todayDate;
         return ctx;

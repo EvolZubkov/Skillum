@@ -28,6 +28,10 @@ var TrustedNow = (function () {
   var TIMEOUT = { timedOut: true };
 
   var chrome = {};
+  // The same responses settled at HEADERS time. The clock lives in a header, so it must
+  // not wait for the body: on a live WebTutor the portal page body took longer than the
+  // whole gate budget (2026-11-18), which also starved the date of its header.
+  var heads = {};
 
   // Which clock the LAST resolution actually used. Reported rather than inferred: a
   // caller comparing the returned value against its own `Date.now()` could not tell a
@@ -46,32 +50,56 @@ var TrustedNow = (function () {
   // trusted clock all read the SAME response, so the portal is touched once per URL
   // instead of once per resolver. `no-store` keeps the Date header live: a cached
   // response would carry a stale server clock.
-  function fetchPortalChrome(url) {
-    var key = url || '/';
-    if (Object.prototype.hasOwnProperty.call(chrome, key)) return chrome[key];
-    chrome[key] = (function () {
+  // Monotonic clock for the diagnostics below (how long the portal took).
+  function elapsedSince(t0) {
+    var now = (typeof performance !== 'undefined' && performance && performance.now) ? performance.now() : Date.now();
+    return Math.round(now - t0);
+  }
+
+  function startPortalFetch(key) {
+    var t0 = (typeof performance !== 'undefined' && performance && performance.now) ? performance.now() : Date.now();
+    var resp = (function () {
       // `fetch` may be missing or throw synchronously (hostile shim, ancient runtime).
       // Turn that into a rejection so callers degrade instead of escaping their promise
       // chain — resolveNowMs is called synchronously from buildContext, i.e. BEFORE the
       // gate's own chain exists, so a synchronous throw would never reach its `.catch`.
       try { return fetch(key, { credentials: 'include', cache: 'no-store' }); }
       catch (e) { return Promise.reject(e); }
-    })()
-      .then(function (r) {
-        var dateHeader = '';
-        try { dateHeader = (r.headers && r.headers.get && r.headers.get('Date')) || ''; } catch (e) { dateHeader = ''; }
-        return r.text().then(function (text) {
-          // `failed`/`status` are diagnostics only: an error response can still carry a
-          // usable `Date` header, so the body is handed on exactly as before.
-          return { text: text || '', dateHeader: dateHeader, failed: !r.ok, status: r.status || 0 };
-        });
-      })
-      .catch(function (e) { return { text: '', dateHeader: '', failed: true, status: 0, error: e }; });
+    })();
+    function failedPage(e) { return { text: '', dateHeader: '', failed: true, status: 0, error: e }; }
+    function readDate(r) {
+      try { return (r.headers && r.headers.get && r.headers.get('Date')) || ''; } catch (e) { return ''; }
+    }
+    heads[key] = resp.then(function (r) {
+      glog('portal page', key, '| headers in', elapsedSince(t0), 'ms | HTTP', r.status || 0);
+      // `failed`/`status` are diagnostics only: an error response can still carry a
+      // usable `Date` header.
+      return { text: '', dateHeader: readDate(r), failed: !r.ok, status: r.status || 0 };
+    }).catch(failedPage);
+    chrome[key] = resp.then(function (r) {
+      var dateHeader = readDate(r);
+      return r.text().then(function (text) {
+        glog('portal page', key, '| body in', elapsedSince(t0), 'ms');
+        return { text: text || '', dateHeader: dateHeader, failed: !r.ok, status: r.status || 0 };
+      });
+    }).catch(failedPage);
+  }
+
+  function fetchPortalChrome(url) {
+    var key = url || '/';
+    if (!Object.prototype.hasOwnProperty.call(chrome, key)) startPortalFetch(key);
     return chrome[key];
   }
 
+  /** The portal response at headers time: `{ dateHeader, failed, status }`, no body. */
+  function fetchPortalHeaders(url) {
+    var key = url || '/';
+    if (!Object.prototype.hasOwnProperty.call(heads, key)) startPortalFetch(key);
+    return heads[key];
+  }
+
   /** Drop the memoized responses so the next run asks the portal again. */
-  function reset() { chrome = {}; }
+  function reset() { chrome = {}; heads = {}; }
 
   // Why the trusted clock was NOT used. The resolution degrades silently by design (a
   // network hiccup must never block a course), so this string is the ONLY way to tell a
@@ -106,7 +134,7 @@ var TrustedNow = (function () {
         '| skew sec:', Math.round((preferredMs - nowClientMs) / 1000));
       return Promise.resolve(preferredMs);
     }
-    var work = fetchPortalChrome(endpoint || '/');
+    var work = fetchPortalHeaders(endpoint || '/');
     var timeout = new Promise(function (resolve) {
       setTimeout(function () { resolve(TIMEOUT); }, DATE_TIMEOUT_MS);
     });
@@ -136,6 +164,7 @@ var TrustedNow = (function () {
   return {
     DATE_TIMEOUT_MS: DATE_TIMEOUT_MS,
     fetchPortalChrome: fetchPortalChrome,
+    fetchPortalHeaders: fetchPortalHeaders,
     resolveNowMs: resolveNowMs,
     /** Clock used by the last resolveNowMs: 'network' (portal) or 'client' (machine). */
     lastSource: function () { return lastSource; },

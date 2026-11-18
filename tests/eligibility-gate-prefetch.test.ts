@@ -189,6 +189,135 @@ describe("PRD-6 gate — records request at parse time", () => {
   });
 });
 
+/**
+ * Make `window.parent` a same-origin portal window whose HTML is `html`, as the course
+ * frame sees it inside the WebTutor player. Returns the restore function.
+ */
+function withPortalParent(html: string): () => void {
+  const portal: Record<string, unknown> = { document: { documentElement: { outerHTML: html } } };
+  portal.parent = portal;
+  const prev = Object.getOwnPropertyDescriptor(window, "parent");
+  Object.defineProperty(window, "parent", { configurable: true, get: () => portal });
+  return () => {
+    if (prev) Object.defineProperty(window, "parent", prev);
+  };
+}
+
+/**
+ * Live WebTutor, 2026-11-18: for a learner with a long learning list the portal home
+ * page («/») did not answer within the 30 s budget, while the records query took 62 ms.
+ * The SECID is in the portal page that already surrounds the course, so the gate takes
+ * it from there and never requests «/».
+ */
+describe("PRD-6 gate — SECID from the loaded portal window", () => {
+  it("takes the SECID from the parent window and does not request the portal page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    const restore = withPortalParent('<html><body data-secid="0123456789ABCDEF0123456789ABCDEF"></body></html>');
+    try {
+      const calls: string[] = [];
+      const bodies: unknown[] = [];
+      vi.stubGlobal("fetch", (url: string, init?: { body?: unknown }) => {
+        calls.push(String(url));
+        bodies.push(init?.body);
+        if (String(url).indexOf("extjs_json_collection_data") !== -1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: { get: (k: string) => (k.toLowerCase() === "date" ? "Sat, 30 May 2026 09:00:00 GMT" : null) },
+            json: () => Promise.resolve({ success: true, total: 1, results: [{ state: "Пройден", last_usage_date: "20.05.2026" }] }),
+          });
+        }
+        return new Promise(() => {}); // the portal page never answers
+      });
+      const td = gatedTest();
+      const state: Record<string, unknown> = { templateLayouts: {} };
+      const gate = loadGate(td, state, SCORM_FRESH);
+      gate.run(td, () => {});
+      await flush();
+
+      expect(calls).not.toContain("/");
+      expect(String(bodies[0])).toContain("secid=0123456789ABCDEF0123456789ABCDEF");
+      // Verdict reached at once, on the records response's clock.
+      expect((state.retake as any)?.todayDate).toBe("2026-05-30");
+      expect((state.retake as any)?.allowed).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  // Live WebTutor 2026-11-18: the course opens in its own window, so there is no parent
+  // chain; the SECID sits in the portal page that opened it (`top.opener`).
+  it("takes the SECID from the window that opened the player", async () => {
+    const opener = { document: { documentElement: { outerHTML: "<p>FEDCBA9876543210FEDCBA9876543210</p>" } } };
+    const prev = Object.getOwnPropertyDescriptor(window, "opener");
+    Object.defineProperty(window, "opener", { configurable: true, get: () => opener });
+    try {
+      const calls: string[] = [];
+      const bodies: unknown[] = [];
+      vi.stubGlobal("fetch", (url: string, init?: { body?: unknown }) => {
+        calls.push(String(url));
+        bodies.push(init?.body);
+        if (String(url).indexOf("extjs_json_collection_data") !== -1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: { get: (k: string) => (k.toLowerCase() === "date" ? "Sat, 30 May 2026 09:00:00 GMT" : null) },
+            json: () => Promise.resolve({ success: true, total: 0, results: [] }),
+          });
+        }
+        return new Promise(() => {});
+      });
+      const td = gatedTest();
+      const state: Record<string, unknown> = { templateLayouts: {} };
+      loadGate(td, state, SCORM_FRESH).run(td, () => {});
+      await flush();
+
+      expect(calls).not.toContain("/");
+      expect(String(bodies[0])).toContain("secid=FEDCBA9876543210FEDCBA9876543210");
+      expect((state.retake as any)?.checked).toBe(true);
+    } finally {
+      if (prev) Object.defineProperty(window, "opener", prev);
+    }
+  });
+
+  it("asks the portal page for the day only when the records response has no Date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    const restore = withPortalParent('<div>0123456789ABCDEF0123456789ABCDEF</div>');
+    try {
+      const calls: string[] = [];
+      vi.stubGlobal("fetch", (url: string) => {
+        calls.push(String(url));
+        if (String(url).indexOf("extjs_json_collection_data") !== -1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: () => Promise.resolve({ success: true, total: 0, results: [] }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: (k: string) => (k.toLowerCase() === "date" ? "Sat, 30 May 2026 09:00:00 GMT" : null) },
+          text: () => new Promise(() => {}), // the body never arrives: the day must not wait for it
+        });
+      });
+      const td = gatedTest();
+      const state: Record<string, unknown> = { templateLayouts: {} };
+      const gate = loadGate(td, state, SCORM_FRESH);
+      gate.run(td, () => {});
+      await flush();
+
+      expect(calls.filter((u) => u === "/")).toHaveLength(1);
+      expect((state.retake as any)?.todayDate).toBe("2026-05-30");
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe("PRD-6 gate — waiting indicator", () => {
   it("replaces the loading line with the spinner and the wireframe text", () => {
     stubFetch({ holdRecords: true });
