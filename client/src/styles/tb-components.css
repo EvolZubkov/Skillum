@@ -3433,3 +3433,26 @@
 .tb-miss-dot { position: absolute; width: var(--ou-space-3); height: var(--ou-space-3); margin: calc(var(--ou-space-3) / -2) 0 0 calc(var(--ou-space-3) / -2); border-radius: 50%; background: var(--ou-error-default); opacity: 0.55; box-shadow: 0 0 0 1px var(--ou-bg-page); pointer-events: none; }
 .tb-miss-body { display: flex; align-items: flex-start; gap: var(--ou-space-4); }
 .tb-miss-body > .tb-miss-map { flex: 1; min-width: 0; }
+
+/* PRD-52 «Согласовано» (эскиз docs/wireframes/prd52-review-approval.html): бейдж на точке карты
+   вопросов в окне рецензирования. Хост ставит на точку атрибут `data-review-approved`
+   (all | part | stale) и всё рисует CSS: узлов в DOM экрана нет, поэтому перерисовка экрана,
+   которую делают хосты на каждом вопросе, бейдж не стирает. Тот же селектор красит точки в
+   строке карты и в панели «Все вопросы». Нижний правый угол: верхний занят `is-flagged::after`.
+   all - все принявшие согласовали (сплошной), part - часть (контурный), stale - объект
+   правили после отметки (пунктирный). В ДС значка на точке нет. */
+.ou-quiz__dot[data-review-approved]::before {
+  content: "\2713"; position: absolute; right: calc(var(--ou-space-2) * -1); bottom: calc(var(--ou-space-2) * -1);
+  width: var(--ou-space-4); height: var(--ou-space-4); box-sizing: border-box; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--ou-space-3); font-weight: 700; line-height: 1;
+  background: var(--ou-bg-elevated); color: var(--ou-success-default);
+  box-shadow: 0 0 0 2px var(--ou-bg-elevated), inset 0 0 0 1px var(--ou-success-default);
+}
+.ou-quiz__dot[data-review-approved="all"]::before { background: var(--ou-success-default); color: var(--ou-fg-on-accent); box-shadow: 0 0 0 2px var(--ou-bg-elevated); }
+.ou-quiz__dot[data-review-approved="stale"]::before { color: var(--ou-warning-default); border: 1px dashed var(--ou-warning-default); box-shadow: 0 0 0 2px var(--ou-bg-elevated); }
+/* Строка легенды панели: тот же бейдж, но сам по себе, без точки. */
+.ou-quiz__legend-dot[data-review-approved] { position: relative; width: var(--ou-space-4); height: var(--ou-space-4); background: transparent; box-shadow: none; }
+.ou-quiz__legend-dot[data-review-approved]::before { content: "\2713"; position: absolute; inset: 0; box-sizing: border-box; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: var(--ou-space-3); font-weight: 700; line-height: 1; background: var(--ou-bg-elevated); color: var(--ou-success-default); box-shadow: inset 0 0 0 1px var(--ou-success-default); }
+.ou-quiz__legend-dot[data-review-approved="all"]::before { background: var(--ou-success-default); color: var(--ou-fg-on-accent); box-shadow: none; }
+.ou-quiz__legend-dot[data-review-approved="stale"]::before { color: var(--ou-warning-default); border: 1px dashed var(--ou-warning-default); box-shadow: none; }
