@@ -19,7 +19,11 @@ import {
 describe("pageSizeFor", () => {
   it("is 10 on a wide scene and 5 on a narrow one", () => {
     expect(pageSizeFor(1200)).toBe(QNAV_PAGE_SIZE);
-    expect(pageSizeFor(521)).toBe(QNAV_PAGE_SIZE);
+    expect(pageSizeFor(701)).toBe(QNAV_PAGE_SIZE);
+    expect(pageSizeFor(700)).toBe(QNAV_PAGE_SIZE_NARROW);
+    expect(pageSizeFor(641)).toBe(QNAV_PAGE_SIZE_NARROW);
+    expect(pageSizeFor(640)).toBe(QNAV_PAGE_SIZE_NARROW);
+    expect(pageSizeFor(521)).toBe(QNAV_PAGE_SIZE_NARROW);
     expect(pageSizeFor(520)).toBe(QNAV_PAGE_SIZE_NARROW);
     expect(pageSizeFor(360)).toBe(QNAV_PAGE_SIZE_NARROW);
   });

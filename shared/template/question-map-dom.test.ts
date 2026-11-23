@@ -56,6 +56,24 @@ describe("attachQuestionMap", () => {
     expect(root.getAttribute("data-paged")).toBe("false");
   });
 
+  it("marks the root narrow while the narrow page size is in effect (styles reserve 5 dots, not 10)", () => {
+    const root = mountMap(17, 1);
+    const scene = root.closest<HTMLElement>(".tb-scene")!;
+    scene.getBoundingClientRect = () => ({ width: 600 }) as DOMRect;
+    attachQuestionMap(root);
+    expect(root.getAttribute("data-qnav-narrow")).toBe("true");
+    expect(visibleRowDots(root)).toHaveLength(5);
+  });
+
+  it("does not mark the root narrow on a wide scene", () => {
+    const root = mountMap(17, 1);
+    const scene = root.closest<HTMLElement>(".tb-scene")!;
+    scene.getBoundingClientRect = () => ({ width: 701 }) as DOMRect;
+    attachQuestionMap(root);
+    expect(root.getAttribute("data-qnav-narrow")).toBe("false");
+    expect(visibleRowDots(root)).toHaveLength(10);
+  });
+
   it("opens on the page of the current question", () => {
     const root = mountMap(17, 17);
     attachQuestionMap(root);

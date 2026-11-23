@@ -25,10 +25,24 @@
  * through `composedPath()`).
  */
 
-import { clampPage, needsPaging, pageCount, pageOf, pageSizeFor, rangeLabel } from "./question-map";
+import {
+  QNAV_PAGE_SIZE,
+  clampPage,
+  needsPaging,
+  pageCount,
+  pageOf,
+  pageSizeFor,
+  rangeLabel,
+} from "./question-map";
 
 /** Attribute on the map root: `"true"` while the map is paged. Styles select on it. */
 export const QNAV_PAGED_ATTR = "data-paged";
+
+/**
+ * Attribute on the map root: `"true"` while the narrow page size is in effect. Styles select on it to reserve
+ * the width of a narrow page of dots instead of a wide one, so the «Все вопросы» button stays on the dots row.
+ */
+export const QNAV_NARROW_ATTR = "data-qnav-narrow";
 
 const NOOP = (): void => undefined;
 
@@ -79,6 +93,7 @@ export function attachQuestionMap(root: HTMLElement): () => void {
   const render = (): void => {
     const paged = needsPaging(total, size);
     root.setAttribute(QNAV_PAGED_ATTR, paged ? "true" : "false");
+    root.setAttribute(QNAV_NARROW_ATTR, size < QNAV_PAGE_SIZE ? "true" : "false");
     page = clampPage(page, total, size);
 
     rowDots.forEach((dot, i) => {

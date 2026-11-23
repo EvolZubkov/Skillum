@@ -22,8 +22,12 @@ export const QNAV_PAGE_SIZE = 10;
 /** Dots per page on a narrow scene. */
 export const QNAV_PAGE_SIZE_NARROW = 5;
 
-/** Scene width (px) at and below which the narrow page size applies — the layout's phone step. */
-export const QNAV_NARROW_MAX_WIDTH = 520;
+/**
+ * Scene width (px) at and below which the narrow page size applies. Below it ten dots, the arrows, the
+ * «1-10 из N» caption and the «Все вопросы» button no longer fit one row, so the button would wrap
+ * (measured in the debug player: ten dots fit from 700 px). Deliberately NOT the 520 px phone step of the layout CSS: that step governs layout, this one the page size.
+ */
+export const QNAV_NARROW_MAX_WIDTH = 700;
 
 /**
  * Page size for a scene of the given width.
