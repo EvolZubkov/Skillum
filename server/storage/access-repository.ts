@@ -13,7 +13,7 @@
  * a transaction. Exposed through the `IStorage` facade, never imported by routes.
  */
 import { randomUUID } from "crypto";
-import { eq, and, ne, sql, inArray } from "drizzle-orm";
+import { eq, and, ne, sql, inArray, isNull } from "drizzle-orm";
 import { db } from "../db";
 import {
   tests, topics, userRoles, testAccessGrants, topicAccessGrants, testFolders, testFolderAccessGrants,
@@ -104,6 +104,21 @@ export class AccessRepository {
         eq(testAccessGrants.accessLevel, "review"),
       ));
     return grant || undefined;
+  }
+
+  /**
+   * PRD-52: records that the holder of a `review` grant opened the review window of this test. Written
+   * ONCE - the «согласовали N из M» denominator counts by it. A grant of another level is not touched.
+   */
+  async markReviewGrantAccepted(testId: string, userId: string): Promise<void> {
+    await db.update(testAccessGrants)
+      .set({ acceptedAt: new Date() })
+      .where(and(
+        eq(testAccessGrants.testId, testId),
+        eq(testAccessGrants.userId, userId),
+        eq(testAccessGrants.accessLevel, "review"),
+        isNull(testAccessGrants.acceptedAt),
+      ));
   }
 
   /**

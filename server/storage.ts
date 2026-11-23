@@ -49,6 +49,7 @@ import {
   type ReviewCommentInput,
   type ReviewThread,
 } from "./storage/review-comments-repository";
+import { ReviewApprovalsRepository, type ReviewApprovalInput } from "./storage/review-approvals-repository";
 import {
   TestTransferRepository,
   type ImportWriteResult,
@@ -103,6 +104,7 @@ import type {
   MediaAsset, InsertMediaAsset, MediaUsage, MediaEntityType,
   ReportBlockRow,
   TestReviewComment,
+  TestReviewApproval,
 } from "@shared/schema";
 import type { StoredRole } from "@shared/access";
 import type { OrgField, OrgValueCount } from "@shared/org-fields";
@@ -552,6 +554,12 @@ export interface IStorage {
   reopenReviewComment(id: string): Promise<TestReviewComment | undefined>;
   countOpenReviewComments(testId: string): Promise<number>;
   countOpenReviewCommentsByTests(testIds: string[]): Promise<Record<string, number>>;
+  // Отметки «Согласовано» (PRD-52)
+  listReviewApprovals(testId: string, filter?: { reviewerId?: string }): Promise<TestReviewApproval[]>;
+  getReviewApproval(id: string): Promise<TestReviewApproval | undefined>;
+  upsertReviewApproval(input: ReviewApprovalInput): Promise<TestReviewApproval>;
+  deleteReviewApproval(id: string): Promise<boolean>;
+  markReviewGrantAccepted(testId: string, userId: string): Promise<void>;
   listReportBlocks(testId: string, mode: ReportDocumentMode): Promise<ReportBlockRow[]>;
   replaceReportBlocks(
     testId: string,
@@ -589,6 +597,7 @@ export class DatabaseStorage implements IStorage {
   private readonly mediaRepo = new MediaRepository();
   private readonly reportBlocksRepo = new ReportBlocksRepository();
   private readonly reviewCommentsRepo = new ReviewCommentsRepository();
+  private readonly reviewApprovalsRepo = new ReviewApprovalsRepository();
   private readonly transferRepo = new TestTransferRepository();
 
   // ============================================
@@ -1738,6 +1747,27 @@ export class DatabaseStorage implements IStorage {
 
   countOpenReviewCommentsByTests(testIds: string[]): Promise<Record<string, number>> {
     return this.reviewCommentsRepo.countOpenReviewCommentsByTests(testIds);
+  }
+
+  // Отметки «Согласовано» (delegated to ReviewApprovalsRepository; PRD-52)
+  listReviewApprovals(testId: string, filter?: { reviewerId?: string }): Promise<TestReviewApproval[]> {
+    return this.reviewApprovalsRepo.listReviewApprovals(testId, filter);
+  }
+
+  getReviewApproval(id: string): Promise<TestReviewApproval | undefined> {
+    return this.reviewApprovalsRepo.getReviewApproval(id);
+  }
+
+  upsertReviewApproval(input: ReviewApprovalInput): Promise<TestReviewApproval> {
+    return this.reviewApprovalsRepo.upsertReviewApproval(input);
+  }
+
+  deleteReviewApproval(id: string): Promise<boolean> {
+    return this.reviewApprovalsRepo.deleteReviewApproval(id);
+  }
+
+  markReviewGrantAccepted(testId: string, userId: string): Promise<void> {
+    return this.accessRepo.markReviewGrantAccepted(testId, userId);
   }
 
   listReportBlocks(testId: string, mode: ReportDocumentMode): Promise<ReportBlockRow[]> {
