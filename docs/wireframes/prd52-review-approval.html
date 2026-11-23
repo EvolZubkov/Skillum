@@ -56,8 +56,9 @@
       .wf-dots-anchor { position: relative; }
       .wf-dots-anchor { container-type: inline-size; }
       .wf-map-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-2); }
+      .wf-map-bar > .ou-quiz { width: auto; flex: 0 0 auto; }
       .wf-map-range--narrow { display: none; }
-      @container (max-width: 520px) {
+      @container (max-width: 640px) {
         .wf-map-bar .ou-quiz__dot:nth-child(n+6) { display: none; }
         .wf-map-range--wide { display: none; }
         .wf-map-range--narrow { display: inline; }
