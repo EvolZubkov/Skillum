@@ -38,11 +38,11 @@ function answer(data: Partial<ReviewApprovalsResponse> = {}) {
   apiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "reviewer", approvals: [], ...data });
 }
 
-function renderBlock() {
+function renderBlock(screenTitle?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ReviewApprovalBlock testId="t1" screenAnchor={{ kind: "question", questionId: "q1" }} />
+      <ReviewApprovalBlock testId="t1" screenAnchor={{ kind: "question", questionId: "q1" }} screenTitle={screenTitle} />
     </QueryClientProvider>,
   );
 }
@@ -112,6 +112,14 @@ describe("<ReviewApprovalBlock /> - рецензент", () => {
     renderBlock();
     await screen.findAllByRole("checkbox", { name: "Согласовано" });
     expect(screen.queryByText(/согласовали \d+ из \d+/)).toBeNull();
+  });
+});
+
+describe("<ReviewApprovalBlock /> - заголовок", () => {
+  it("называет карточку текущего вопроса «Вопрос N», когда номер известен", async () => {
+    answer();
+    renderBlock("Вопрос 4");
+    expect(await screen.findByText("Вопрос 4")).toBeTruthy();
   });
 });
 

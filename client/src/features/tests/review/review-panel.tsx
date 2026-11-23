@@ -36,6 +36,8 @@ export interface ReviewPanelProps {
   currentUserId?: string;
   /** Место текущего экрана прогона; в режиме `editor` не используется. */
   screenAnchor?: ReviewAnchor;
+  /** Title of the current-question approval card («Вопрос N»); default «Текущий вопрос». */
+  screenTitle?: string;
   /** Разделы и их содержимое для выбора места в режиме `editor`. */
   anchorOptions?: { topics: { id: string; name: string }[]; items?: ReviewAnchorItem[] };
   /** Переход по якорю: панель только зовёт, открывает редактор хозяин панели. */
@@ -53,7 +55,7 @@ function statusTag(thread: ReviewThread) {
 
 export function ReviewPanel({
   testId, mode, canResolve = false, currentUserId,
-  screenAnchor, anchorOptions, onNavigate, focusThreadId,
+  screenAnchor, screenTitle, anchorOptions, onNavigate, focusThreadId,
 }: ReviewPanelProps) {
   const review = useReviewComments(testId);
   const [composing, setComposing] = useState(false);
@@ -116,7 +118,7 @@ export function ReviewPanel({
     <Stack gap={3} className="rvp">
       {/* PRD-52: согласование стоит над лентой, только там, где есть прогон. */}
       {mode === "player" && screenAnchor ? (
-        <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} />
+        <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} screenTitle={screenTitle} />
       ) : null}
       {mode === "player" ? <div className="tb-section-label">Комментарии</div> : null}
       <Cluster gap={3} align="center" className="rvp__bar">

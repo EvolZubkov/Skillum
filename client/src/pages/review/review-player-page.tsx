@@ -21,6 +21,7 @@ import { buildSnapshot, type InspectorSnapshot } from "@/features/tests/debug-pl
 import { ScorePanel, ProtocolPanel, PanelEmpty } from "@/features/tests/run-inspector/panels";
 import { ReviewPanel } from "@/features/tests/review/review-panel";
 import { useScreenAnchor } from "@/features/tests/review/use-screen-anchor";
+import { useScreenTitle } from "@/features/tests/review/use-screen-title";
 import { useReviewApprovalMarks } from "@/features/tests/review/use-approval-marks";
 import "@/features/tests/debug-player/debug-player.css";
 
@@ -47,6 +48,7 @@ export default function ReviewPlayerPage() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Место комментария — текущий экран прогона; тот же резолвер, что рисует эталон.
   const screenAnchor = useScreenAnchor(frameRef, snap);
+  const screenTitle = useScreenTitle(frameRef, snap, screenAnchor);
   // PRD-52: бейджи «Согласовано» на карте вопросов в кадре пакета - только собственные отметки рецензента.
   useReviewApprovalMarks(frameRef, testId, snap);
 
@@ -191,7 +193,7 @@ export default function ReviewPlayerPage() {
           />
           <div className="dbg__ins-body">
             {tab === "comments" ? (
-              <ReviewPanel testId={testId} mode="player" screenAnchor={screenAnchor} />
+              <ReviewPanel testId={testId} mode="player" screenAnchor={screenAnchor} screenTitle={screenTitle} />
             ) : !snap ? (
               <PanelEmpty text="Запустите пакет — здесь появятся данные прогона." />
             ) : fullDraw ? (

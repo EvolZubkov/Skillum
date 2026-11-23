@@ -12,24 +12,9 @@ import { useCallback, useEffect, type RefObject } from "react";
 import approvalCss from "./approval-marks.css?raw";
 import { applyApprovalMarks, ensureApprovalLegend, ensureApprovalStyle } from "./approval-marks";
 import type { ApprovalBadge } from "@shared/review/approval-state";
+import { deliveredQuestionIds } from "./delivery-order";
 import { badgeOfQuestion } from "./review-approval-model";
 import { useReviewApprovals } from "./use-review-approvals";
-
-/** Идентификаторы вопросов в порядке выдачи прогона; пусто, пока пакет не стартовал. */
-function deliveredQuestionIds(win: Window): string[] {
-  try {
-    // Элемент порядка выдачи в живом состоянии пакета - `{ question: { id, ... }, ... }` (так, а не `{ id }`:
-    // проверено на живом прогоне). `id` на верхнем уровне оставлен запасным видом на случай другой раскладки.
-    const pkg = window.TBInspector?.readPkg?.(win) as
-      | { state?: { flatQuestions?: { question?: { id?: string }; id?: string }[] } | null }
-      | null
-      | undefined;
-    return (pkg?.state?.flatQuestions ?? []).map((q) => q.question?.id ?? q.id ?? "");
-  } catch {
-    // Пакет ещё не построил состояние - бейджи появятся на следующем кадре.
-    return [];
-  }
-}
 
 export function useApprovalMarks(
   frameRef: RefObject<HTMLIFrameElement | null>,
