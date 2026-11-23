@@ -130,6 +130,18 @@ describe("matchMagicScopeRule", () => {
       expect(matchMagicScopeRule('GET', '/api/tests/t1/review/inspector-compute.js')?.rule.bind).toBe('test');
     });
 
+    it('отметки «Согласовано»: чтение, постановка и снятие привязаны к тесту ссылки (issue 66)', () => {
+      expect(matchMagicScopeRule('GET', '/api/tests/t1/review/approvals')?.rule.bind).toBe('test');
+      expect(matchMagicScopeRule('PUT', '/api/tests/t1/review/approvals')?.rule.bind).toBe('test');
+      expect(matchMagicScopeRule('DELETE', '/api/tests/t1/review/approvals/a1')?.rule.bind).toBe('test');
+    });
+
+    it('отметки: чужие методы и пути не открыты', () => {
+      expect(matchMagicScopeRule('POST', '/api/tests/t1/review/approvals')).toBeNull();
+      expect(matchMagicScopeRule('PATCH', '/api/tests/t1/review/approvals/a1')).toBeNull();
+      expect(matchMagicScopeRule('GET', '/api/tests/t1/review/approvals/a1')).toBeNull();
+    });
+
     it('ничего сверх рецензирования: отладчик и экспорт остаются закрытыми', () => {
       expect(matchMagicScopeRule('POST', '/api/tests/t1/debug/session')).toBeNull();
       expect(matchMagicScopeRule('GET', '/api/tests/t1/export/scorm')).toBeNull();
