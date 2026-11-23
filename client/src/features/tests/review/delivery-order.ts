@@ -9,6 +9,8 @@
 interface LivePkgState {
   flatQuestions?: { question?: { id?: string }; id?: string }[];
   adaptiveState?: { isFinished?: boolean } | null;
+  /** Current screen of the package: `start`, `router`, `content`, `question`, `review`, ... */
+  phase?: string;
 }
 
 /** Reads the live package state of the frame; `null` while the package has not built it yet. */
@@ -55,4 +57,20 @@ export function screenQuestionNumber(win: Window | null | undefined, questionId:
   const adaptive = Boolean(state.adaptiveState && !state.adaptiveState.isFinished);
   const order = (state.flatQuestions ?? []).map((q) => q.question?.id ?? q.id ?? "");
   return questionNumber(questionId, order, adaptive, answered);
+}
+
+/**
+ * Pure rule: is a question itself on screen. The `question` phase shows one, and so does `adaptive-session`
+ * (an adaptive run renders its questions in that phase; checked on a live run). Start, router, content
+ * (section intro), section results, review overview, results and blocked screens do not, even though the
+ * package keeps a `currentIndex` pointing at some question there.
+ */
+export function isQuestionScreen(phase: string | undefined): boolean {
+  return phase === "question" || phase === "adaptive-session";
+}
+
+/** Whether the frame currently shows a question; `false` while the package has no state yet. */
+export function screenShowsQuestion(win: Window | null | undefined): boolean {
+  if (!win) return false;
+  return isQuestionScreen(readState(win)?.phase);
 }

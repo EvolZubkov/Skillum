@@ -3,7 +3,7 @@
  * @description Tests of the on-screen question number rule behind the «Вопрос N» approval card title.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { questionNumber, screenQuestionNumber } from "../delivery-order";
+import { isQuestionScreen, questionNumber, screenQuestionNumber, screenShowsQuestion } from "../delivery-order";
 
 describe("questionNumber", () => {
   it("returns the 1-based position in the delivery order", () => {
@@ -39,5 +39,28 @@ describe("screenQuestionNumber", () => {
     mockState(null);
     expect(screenQuestionNumber(win, "a", 0)).toBeNull();
     expect(screenQuestionNumber(null, "a", 0)).toBeNull();
+  });
+});
+
+describe("isQuestionScreen", () => {
+  it("is true in the question and adaptive-session phases only", () => {
+    expect(isQuestionScreen("question")).toBe(true);
+    expect(isQuestionScreen("adaptive-session")).toBe(true);
+    for (const phase of ["start", "router", "content", "sectionResults", "review", "viewResults", "postResults", "blocked", undefined]) {
+      expect(isQuestionScreen(phase)).toBe(false);
+    }
+  });
+});
+
+describe("screenShowsQuestion", () => {
+  afterEach(() => {
+    delete (window as unknown as { TBInspector?: unknown }).TBInspector;
+  });
+  it("reads the phase of the live state", () => {
+    (window as unknown as { TBInspector: unknown }).TBInspector = { readPkg: vi.fn(() => ({ state: { phase: "question" } })) };
+    expect(screenShowsQuestion({} as Window)).toBe(true);
+    (window as unknown as { TBInspector: unknown }).TBInspector = { readPkg: vi.fn(() => ({ state: { phase: "start" } })) };
+    expect(screenShowsQuestion({} as Window)).toBe(false);
+    expect(screenShowsQuestion(null)).toBe(false);
   });
 });
