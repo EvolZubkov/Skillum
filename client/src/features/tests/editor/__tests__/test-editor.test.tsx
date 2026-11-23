@@ -129,7 +129,7 @@ describe("<TestEditor /> DOM and focus", () => {
       "Оценка результата",
       "Обратная связь и итоги",
       "Оформление",
-      "Комментарии",
+      "Рецензирование",
     ]) {
       expect(screen.getByRole("tab", { name: new RegExp(label, "i") })).toBeInTheDocument();
     }

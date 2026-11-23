@@ -797,13 +797,13 @@ describe("<TestsListPage /> — счётчик комментариев", () => 
 // ─── PRD-52 FR-27: ссылка на конкретную ветку ────────────────────────────────
 
 describe("<TestsListPage /> — ссылка ?review=<id>", () => {
-  it("открывает ящик теста сразу на вкладке «Комментарии»", async () => {
+  it("открывает ящик теста сразу на вкладке «Рецензирование»", async () => {
     window.history.replaceState(null, "", "/author/tests?test=t-1&review=c1");
     mockMany({ "/api/tests": [buildApiTestRow()], "/api/test-folders": [] });
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /Комментарии/ })).toHaveAttribute("aria-selected", "true"),
+      expect(screen.getByRole("tab", { name: /Рецензирование/ })).toHaveAttribute("aria-selected", "true"),
     );
     // Параметры сняты с адреса: обновление страницы не должно снова открывать ящик.
     expect(window.location.search).toBe("");

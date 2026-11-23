@@ -64,6 +64,7 @@ import { DesignSection } from "./sections/design-section";
 import { ScenarioTaskSection } from "./sections/scenario-task-section";
 import { describeFeasibilityState } from "@/features/content-protection/issue-text";
 import { ReviewPanel } from "../review/review-panel";
+import { ReviewTab } from "../review/review-tab";
 import type { ReviewAnchorItem } from "../review/review-comment-form";
 import { useReviewComments } from "../review/use-review-comments";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
@@ -152,7 +153,7 @@ const TAB_LABELS: Record<EditorTabKey, string> = {
   scoring: "Оценка результата",
   feedback: "Обратная связь и итоги",
   design: "Оформление",
-  review: "Комментарии",
+  review: "Рецензирование",
 };
 
 /**
@@ -846,7 +847,7 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
             // Tabs that render an `ou-drawer__split` (rail + content) need the
             // flush body so the split fills the full height — otherwise a short
             // pane (e.g. the Scales empty state) leaves a gap below.
-            (activeTab === "main" || activeTab === "review" ? "" : " ou-drawer__body--flush")
+            (activeTab === "main" ? "" : " ou-drawer__body--flush")
           }
           tabIndex={0}
           data-testid="test-editor-body"
@@ -1014,28 +1015,33 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
             />
           )}
           {editor.model?.id && activeTab === "review" && (
-            <div className="tb-settings-content" data-testid="settings-pane-review">
-              <ReviewPanel
-                testId={editor.model.id}
-                mode="editor"
-                canResolve
-                currentUserId={auth?.user?.id}
-                // Место комментария автор выбирает из РАЗДЕЛОВ этого теста: панель сама
-                // не ходит за составом, его знает ящик.
-                anchorOptions={{
-                  topics: editor.model.sections.map((s) => ({ id: s.topicId, name: s.topicName })),
-                  items: reviewAnchorItems,
-                }}
-                onNavigate={(target) => {
-                  // Вопрос открывается ЯЩИКОМ ПОВЕРХ этого: ящик теста остаётся
-                  // смонтированным, поэтому после правки автор возвращается в то же
-                  // место списка комментариев, а не собирает контекст заново.
-                  if (target.target === "question-editor") setReviewQuestionId(target.questionId);
-                  else if (target.target === "test-editor") setActiveTab(target.tab);
-                }}
-                focusThreadId={props.focusReviewThreadId}
-              />
-            </div>
+            <ReviewTab
+              openComments={reviewOpenCount}
+              // Ссылка `?review=<id>` ведёт к ветке: вкладка открывается сразу на комментариях.
+              initialKey={props.focusReviewThreadId ? "comments" : undefined}
+              comments={
+                <ReviewPanel
+                  testId={editor.model.id}
+                  mode="editor"
+                  canResolve
+                  currentUserId={auth?.user?.id}
+                  // Место комментария автор выбирает из РАЗДЕЛОВ этого теста: панель сама
+                  // не ходит за составом, его знает ящик.
+                  anchorOptions={{
+                    topics: editor.model.sections.map((s) => ({ id: s.topicId, name: s.topicName })),
+                    items: reviewAnchorItems,
+                  }}
+                  onNavigate={(target) => {
+                    // Вопрос открывается ЯЩИКОМ ПОВЕРХ этого: ящик теста остаётся
+                    // смонтированным, поэтому после правки автор возвращается в то же
+                    // место списка комментариев, а не собирает контекст заново.
+                    if (target.target === "question-editor") setReviewQuestionId(target.questionId);
+                    else if (target.target === "test-editor") setActiveTab(target.tab);
+                  }}
+                  focusThreadId={props.focusReviewThreadId}
+                />
+              }
+            />
           )}
           {!editor.model && <TabPlaceholder tab={activeTab} />}
           {reviewQuestionId ? (
@@ -1223,7 +1229,7 @@ function TabPlaceholder({ tab }: { tab: EditorTabKey }) {
     scoring: "Цена ответа, вердикт теста и тем, шкалы и показатели.",
     feedback: "Что участник узнаёт о результате: итоги, тексты и отчёт.",
     design: "Шаблон и объявленный им облик: цвета, шрифты, фоны и логотип.",
-    review: "Комментарии коллег к этому тесту.",
+    review: "Комментарии и согласование коллег к этому тесту.",
   };
   return (
     <EmptyState

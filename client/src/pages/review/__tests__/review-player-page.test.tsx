@@ -66,7 +66,7 @@ describe("окно рецензента", () => {
   it("показывает ровно три вкладки инспектора", async () => {
     renderPage();
     const tabs = await screen.findAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Комментарии", "Результаты", "Протокол"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Рецензирование", "Результаты", "Протокол"]);
   });
 
   it("эталон включён при открытии, полная выдача выключена", async () => {

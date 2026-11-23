@@ -27,6 +27,8 @@ export type RailItem<K extends string> = {
   label: string;
   /** Точка состояния; отсутствует — пункт чистый. */
   dot?: RailDot;
+  /** Число на значке справа от подписи (например, открытые комментарии); 0 и отсутствие - без значка. */
+  badge?: number;
   /** Пункт виден, но недоступен (например, шаблон не прочитался). */
   disabled?: boolean;
   /**
@@ -130,6 +132,7 @@ export function TabRail<K extends string>({
           {item.dot === "warning" && (
             <span className="tb-status-dot tb-status-dot--warn" aria-label="Требует внимания" />
           )}
+          {item.badge ? <span className="ou-drawer__rail-badge">{item.badge}</span> : null}
         </button>
         {hintId && (
           <span className="ou-drawer__rail-hint" id={hintId}>

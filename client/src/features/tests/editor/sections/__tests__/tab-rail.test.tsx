@@ -116,3 +116,34 @@ describe("рейл вкладки — второй уровень", () => {
     ]);
   });
 });
+
+describe("рейл вкладки — значок с числом", () => {
+  function renderBadged(badge: number | undefined) {
+    render(
+      <TabRail<"a" | "b">
+        items={[{ key: "a", label: "Согласование" }, { key: "b", label: "Комментарии", badge }]}
+        active="a"
+        onChange={() => undefined}
+        ariaLabel="Разделы"
+        testIdPrefix="t"
+      >
+        <div />
+      </TabRail>,
+    );
+  }
+
+  it("рисует значок с числом у пункта", () => {
+    renderBadged(3);
+    expect(screen.getByTestId("t-rail-b").querySelector(".ou-drawer__rail-badge")).toHaveTextContent("3");
+  });
+
+  it("без числа и с нулём значка нет", () => {
+    renderBadged(undefined);
+    expect(screen.getByTestId("t-rail-b").querySelector(".ou-drawer__rail-badge")).toBeNull();
+  });
+
+  it("нуль не рисуется значком", () => {
+    renderBadged(0);
+    expect(screen.getByTestId("t-rail-b").querySelector(".ou-drawer__rail-badge")).toBeNull();
+  });
+});

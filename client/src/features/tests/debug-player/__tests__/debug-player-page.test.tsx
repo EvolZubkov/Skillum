@@ -311,8 +311,8 @@ describe("PRD-52: полная выдача в отладчике", () => {
 });
 
 describe("PRD-52: комментарии в отладчике", () => {
-  it("вкладка «Комментарии» есть у автора", () => {
+  it("вкладка «Рецензирование» есть у автора", () => {
     render(<DebugPlayerPage />);
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toContain("Комментарии");
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toContain("Рецензирование");
   });
 });
