@@ -14,8 +14,6 @@
         <button type="button" role="tab" class="ou-tabs__tab" data-target="s2">2. Панель открыта</button>
         <button type="button" role="tab" class="ou-tabs__tab" data-target="s3">3. Ручной уход на первую страницу</button>
         <button type="button" role="tab" class="ou-tabs__tab" data-target="s4">4. Короткий тест (8 вопросов)</button>
-        <button type="button" role="tab" class="ou-tabs__tab" data-target="s5">5. Узкий экран, панель закрыта</button>
-        <button type="button" role="tab" class="ou-tabs__tab" data-target="s6">6. Узкий экран, панель открыта</button>
       </div>
     </div>
   </div>
@@ -282,155 +280,18 @@
     </div>
   </section>
 
-  <section data-state="s5" hidden>
-    <div class="ou ou--dark ou--normal" style="width:390px;height:640px;display:flex;flex-direction:column;overflow:hidden;font-family:var(--ou-font-family-base);border:1px solid var(--ou-border-soft);border-radius:var(--ou-radius-m)">
-    <header style="background:var(--ou-bg-elevated);border-bottom:1px solid var(--ou-border-soft);padding:var(--ou-space-3) 16px 0;display:flex;flex-direction:column;gap:var(--ou-space-3);position:relative">
-      <div style="display:flex;align-items:flex-start;gap:var(--ou-space-4)">
-        <div style="min-width:0;display:flex;flex-direction:column;gap:2px;padding-top:2px">
-          <h1 style="margin:0;font:var(--ou-text-heading-m);color:var(--ou-fg-default);letter-spacing:-.01em;text-wrap:pretty">Основы информационной безопасности</h1>
-        </div>
-        <div style="margin-left:auto;flex:none">
-          <div class="ou-timer ou-timer--digital ou-timer--s">
-            <span class="ou-timer__lbl">тест</span>
-            <span class="ou-timer__num">20:06</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="ou-quiz ou-quiz--circle ou-quiz--l" style="width:100%;flex-direction:column;align-items:stretch;gap:var(--ou-space-2);padding-bottom:var(--ou-space-4);position:relative">
-        <div style="display:flex;align-items:center;gap:var(--ou-space-2)">
-          <button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Предыдущие 5 вопросов"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
-          <div class="ou-quiz__dots" style="flex:none;min-width:204px">
-            <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 15">15</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 16">16</button>
-          <button type="button" class="ou-quiz__dot is-current" aria-label="Вопрос 17">17</button>
-          </div>
-          <button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Следующие 5 вопросов" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
-          <span style="margin-left:auto"><button type="button" class="ou-iconbtn ou-iconbtn--outline ou-iconbtn--m" aria-label="Все вопросы, есть пропущенные" aria-expanded="false" aria-controls="qnav-panel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg><span class="ou-iconbtn__badge ou-iconbtn__badge--dot" style="background:var(--ou-warning-default)"></span></button></span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--ou-space-3);font:var(--ou-text-body-s);color:var(--ou-fg-muted)">
-          <span aria-live="polite" style="font-variant-numeric:tabular-nums">15–17 из 17</span>
-          <span>отвечено <strong style="color:var(--ou-fg-default);font-weight:600">11</strong> из 17 · пропущено 5</span>
-        </div>
-
-      </div>
-      <div style="position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--ou-bg-surface-3)">
-        <div style="height:100%;width:65%;background:var(--ou-accent-default);border-radius:0 999px 999px 0"></div>
-      </div>
-    </header>
-    <main style="flex:1;min-height:0;overflow:hidden;padding:16px">
-      <div style="display:flex;flex-direction:column;gap:var(--ou-space-4)">
-        <div style="display:flex;align-items:center;gap:var(--ou-space-3)">
-          <span style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">Вопрос 17 из 17</span>
-          <span class="ou-tag ou-tag--neutral">Пароли и аутентификация</span>
-        </div>
-        <h2 style="margin:0;font-weight:600;font-size:22px;line-height:1.25;color:var(--ou-fg-default);letter-spacing:-.015em;text-wrap:pretty">Какой пароль является наиболее надёжным с точки зрения безопасности?</h2>
-        <span style="font:var(--ou-text-body-s);color:var(--ou-fg-muted)">Выберите один вариант ответа</span>
-      </div>
-    </main>
-    </div>
-  </section>
-
-  <section data-state="s6" hidden>
-    <div class="ou ou--dark ou--normal" style="width:390px;height:640px;display:flex;flex-direction:column;overflow:hidden;font-family:var(--ou-font-family-base);border:1px solid var(--ou-border-soft);border-radius:var(--ou-radius-m)">
-    <header style="background:var(--ou-bg-elevated);border-bottom:1px solid var(--ou-border-soft);padding:var(--ou-space-3) 16px 0;display:flex;flex-direction:column;gap:var(--ou-space-3);position:relative">
-      <div style="display:flex;align-items:flex-start;gap:var(--ou-space-4)">
-        <div style="min-width:0;display:flex;flex-direction:column;gap:2px;padding-top:2px">
-          <h1 style="margin:0;font:var(--ou-text-heading-m);color:var(--ou-fg-default);letter-spacing:-.01em;text-wrap:pretty">Основы информационной безопасности</h1>
-        </div>
-        <div style="margin-left:auto;flex:none">
-          <div class="ou-timer ou-timer--digital ou-timer--s">
-            <span class="ou-timer__lbl">тест</span>
-            <span class="ou-timer__num">20:06</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="ou-quiz ou-quiz--circle ou-quiz--l" style="width:100%;flex-direction:column;align-items:stretch;gap:var(--ou-space-2);padding-bottom:var(--ou-space-4);position:relative">
-        <div style="display:flex;align-items:center;gap:var(--ou-space-2)">
-          <button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Предыдущие 5 вопросов"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
-          <div class="ou-quiz__dots" style="flex:none;min-width:204px">
-            <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 15">15</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 16">16</button>
-          <button type="button" class="ou-quiz__dot is-current" aria-label="Вопрос 17">17</button>
-          </div>
-          <button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Следующие 5 вопросов" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
-          <span style="margin-left:auto"><button type="button" class="ou-iconbtn ou-iconbtn--outline ou-iconbtn--m" aria-label="Все вопросы, есть пропущенные" aria-expanded="true" aria-controls="qnav-panel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg><span class="ou-iconbtn__badge ou-iconbtn__badge--dot" style="background:var(--ou-warning-default)"></span></button></span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--ou-space-3);font:var(--ou-text-body-s);color:var(--ou-fg-muted)">
-          <span aria-live="polite" style="font-variant-numeric:tabular-nums">15–17 из 17</span>
-          <span>отвечено <strong style="color:var(--ou-fg-default);font-weight:600">11</strong> из 17 · пропущено 5</span>
-        </div>
-
-        <div id="qnav-panel" class="ou-popover ou-popover--no-arrow" role="dialog" aria-label="Все вопросы" style="--_w:100%;position:absolute;top:100%;left:0;right:0;margin-top:var(--ou-space-2)">
-          <div class="ou-popover__header">
-            <div class="ou-popover__header-text">
-              <h3 class="ou-popover__title">Все вопросы</h3>
-              <p class="ou-popover__subtitle">отвечено <strong style="color:var(--ou-fg-default);font-weight:600">11</strong> из 17 · пропущено 5</p>
-            </div>
-            <button type="button" class="ou-popover__close" aria-label="Закрыть"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
-          </div>
-          <div class="ou-popover__body">
-            <div class="ou-quiz ou-quiz--circle ou-quiz--l">
-              <div class="ou-quiz__dots" style="gap:var(--ou-space-3)">
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 1">1</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 2">2</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 3">3</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 4">4</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 5">5</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 6">6</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 7">7</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 8">8</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 9">9</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 10">10</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 11">11</button>
-          <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 12">12</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 13">13</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 14">14</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 15">15</button>
-          <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 16">16</button>
-          <button type="button" class="ou-quiz__dot is-current" aria-label="Вопрос 17">17</button>
-              </div>
-            </div>
-          </div>
-          <div class="ou-popover__footer" style="justify-content:flex-start">
-        <div class="ou-quiz__legend" style="margin-top:0">
-          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-flagged"></span>пропущен</span>
-          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" style="background:transparent;box-shadow:inset 0 0 0 2px var(--ou-accent-default)"></span>текущий</span>
-          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot"></span>не отвечен</span>
-          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
-        </div>
-          </div>
-        </div>
-      </div>
-      <div style="position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--ou-bg-surface-3)">
-        <div style="height:100%;width:65%;background:var(--ou-accent-default);border-radius:0 999px 999px 0"></div>
-      </div>
-    </header>
-    <main style="flex:1;min-height:0;overflow:hidden;padding:16px">
-      <div style="display:flex;flex-direction:column;gap:var(--ou-space-4)">
-        <div style="display:flex;align-items:center;gap:var(--ou-space-3)">
-          <span style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">Вопрос 17 из 17</span>
-          <span class="ou-tag ou-tag--neutral">Пароли и аутентификация</span>
-        </div>
-        <h2 style="margin:0;font-weight:600;font-size:22px;line-height:1.25;color:var(--ou-fg-default);letter-spacing:-.015em;text-wrap:pretty">Какой пароль является наиболее надёжным с точки зрения безопасности?</h2>
-        <span style="font:var(--ou-text-body-s);color:var(--ou-fg-muted)">Выберите один вариант ответа</span>
-      </div>
-    </main>
-    </div>
-  </section>
-
   <div style="display:flex;flex-direction:column;gap:var(--ou-space-3);color:var(--ou-fg-default)">
     <h2 style="margin:0;font:var(--ou-text-heading-m)">Пояснения</h2>
     <table style="border-collapse:collapse;width:100%;font:var(--ou-text-body-m)">
       <thead><tr style="text-align:left;color:var(--ou-fg-muted)"><th style="padding:8px 12px;width:20%">Элемент</th><th style="padding:8px 12px">Поведение</th><th style="padding:8px 12px;width:28%">Источник в DS</th></tr></thead>
       <tbody>
-        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Стрелки ‹ ›</td><td style="padding:8px 12px">Листание пачками: 10 вопросов на широком экране, 5 на узком. Границы страниц фиксированы (1–10, 11–20), а не зависят от ширины окна. Крайняя стрелка неактивна, но остаётся на месте. Ширина области кружков постоянна, поэтому на короткой последней странице стрелки не прыгают.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s</td></tr>
+        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Стрелки ‹ ›</td><td style="padding:8px 12px">Листание пачками по 10 вопросов. Границы страниц фиксированы (1–10, 11–20), а не зависят от ширины окна. Крайняя стрелка неактивна, но остаётся на месте. Ширина области кружков постоянна, поэтому на короткой последней странице стрелки не прыгают.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s</td></tr>
         <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Диапазон</td><td style="padding:8px 12px">«11–17 из 17» рядом со стрелками, aria-live=polite. Показывает, где навигатор находится.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">текст, ou-text-body-m</td></tr>
-        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Кнопка «Все вопросы»</td><td style="padding:8px 12px">Открывает панель. Маркер на кнопке горит, только если есть пропущенные вопросы; неотвеченные его не включают. На узком экране кнопка становится иконкой с маркером.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-btn ou-btn--secondary ou-btn--s; ou-iconbtn с ou-iconbtn__badge--dot</td></tr>
-        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Панель</td><td style="padding:8px 12px">Выпадает под строкой навигатора, не сдвигает вопрос. Содержит все кружки (крупнее: ou-quiz--l, цель касания 36), счётчик и легенду. Закрывается по Esc, клику вне панели и после выбора номера. На узком экране занимает всю ширину.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-popover ou-popover--no-arrow; ou-quiz__dot</td></tr>
+        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Кнопка «Все вопросы»</td><td style="padding:8px 12px">Открывает панель. Маркер на кнопке горит, только если есть пропущенные вопросы; неотвеченные его не включают.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-btn ou-btn--secondary ou-btn--s; ou-iconbtn с ou-iconbtn__badge--dot</td></tr>
+        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Панель</td><td style="padding:8px 12px">Выпадает под строкой навигатора, не сдвигает вопрос. Содержит все кружки (крупнее: ou-quiz--l, цель касания 36), счётчик и легенду. Закрывается по Esc, клику вне панели и после выбора номера.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-popover ou-popover--no-arrow; ou-quiz__dot</td></tr>
         <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Выбор номера в панели</td><td style="padding:8px 12px">Переход к вопросу, панель закрывается, пачка листается на страницу с выбранным вопросом.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">поведение</td></tr>
         <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Автоследование</td><td style="padding:8px 12px">При переходе на вопрос за границей пачки навигатор листается сам. Ручной уход (состояние 3) не возвращается сам; вернуть можно кнопкой «К текущему вопросу».</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-btn ou-btn--ghost ou-btn--xs</td></tr>
+        <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Телефон (сцена до 520 px)</td><td style="padding:8px 12px">Карта скрыта, остаются счётчики «отвечено N из M · пропущено K»; полная карта живёт на экране обзора, а «К обзору» есть в подвале. Решение утверждено раньше и здесь не меняется.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">существующее правило шаблона</td></tr>
         <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Короткий тест</td><td style="padding:8px 12px">Если вопросов не больше размера пачки, стрелок и кнопки панели нет, навигатор как в утверждённом эскизе «Прохождение теста».</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-quiz__dots, ou-quiz__legend</td></tr>
         <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Легенда</td><td style="padding:8px 12px">В длинном тесте уходит из шапки в панель, в коротком остаётся в строке.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">ou-quiz__legend</td></tr>
         <tr style="border-top:1px solid var(--ou-border-soft);vertical-align:top"><td style="padding:8px 12px;font-weight:600">Доступность</td><td style="padding:8px 12px">У стрелок aria-label «Предыдущие/Следующие N вопросов», у кнопки aria-expanded и aria-controls, при открытии фокус в панели, при закрытии возвращается на кнопку. Анимации нет, либо fade до 150 мс с учётом prefers-reduced-motion.</td><td style="padding:8px 12px;color:var(--ou-fg-muted)">поведение</td></tr>
