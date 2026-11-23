@@ -292,7 +292,7 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
 .tb-scene__map[data-paged="true"] > .ou-quiz__legend { display: none; }
 .tb-scene__map[data-paged="true"] .ou-quiz__dots[data-qnav-dots] { flex: none; min-width: calc(10 * 26px + 9 * 6px); }
 /* A narrow page (5 dots, `data-qnav-narrow`) reserves the width of 5 dots, not 10: otherwise the arrows, the
-   caption and «Все вопросы» no longer fit the row on a 520-640px scene and the button wraps. */
+   caption and «Все вопросы» no longer fit the row on a scene up to 700px wide and the button wraps. */
 .tb-scene__map[data-paged="true"][data-qnav-narrow="true"] .ou-quiz__dots[data-qnav-dots] { min-width: calc(5 * 26px + 4 * 6px); }
 /* The panel hangs under its button and floats over the question — it never pushes it. */
 .tb-qnav__pop { position: relative; flex: none; }
