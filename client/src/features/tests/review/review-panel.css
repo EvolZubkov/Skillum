@@ -60,3 +60,10 @@
    дата и тег остаются в строке и не сжимаются. */
 .rvt__row > * { flex: none; }
 .rvt__row > .rvt__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Рейл инспектора окна рецензирования и отладки (утверждённый эскиз окна): уже рейла ящика редактора, потому что
+   сам инспектор вдвое уже ящика; содержимое с отступами инспектора, а не ящика. */
+.rvp-rail { display: flex; flex: 1; min-height: 0; height: 100%; }
+.rvp-rail > .ou-drawer__split { width: 100%; }
+.rvp-rail .ou-drawer__rail { width: 176px; padding: var(--ou-space-3); }
+.rvp-rail .tb-settings-content { min-width: 0; padding: var(--ou-space-3) var(--ou-space-4) var(--ou-space-5); }

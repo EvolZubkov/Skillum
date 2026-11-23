@@ -88,10 +88,18 @@
       .tb-table .wf-thread-head { flex-wrap: nowrap; white-space: nowrap; }
       .wf-pager { display: inline-flex; gap: var(--ou-space-1); }
       .wf-map-legend { justify-content: flex-start; flex-wrap: wrap; gap: var(--ou-space-3) var(--ou-space-4); }
-      .wf-dots-anchor > .ou-popover { --_w: min(480px, 100%); position: absolute; top: calc(100% + var(--ou-space-2)); left: 0; z-index: 5; }
-      .wf-dots-anchor > .ou-popover[data-v="author"] { --_w: min(280px, 100%); left: 0; }
+      /* Панель и подсказка висят у СВОЕГО якоря, как в шаблоне (`.tb-qnav__pop`): панель под кнопкой «Все вопросы», подсказка под точкой. */
+      .wf-pop-anchor { position: relative; display: inline-flex; }
+      .wf-pop-anchor > .ou-popover { position: absolute; top: calc(100% + var(--ou-space-2)); z-index: 5; }
+      .wf-pop-anchor--dot > .ou-popover { --_w: 280px; left: 0; }
+      .wf-pop-anchor--panel > .ou-popover { --_w: 480px; right: 0; }
       .wf-inspector { position: relative; flex: 0 0 36%; min-width: 320px; border-left: var(--wf-border-w) solid var(--ou-border-soft); display: flex; flex-direction: column; min-height: 0; background: var(--ou-bg-elevated); }
       .wf-ins-head { padding: var(--ou-space-2) var(--ou-space-3) 0; }
+      .wf-ins-split { flex: 1; min-height: 0; display: flex; }
+      /* Рейл окна уже рейла редактора: инспектор вдвое уже ящика, на содержимое должно остаться место. */
+      .wf-ins-rail { width: 176px; padding: var(--ou-space-3); }
+      .wf-ins-split > .wf-ins-body { flex: 1; min-width: 0; }
+      .wf-ins-body > section:not([hidden]) { display: flex; flex-direction: column; gap: var(--ou-space-3); }
       .wf-ins-body { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-3) var(--ou-space-4) var(--ou-space-5); display: flex; flex-direction: column; gap: var(--ou-space-3); }
       .wf-ins-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-2); }
       .wf-ins-toolbar .spacer { flex: 1; }
@@ -180,10 +188,12 @@
       <button type="button" onclick="showVar(this, 'test')">рецензент · тест целиком</button>
       <button type="button" onclick="showVar(this, 'author')">окно автора</button>
       <button type="button" onclick="showVar(this, 'panel')">панель «Все вопросы»</button>
+      <button type="button" onclick="showVar(this, 'norev')">окно · рецензентов ещё нет</button>
       <button type="button" onclick="showEd(this, 'attn')">редактор · требуют внимания</button>
       <button type="button" onclick="showEd(this, 'sum')">редактор · все разделы</button>
       <button type="button" onclick="showEd(this, 'empty')">редактор · ничего не найдено</button>
       <button type="button" onclick="showEd(this, 'comm')">редактор · Комментарии</button>
+      <button type="button" onclick="showEd(this, 'norev')">редактор · рецензентов ещё нет</button>
       <span class="wf-nav-sep"></span>
       <button type="button" onclick="showState(this, 'docs')">Пояснения</button>
       <span class="wf-nav-sep"></span>
@@ -228,7 +238,25 @@
                             <button class="ou-quiz__dot is-answered" data-au="all" data-rv="all" aria-label="Вопрос 1">1</button>
                             <button class="ou-quiz__dot is-answered" data-au="part" aria-label="Вопрос 2">2</button>
                             <button class="ou-quiz__dot is-answered" data-au="stale" data-rv="stale" aria-label="Вопрос 3">3</button>
-                            <button class="ou-quiz__dot is-current" data-q4 aria-label="Вопрос 4">4</button>
+                            <span class="wf-pop-anchor wf-pop-anchor--dot">
+                              <button class="ou-quiz__dot is-current" data-q4 aria-label="Вопрос 4">4</button>
+                        <!-- Подсказка точки 4 у автора: кто и когда согласовал. -->
+                        <div class="ou-popover ou-popover--no-arrow" data-v="author" hidden>
+                          <div class="ou-popover__header">
+                            <div class="ou-popover__header-text">
+                              <h5 class="ou-popover__title">Вопрос 4</h5>
+                              <p class="ou-popover__subtitle">Согласовали 2 из 3</p>
+                            </div>
+                          </div>
+                          <div class="ou-popover__body">
+                            <div class="wf-appr-list">
+                              <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span><span class="wf-thread-who">Ирина Петрова</span><span class="wf-thread-when">21 ноября, 18:40</span></div>
+                              <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-purple"><span class="ou-avatar__visual"><span class="ou-avatar__initials">СК</span></span></span><span class="wf-thread-who">Сергей Ковалёв</span><span class="wf-thread-when">21 ноября, 19:12</span></div>
+                              <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АВ</span></span></span><span class="wf-thread-who">Анна Воробьёва</span><span class="ou-tag ou-tag--neutral ou-tag--outline ou-tag--s">не согласовала</span></div>
+                            </div>
+                          </div>
+                        </div>
+                            </span>
                             <button class="ou-quiz__dot" data-au="part" data-rv="all" aria-label="Вопрос 5">5</button>
                             <button class="ou-quiz__dot" aria-label="Вопрос 6">6</button>
                             <button class="ou-quiz__dot" data-au="all" data-rv="all" aria-label="Вопрос 7">7</button>
@@ -240,62 +268,48 @@
                         <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" disabled aria-label="Предыдущие 10 вопросов"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-chevron-left" /></svg></span></button>
                         <span class="wf-map-range"><span class="wf-map-range--wide">1–10 из 16</span><span class="wf-map-range--narrow">1–5 из 16</span></span>
                         <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Следующие 10 вопросов"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-chevron-right" /></svg></span></button>
-                        <button class="ou-btn ou-btn--secondary ou-btn--s" aria-expanded="false">Все вопросы</button>
-                      </div>
-                      <!-- Панель «Все вопросы»: те же бейджи на точках размера l и строки легенды. -->
-                      <div class="ou-popover ou-popover--no-arrow" role="dialog" aria-label="Все вопросы" data-v="panel" hidden>
-                        <div class="ou-popover__header">
-                          <div class="ou-popover__header-text">
-                            <h3 class="ou-popover__title">Все вопросы</h3>
-                            <p class="ou-popover__subtitle">отвечено 3 из 16 · пропущено 0</p>
+                        <span class="wf-pop-anchor wf-pop-anchor--panel">
+                          <button class="ou-btn ou-btn--secondary ou-btn--s" aria-expanded="false">Все вопросы</button>
+                        <!-- Панель «Все вопросы»: те же бейджи на точках размера l и строки легенды. -->
+                        <div class="ou-popover ou-popover--no-arrow" role="dialog" aria-label="Все вопросы" data-v="panel" hidden>
+                          <div class="ou-popover__header">
+                            <div class="ou-popover__header-text">
+                              <h3 class="ou-popover__title">Все вопросы</h3>
+                              <p class="ou-popover__subtitle">отвечено 3 из 16 · пропущено 0</p>
+                            </div>
+                            <button type="button" class="ou-popover__close" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-x" /></svg></button>
                           </div>
-                          <button type="button" class="ou-popover__close" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-x" /></svg></button>
-                        </div>
-                        <div class="ou-popover__body">
-                          <div class="ou-quiz ou-quiz--circle ou-quiz--l">
-                            <div class="ou-quiz__dots wf-map-grid">
-                                <button class="ou-quiz__dot is-answered" data-au="all" data-rv="all" aria-label="Вопрос 1">1</button>
-                                <button class="ou-quiz__dot is-answered" data-au="part" aria-label="Вопрос 2">2</button>
-                                <button class="ou-quiz__dot is-answered" data-au="stale" data-rv="stale" aria-label="Вопрос 3">3</button>
-                                <button class="ou-quiz__dot is-current" data-q4 aria-label="Вопрос 4">4</button>
-                                <button class="ou-quiz__dot" data-au="part" data-rv="all" aria-label="Вопрос 5">5</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 6">6</button>
-                                <button class="ou-quiz__dot" data-au="all" data-rv="all" aria-label="Вопрос 7">7</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 8">8</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 9">9</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 10">10</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 11">11</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 12">12</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 13">13</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 14">14</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 15">15</button>
-                                <button class="ou-quiz__dot" aria-label="Вопрос 16">16</button>
+                          <div class="ou-popover__body">
+                            <div class="ou-quiz ou-quiz--circle ou-quiz--l">
+                              <div class="ou-quiz__dots wf-map-grid">
+                                  <button class="ou-quiz__dot is-answered" data-au="all" data-rv="all" aria-label="Вопрос 1">1</button>
+                                  <button class="ou-quiz__dot is-answered" data-au="part" aria-label="Вопрос 2">2</button>
+                                  <button class="ou-quiz__dot is-answered" data-au="stale" data-rv="stale" aria-label="Вопрос 3">3</button>
+                                  <button class="ou-quiz__dot is-current" data-q4 aria-label="Вопрос 4">4</button>
+                                  <button class="ou-quiz__dot" data-au="part" data-rv="all" aria-label="Вопрос 5">5</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 6">6</button>
+                                  <button class="ou-quiz__dot" data-au="all" data-rv="all" aria-label="Вопрос 7">7</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 8">8</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 9">9</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 10">10</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 11">11</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 12">12</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 13">13</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 14">14</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 15">15</button>
+                                  <button class="ou-quiz__dot" aria-label="Вопрос 16">16</button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div class="ou-popover__footer wf-map-legend">
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-current"></span>текущий</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot"></span>не отвечен</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после вашей отметки</span>
-                        </div>
-                      </div>
-                      <!-- Подсказка точки 4 у автора: кто и когда согласовал. -->
-                      <div class="ou-popover ou-popover--no-arrow" data-v="author" hidden>
-                        <div class="ou-popover__header">
-                          <div class="ou-popover__header-text">
-                            <h5 class="ou-popover__title">Вопрос 4</h5>
-                            <p class="ou-popover__subtitle">Согласовали 2 из 3</p>
+                          <div class="ou-popover__footer wf-map-legend">
+                            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-current"></span>текущий</span>
+                            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
+                            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot"></span>не отвечен</span>
+                            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
+                            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после вашей отметки</span>
                           </div>
                         </div>
-                        <div class="ou-popover__body">
-                          <div class="wf-appr-list">
-                            <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span><span class="wf-thread-who">Ирина Петрова</span><span class="wf-thread-when">21 ноября, 18:40</span></div>
-                            <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-purple"><span class="ou-avatar__visual"><span class="ou-avatar__initials">СК</span></span></span><span class="wf-thread-who">Сергей Ковалёв</span><span class="wf-thread-when">21 ноября, 19:12</span></div>
-                            <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АВ</span></span></span><span class="wf-thread-who">Анна Воробьёва</span><span class="ou-tag ou-tag--neutral ou-tag--outline ou-tag--s">не согласовала</span></div>
-                          </div>
-                        </div>
+                        </span>
                       </div>
                     </div>
                     <h4>Вопрос 4 из 16</h4>
@@ -320,9 +334,15 @@
                 </div>
               </div>
 
-              <div class="wf-ins-body">
-                <!-- Блок согласования текущего объекта: над лентой комментариев. -->
-                <div class="tb-section-label">Согласование</div>
+              <div class="wf-ins-split">
+                <nav class="ou-drawer__rail wf-ins-rail" aria-label="Разделы вкладки «Рецензирование»">
+                  <!-- Пункт «Согласование» есть, только когда есть рецензент, принявший приглашение (состояние «рецензентов нет» его убирает). -->
+                  <button type="button" class="ou-drawer__rail-item is-active" aria-current="page" data-wrail="appr" data-v="none set stale test author panel" onclick="showWRail('appr')">Согласование</button>
+                  <button type="button" class="ou-drawer__rail-item" data-wrail="comm" onclick="showWRail('comm')"><span>Комментарии</span><span class="ou-drawer__rail-badge" data-v="none set stale test author panel">1</span></button>
+                </nav>
+                <div class="wf-ins-body">
+                  <section data-wpanel="appr">
+                <!-- Пункт рейла «Согласование»: карточки текущего объекта и легенда карты. -->
                 <div class="ou-card ou-card--outlined ou-card--sm">
                   <div class="ou-card__header"><span class="ou-card__title">Тест в целом</span></div>
                   <div class="ou-card__body">
@@ -382,7 +402,19 @@
                   </div>
                 </div>
 
-                <div class="tb-section-label">Комментарии</div>
+                <div class="tb-section-label">Обозначения на карте вопросов</div>
+                <div class="ou-quiz ou-quiz--circle ou-quiz--m">
+                  <div class="ou-quiz__legend">
+                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
+                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после вашей отметки</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="all"></span>согласовали все</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="part"></span>согласовали не все</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после отметки</span>
+                  </div>
+                </div>
+                  </section>
+                  <section data-wpanel="comm" hidden>
+                <!-- Пункт рейла «Комментарии»: прежняя лента без изменений. -->
                 <div class="wf-ins-toolbar">
                   <button class="ou-btn ou-btn--primary ou-btn--s"><span class="ou-btn__ico"><svg width="13" height="13"><use href="#i-message" /></svg></span><span>Комментарий к этому экрану</span></button>
                   <span class="spacer"></span>
@@ -396,7 +428,8 @@
                   <button type="button" class="ou-btn ou-btn--secondary ou-btn--s"><span>Следующий комментарий</span></button>
                 </div>
 
-                <div class="ou-card ou-card--outlined ou-card--sm">
+                <div class="wf-sum" data-v="norev" hidden><span>Комментариев пока нет</span></div>
+                <div class="ou-card ou-card--outlined ou-card--sm" data-v="none set stale test author panel">
                   <div class="ou-card__body">
                     <div class="wf-thread-head">
                       <span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span>
@@ -410,15 +443,7 @@
                   </div>
                 </div>
 
-                <div class="tb-section-label">Обозначения на карте вопросов</div>
-                <div class="ou-quiz ou-quiz--circle ou-quiz--m">
-                  <div class="ou-quiz__legend">
-                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
-                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после вашей отметки</span>
-                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="all"></span>согласовали все</span>
-                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="part"></span>согласовали не все</span>
-                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после отметки</span>
-                  </div>
+                  </section>
                 </div>
               </div>
             </aside>
@@ -445,14 +470,14 @@
               <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Оценка результата</span></button>
               <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Обратная связь и итоги</span></button>
               <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Оформление</span></button>
-              <button type="button" class="ou-tabs__tab is-active" role="tab" aria-selected="true"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+              <button type="button" class="ou-tabs__tab is-active" role="tab" aria-selected="true"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s" data-ed="attn sum empty comm">3</span></button>
             </div>
           </nav>
           <div class="ou-drawer__body ou-drawer__body--flush" tabindex="0">
             <div class="ou-drawer__split">
               <nav class="ou-drawer__rail" aria-label="Разделы вкладки «Рецензирование»">
-                <button type="button" class="ou-drawer__rail-item is-active" aria-current="page" data-rail="appr" onclick="showRail('appr')">Согласование</button>
-                <button type="button" class="ou-drawer__rail-item" data-rail="comm" onclick="showRail('comm')"><span>Комментарии</span><span class="ou-drawer__rail-badge">3</span></button>
+                <button type="button" class="ou-drawer__rail-item is-active" aria-current="page" data-rail="appr" data-ed="attn sum empty comm" onclick="showRail('appr')">Согласование</button>
+                <button type="button" class="ou-drawer__rail-item" data-rail="comm" onclick="showRail('comm')"><span>Комментарии</span><span class="ou-drawer__rail-badge" data-ed="attn sum empty comm">3</span></button>
               </nav>
               <div class="tb-settings-content">
             <section class="ou-formsection ou-formsection--stacked" data-rail-panel="appr">
@@ -567,7 +592,7 @@
             <section class="ou-formsection ou-formsection--stacked" data-rail-panel="comm" hidden>
               <div class="ou-formsection__intro"><h3 class="ou-formsection__title">Комментарии</h3></div>
               <div class="ou-formsection__body">
-                <div class="ou-card ou-card--outlined ou-card--sm">
+                <div class="ou-card ou-card--outlined ou-card--sm" data-ed="attn sum empty comm">
                   <div class="ou-card__body">
                     <div class="wf-thread-head">
                       <span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span>
@@ -580,7 +605,8 @@
                     <p class="wf-thread-text">Формулировка допускает два прочтения: доля рынка по абонентам или по выручке.</p>
                   </div>
                 </div>
-                <div class="wf-sum"><span>Всего 7 комментариев · открытых 3 · от двух экспертов</span></div>
+                <div class="wf-sum" data-ed="attn sum empty comm"><span>Всего 7 комментариев · открытых 3 · от двух экспертов</span></div>
+                <div class="wf-sum" data-ed="norev" hidden><span>Комментариев пока нет</span></div>
               </div>
             </section>
               </div>
@@ -650,6 +676,16 @@
     </div>
 
     <script>
+      function showWRail(id) {
+        document.querySelectorAll('#wf-window [data-wpanel]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-wpanel') !== id;
+        });
+        document.querySelectorAll('#wf-window [data-wrail]').forEach(function (b) {
+          var on = b.getAttribute('data-wrail') === id;
+          b.classList.toggle('is-active', on);
+          if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+        });
+      }
       function showRail(id) {
         document.querySelectorAll('#wf-editor [data-rail-panel]').forEach(function (el) {
           el.hidden = el.getAttribute('data-rail-panel') !== id;
@@ -675,20 +711,23 @@
           el.hidden = tokens.indexOf(v) === -1 && tokens.indexOf(base) === -1;
         });
         // Рецензент видит только свои отметки (data-rv), автор - круг рецензентов (data-au).
-        var viewer = v === 'author' ? 'au' : 'rv';
+        var viewer = v === 'author' || v === 'norev' ? 'au' : 'rv';
         document.querySelectorAll('[data-au],[data-rv],[data-q4]').forEach(function (d) {
           var val = d.hasAttribute('data-q4')
             ? { rv: { set: 'all', panel: 'all', stale: 'stale' }, au: { author: 'part' } }[viewer][v]
             : d.getAttribute('data-' + viewer);
-          if (val) d.setAttribute('data-review-approved', val); else d.removeAttribute('data-review-approved');
+          // Пока рецензентов нет, бейджей на карте нет.
+          if (val && v !== 'norev') d.setAttribute('data-review-approved', val); else d.removeAttribute('data-review-approved');
         });
+        // Рейл окна: «Согласование» по умолчанию, а без рецензентов остаются только комментарии.
+        showWRail(v === 'norev' ? 'comm' : 'appr');
       }
       function showEd(btn, mode) {
         showState(btn, 'editor');
         setEd(mode);
       }
       function setEd(mode) {
-        showRail(mode === 'comm' ? 'comm' : 'appr');
+        showRail(mode === 'comm' || mode === 'norev' ? 'comm' : 'appr');
         var seg = { attn: 'attn', sum: 'all', empty: 'all' }[mode];
         document.querySelectorAll('#wf-editor [data-seg]').forEach(function (b) {
           var on = b.getAttribute('data-seg') === seg;

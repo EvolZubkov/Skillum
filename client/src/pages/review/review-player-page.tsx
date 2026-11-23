@@ -191,7 +191,7 @@ export default function ReviewPlayerPage() {
             variant="underline"
             size="s"
           />
-          <div className="dbg__ins-body">
+          <div className={"dbg__ins-body" + (tab === "comments" ? " dbg__ins-body--flush" : "")}>
             {tab === "comments" ? (
               <ReviewPanel testId={testId} mode="player" screenAnchor={screenAnchor} screenTitle={screenTitle} />
             ) : !snap ? (

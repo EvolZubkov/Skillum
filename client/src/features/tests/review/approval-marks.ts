@@ -56,6 +56,11 @@ export function ensureApprovalLegend(doc: Document, viewer: "reviewer" | "author
   }
 }
 
+/** Убирает строки отметок из легенды: рецензентов не осталось, объяснять нечего. Без них ничего не делает. */
+export function removeApprovalLegend(doc: Document): void {
+  for (const el of doc.querySelectorAll("[data-review-legend]")) el.remove();
+}
+
 /** Кладёт стиль бейджа в документ iframe один раз: стили проекта в кадр пакета не попадают. */
 export function ensureApprovalStyle(doc: Document, css: string): void {
   if (doc.head.querySelector("style[data-review-approval]")) return;

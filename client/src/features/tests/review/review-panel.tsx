@@ -24,6 +24,8 @@ import type { ReviewThread } from "./review-api";
 import { resolveAnchorTarget, type ReviewAnchor, type AnchorTarget } from "@shared/review/anchor";
 import { initialsOf, when } from "./review-format";
 import { ReviewApprovalBlock, ReviewApprovalLegend } from "./review-approval-block";
+import { ReviewTab } from "./review-tab";
+import { useReviewApprovals } from "./use-review-approvals";
 import "./review-panel.css";
 
 export interface ReviewPanelProps {
@@ -58,6 +60,8 @@ export function ReviewPanel({
   screenAnchor, screenTitle, anchorOptions, onNavigate, focusThreadId,
 }: ReviewPanelProps) {
   const review = useReviewComments(testId);
+  // Окно прогона: пункт «Согласование» в рейле есть, только когда есть рецензент, принявший приглашение.
+  const approvals = useReviewApprovals(testId, { enabled: mode === "player" });
   const [composing, setComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [resolving, setResolving] = useState<{ id: string; status: "accepted" | "rejected" } | null>(null);
@@ -100,6 +104,11 @@ export function ReviewPanel({
     );
   }
 
+  // Рейл выбирает пункт по умолчанию при первой отрисовке, поэтому ждём ответа про рецензентов.
+  if (mode === "player" && approvals.isLoading) {
+    return <Text tone="muted" variant="body-s">Загружаем комментарии…</Text>;
+  }
+
   async function submitResolve() {
     if (!resolving) return;
     // При отклонении ответ обязателен — сервер это тоже проверяет, но человек не
@@ -114,13 +123,8 @@ export function ReviewPanel({
 
   const rejectBlocked = resolving?.status === "rejected" && !rejectReply.trim();
 
-  return (
+  const comments = (
     <Stack gap={3} className="rvp">
-      {/* PRD-52: согласование стоит над лентой, только там, где есть прогон. */}
-      {mode === "player" && screenAnchor ? (
-        <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} screenTitle={screenTitle} />
-      ) : null}
-      {mode === "player" ? <div className="tb-section-label">Комментарии</div> : null}
       <Cluster gap={3} align="center" className="rvp__bar">
         <Button
           variant="primary"
@@ -356,7 +360,28 @@ export function ReviewPanel({
         </Text>
       </div>
 
-      {mode === "player" ? <ReviewApprovalLegend testId={testId} /> : null}
     </Stack>
+  );
+
+  if (mode !== "player") return comments;
+
+  // PRD-52, утверждённый эскиз окна: рейл «Согласование / Комментарии» как в редакторе. «Согласование» - карточки
+  // текущего экрана и легенда карты; пока рецензентов нет, пункта нет и остаются комментарии.
+  return (
+    <ReviewTab
+      compact
+      openComments={review.openCount}
+      approval={
+        approvals.hasReviewers ? (
+          <Stack gap={3}>
+            {screenAnchor ? (
+              <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} screenTitle={screenTitle} />
+            ) : null}
+            <ReviewApprovalLegend testId={testId} />
+          </Stack>
+        ) : undefined
+      }
+      comments={comments}
+    />
   );
 }

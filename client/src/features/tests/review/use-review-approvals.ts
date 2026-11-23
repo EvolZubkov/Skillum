@@ -39,6 +39,14 @@ export function useReviewApprovals(testId: string, options: { enabled?: boolean 
     reviewers: query.data?.reviewers ?? [],
     /** Круг счётчика «согласовали N из M»: принявшие приглашение и поставившие отметку. */
     circle: (query.data?.reviewers ?? []).filter((r) => r.accepted),
+    /**
+     * Есть ли у теста рецензенты, о которых стоит говорить: рецензент по определению, а автору - если в круге
+     * есть хоть один принявший приглашение или поставивший отметку. Пока никто не пришёл, согласования нет, есть
+     * только возможность оставлять комментарии: блок, легенда и пункт редактора не показываются.
+     */
+    hasReviewers:
+      query.data?.viewer === "reviewer" ||
+      (query.data?.reviewers ?? []).some((r) => r.accepted),
     isLoading: query.isLoading,
     error: query.error as Error | null,
     approve,

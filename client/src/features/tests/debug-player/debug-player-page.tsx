@@ -326,7 +326,7 @@ export default function DebugPlayerPage() {
           />
           <div className="dbg__ins-main">
             <TabHead tab={tab} onTab={setTab} />
-            <div className="dbg__ins-body">
+            <div className={"dbg__ins-body" + (tab === "review" ? " dbg__ins-body--flush" : "")}>
               {tab === "review" && (
                 <ReviewPanel
                   testId={testId}

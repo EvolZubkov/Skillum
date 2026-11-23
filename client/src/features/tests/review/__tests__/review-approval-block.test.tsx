@@ -154,6 +154,27 @@ describe("<ReviewApprovalBlock /> - автор", () => {
     ],
   };
 
+  it("пока никто из рецензентов не пришёл, блок «Согласование» не показывается (приглашённые без принятия не считаются)", async () => {
+    answer({
+      viewer: "author",
+      approvals: [],
+      reviewers: [{ userId: "r1", name: "Ирина Петрова", accepted: false }],
+    });
+    renderBlock();
+    await waitFor(() => expect(apiMock.fetchReviewApprovals).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("review-approval-block")).toBeNull();
+    expect(screen.queryByText("Тест в целом")).toBeNull();
+  });
+
+  it("без единого рецензента блока тоже нет", async () => {
+    answer({ viewer: "author", approvals: [], reviewers: [] });
+    renderBlock();
+    await waitFor(() => expect(apiMock.fetchReviewApprovals).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("review-approval-block")).toBeNull();
+  });
+
   it("не даёт чекбокса: автор согласование принимает, а не даёт", async () => {
     answer(authorData);
     renderBlock();

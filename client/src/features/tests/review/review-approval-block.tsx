@@ -23,8 +23,8 @@ export interface ReviewApprovalBlockProps {
 }
 
 export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle }: ReviewApprovalBlockProps) {
-  const { viewer, approvals, circle, approve, withdraw } = useReviewApprovals(testId);
-  if (!viewer) return null;
+  const { viewer, approvals, circle, hasReviewers, approve, withdraw } = useReviewApprovals(testId);
+  if (!viewer || !hasReviewers) return null;
 
   const busy = approve.isPending || withdraw.isPending;
   const testAnchor: ReviewAnchor = { kind: "test" };
@@ -33,7 +33,6 @@ export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle }: Revie
 
   return (
     <Stack gap={2} className="rva" data-testid="review-approval-block">
-      <div className="tb-section-label">Согласование</div>
       <ReviewApprovalCard
         title="Тест в целом"
         subject="Тест"
@@ -80,8 +79,8 @@ const LEGEND: Record<"reviewer" | "author", { badge: ApprovalBadge; text: string
  * бейджей объясняются здесь и в панели «Все вопросы».
  */
 export function ReviewApprovalLegend({ testId }: { testId: string }) {
-  const { viewer } = useReviewApprovals(testId);
-  if (!viewer) return null;
+  const { viewer, hasReviewers } = useReviewApprovals(testId);
+  if (!viewer || !hasReviewers) return null;
   return (
     <Stack gap={2} data-testid="review-approval-legend">
       <div className="tb-section-label">Обозначения на карте вопросов</div>

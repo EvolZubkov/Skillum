@@ -4,7 +4,7 @@
  * `goto:N`, а отметка хранится по идентификатору вопроса, поэтому соответствие берётся из порядка выдачи прогона.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { applyApprovalMarks, ensureApprovalLegend, ensureApprovalStyle } from "../approval-marks";
+import { applyApprovalMarks, ensureApprovalLegend, ensureApprovalStyle, removeApprovalLegend } from "../approval-marks";
 
 function mapDoc(): Document {
   const doc = document.implementation.createHTMLDocument("t");
@@ -67,6 +67,17 @@ describe("ensureApprovalLegend", () => {
     ensureApprovalLegend(doc, "reviewer");
     ensureApprovalLegend(doc, "reviewer");
     expect(doc.querySelectorAll("[data-review-legend]")).toHaveLength(2);
+  });
+
+  it("removeApprovalLegend убирает строки отметок, и ничего не делает без них", () => {
+    const doc = mapDoc();
+    removeApprovalLegend(doc);
+    ensureApprovalLegend(doc, "author");
+    expect(doc.querySelectorAll("[data-review-legend]")).toHaveLength(3);
+    removeApprovalLegend(doc);
+    expect(doc.querySelectorAll("[data-review-legend]")).toHaveLength(0);
+    ensureApprovalLegend(doc, "author");
+    expect(doc.querySelectorAll("[data-review-legend]")).toHaveLength(3);
   });
 
   it("у автора три строки", () => {

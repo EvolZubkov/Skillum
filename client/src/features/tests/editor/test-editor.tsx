@@ -66,6 +66,7 @@ import { describeFeasibilityState } from "@/features/content-protection/issue-te
 import { ReviewPanel } from "../review/review-panel";
 import { ReviewTab } from "../review/review-tab";
 import { ReviewApprovalSummary } from "../review/review-approval-summary";
+import { useReviewApprovals } from "../review/use-review-approvals";
 import type { SectionInput } from "../review/review-approval-model";
 import type { ReviewAnchorItem } from "../review/review-comment-form";
 import { useReviewComments } from "../review/use-review-comments";
@@ -717,6 +718,9 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
     return [...questions, ...pages];
   }, [editor.model?.sections, reviewQuestions.data, contentPages.pages]);
 
+  // PRD-52: отметки теста нужны, пока открыта вкладка «Рецензирование»; от них зависит, есть ли в ней пункт «Согласование».
+  const reviewApprovals = useReviewApprovals(editor.model?.id ?? "", { enabled: activeTab === "review" });
+
   /**
    * Разделы и их вопросы для раздела «Согласование» (PRD-52). Вопросы - из банка тем теста, нумерация внутри
    * раздела, как в эскизе: «Вопрос 2 «Кластер…»».
@@ -1038,12 +1042,17 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
               updateModel={editor.updateModel}
             />
           )}
-          {editor.model?.id && activeTab === "review" && (
+          {editor.model?.id && activeTab === "review" && !reviewApprovals.isLoading && (
             <ReviewTab
               openComments={reviewOpenCount}
               // Ссылка `?review=<id>` ведёт к ветке: вкладка открывается сразу на комментариях.
               initialKey={props.focusReviewThreadId ? "comments" : undefined}
-              approval={<ReviewApprovalSummary testId={editor.model.id} sections={reviewApprovalSections} />}
+              // Пока никто из рецензентов не пришёл, согласования нет: пункта в рейле нет, остаются комментарии.
+              approval={
+                reviewApprovals.hasReviewers
+                  ? <ReviewApprovalSummary testId={editor.model.id} sections={reviewApprovalSections} />
+                  : undefined
+              }
               comments={
                 <ReviewPanel
                   testId={editor.model.id}
