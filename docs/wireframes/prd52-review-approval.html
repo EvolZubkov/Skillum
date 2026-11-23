@@ -42,7 +42,7 @@
       .wf-stat-sub { font: var(--ou-text-body-s); color: var(--ou-fg-muted); font-variant-numeric: tabular-nums; }
       .wf-pbar { display: inline-block; width: 84px; }
       .wf-pl-body { flex: 1; min-height: 0; display: flex; }
-      .wf-pl-stage { flex: 1; min-width: 0; background: var(--ou-bg-page); display: flex; flex-direction: column; }
+      .wf-pl-stage { flex: 1 1 0; min-width: 0; background: var(--ou-bg-page); display: flex; flex-direction: column; }
       .wf-stage-canvas { flex: 1; min-height: 0; position: relative; display: flex; padding: var(--ou-space-5); }
       .wf-frame { flex: 1; display: flex; flex-direction: column; background: var(--ou-bg-elevated); border: var(--wf-border-w) solid var(--ou-border-default); border-radius: var(--ou-radius-m); box-shadow: var(--ou-shadow-s); overflow: hidden; }
       .wf-frame-ribbon { display: flex; align-items: center; gap: var(--ou-space-4); font: var(--ou-text-caption); color: var(--ou-fg-muted); background: var(--ou-bg-muted); padding: var(--ou-space-1) var(--ou-space-3); border-bottom: var(--wf-border-w) dashed var(--ou-border-default); }
@@ -54,16 +54,45 @@
       .q-opt input { flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--ou-accent-default); pointer-events: none; }
       .q-opt.is-sel { border-color: var(--ou-accent-default); background: var(--ou-accent-soft); }
       .wf-dots-anchor { position: relative; }
-      .wf-map-bar { display: flex; align-items: center; gap: var(--ou-space-2); }
+      .wf-dots-anchor { container-type: inline-size; }
+      .wf-map-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-2); }
+      .wf-map-range--narrow { display: none; }
+      @container (max-width: 520px) {
+        .wf-map-bar .ou-quiz__dot:nth-child(n+6) { display: none; }
+        .wf-map-range--wide { display: none; }
+        .wf-map-range--narrow { display: inline; }
+      }
       .wf-map-range { font: var(--ou-text-body-m); color: var(--ou-fg-muted); font-variant-numeric: tabular-nums; min-width: var(--wf-size-90, 88px); text-align: center; }
       .wf-map-grid { gap: var(--ou-space-3); }
+      .wf-appr-toolbar { display: flex; align-items: center; gap: var(--ou-space-3); flex-wrap: wrap; }
+      .wf-appr-search { flex: 1; min-width: var(--wf-size-180, 180px); }
+      .wf-nowrap { white-space: nowrap; }
+      /* Форма не выходит за границы окна: колонки и контейнеры могут сжиматься, длинное режется многоточием. */
+      .wf-drawer, .wf-drawer-body, .wf-drawer-body > *, .ou-formsection__body, .ou-formsection__body > * { min-width: 0; max-width: 100%; }
+      .wf-appr-toolbar > .ou-seg { max-width: 100%; flex-wrap: wrap; }
+      .wf-matrix { table-layout: fixed; width: 100%; min-width: 420px; }
+      .wf-matrix .wf-col-q { width: 50%; }
+      .wf-th-av { text-align: center; }
+      .wf-matrix td:not(:first-child) { text-align: center; }
+      .wf-legend-row { margin-top: var(--ou-space-3); }
+      .wf-matrix th, .wf-matrix td { vertical-align: middle; padding-inline: var(--ou-space-2); overflow: hidden; }
+      .wf-ellip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .wf-matrix .wf-thread-who { overflow: hidden; text-overflow: ellipsis; }
+      .wf-legend { display: inline-flex; align-items: center; gap: var(--ou-space-1); flex-wrap: wrap; font: var(--ou-text-caption); color: var(--ou-fg-muted); }
+      .wf-legend > .ou-tag { margin-left: var(--ou-space-2); }
+      .wf-legend > .ou-tag:first-child { margin-left: 0; }
+      .wf-acc-wrap .ou-acc__body { padding: 0 var(--ou-space-3) var(--ou-space-3); overflow-x: auto; }
+      .wf-acc-wrap .ou-acc__trigger { padding: var(--ou-space-3) var(--ou-space-3); gap: var(--ou-space-3); }
+      .wf-pbar-inline { flex: none; width: var(--wf-size-90, 88px); }
+      .tb-table .wf-thread-head { flex-wrap: nowrap; white-space: nowrap; }
+      .wf-pager { display: inline-flex; gap: var(--ou-space-1); }
       .wf-map-legend { justify-content: flex-start; flex-wrap: wrap; gap: var(--ou-space-3) var(--ou-space-4); }
-      .wf-dots-anchor > .ou-popover { --_w: 480px; position: absolute; top: calc(100% + var(--ou-space-2)); left: 0; z-index: 5; }
-      .wf-dots-anchor > .ou-popover[data-v="author"] { --_w: 280px; left: var(--ou-space-8); }
-      .wf-inspector { position: relative; flex: 0 0 36%; min-width: 420px; border-left: var(--wf-border-w) solid var(--ou-border-soft); display: flex; flex-direction: column; min-height: 0; background: var(--ou-bg-elevated); }
+      .wf-dots-anchor > .ou-popover { --_w: min(480px, 100%); position: absolute; top: calc(100% + var(--ou-space-2)); left: 0; z-index: 5; }
+      .wf-dots-anchor > .ou-popover[data-v="author"] { --_w: min(280px, 100%); left: 0; }
+      .wf-inspector { position: relative; flex: 0 0 36%; min-width: 320px; border-left: var(--wf-border-w) solid var(--ou-border-soft); display: flex; flex-direction: column; min-height: 0; background: var(--ou-bg-elevated); }
       .wf-ins-head { padding: var(--ou-space-2) var(--ou-space-3) 0; }
       .wf-ins-body { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-3) var(--ou-space-4) var(--ou-space-5); display: flex; flex-direction: column; gap: var(--ou-space-3); }
-      .wf-ins-toolbar { display: flex; align-items: center; gap: var(--ou-space-2); }
+      .wf-ins-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-2); }
       .wf-ins-toolbar .spacer { flex: 1; }
       .wf-appr-row { display: flex; align-items: center; gap: var(--ou-space-2); flex-wrap: wrap; }
       .wf-appr-row .spacer { flex: 1; }
@@ -81,6 +110,14 @@
       }
       .wf-drawer__tabs { border-bottom: var(--wf-border-w) solid var(--ou-border-soft); padding: 0 var(--ou-space-5); }
       .wf-drawer-body { padding: var(--ou-space-5) var(--ou-space-6); display: flex; flex-direction: column; gap: var(--ou-space-4); }
+      /* Ящик и окно целиком помещаются в окно браузера: шапка и вкладки на месте, прокручивается только тело. */
+      body .wf-stage { box-sizing: border-box; height: 100vh; display: flex; flex-direction: column; padding: calc(var(--wf-nav-h, 92px) + var(--ou-space-4)) var(--ou-space-6) var(--ou-space-4); }
+      body .wf-stage > .wf-state { padding-top: 0; }
+      body .wf-stage > .wf-state.active { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+      body .wf-stage > .wf-state.active > .wf-drawer { flex: 0 1 auto; min-height: 0; width: 100%; }
+      body .wf-stage > .wf-state.active > .wf-player { flex: 1 1 auto; min-height: 0; height: auto; max-height: 760px; }
+      .wf-drawer-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+      .wf-drawer-body--flush { padding: 0; display: flex; overflow: hidden; gap: 0; }
 
       .wf-thread-head { display: flex; align-items: center; gap: var(--ou-space-2); flex-wrap: wrap; }
       .wf-thread-head .spacer { flex: 1; }
@@ -129,6 +166,8 @@
       <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></symbol>
       <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></symbol>
       <symbol id="i-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></symbol>
     </svg>
 
@@ -140,7 +179,10 @@
       <button type="button" onclick="showVar(this, 'test')">рецензент · тест целиком</button>
       <button type="button" onclick="showVar(this, 'author')">окно автора</button>
       <button type="button" onclick="showVar(this, 'panel')">панель «Все вопросы»</button>
-      <button type="button" onclick="showState(this, 'editor')">редактор теста</button>
+      <button type="button" onclick="showEd(this, 'attn')">редактор · требуют внимания</button>
+      <button type="button" onclick="showEd(this, 'sum')">редактор · все разделы</button>
+      <button type="button" onclick="showEd(this, 'empty')">редактор · ничего не найдено</button>
+      <button type="button" onclick="showEd(this, 'comm')">редактор · Комментарии</button>
       <span class="wf-nav-sep"></span>
       <button type="button" onclick="showState(this, 'docs')">Пояснения</button>
       <span class="wf-nav-sep"></span>
@@ -172,22 +214,6 @@
                     <span class="wf-pbar"><span class="ou-progress ou-progress--xs"><span class="ou-progress__track"><span class="ou-progress__fill" style="width:25%"></span></span></span></span>
                   </span>
                 </div>
-                <div class="wf-stat-cell">
-                  <span class="wf-stat-lbl">Согласование теста</span>
-                  <span class="wf-stat-val" data-v="none set stale">
-                    <button class="ou-btn ou-btn--secondary ou-btn--s"><span class="ou-btn__ico"><svg width="13" height="13"><use href="#i-check-circle" /></svg></span><span>Согласовать тест</span></button>
-                    <span class="wf-stat-sub">согласовали 1 из 3</span>
-                  </span>
-                  <span class="wf-stat-val" data-v="test" hidden>
-                    <span class="ou-tag ou-tag--success ou-tag--s"><svg width="12" height="12"><use href="#i-check" /></svg>Вы · 22 ноября, 15:12</span>
-                    <button class="ou-btn ou-btn--ghost ou-btn--s"><span class="ou-btn__ico"><svg width="13" height="13"><use href="#i-rotate-ccw" /></svg></span><span>Снять отметку</span></button>
-                    <span class="wf-stat-sub">согласовали 2 из 3</span>
-                  </span>
-                  <span class="wf-stat-val" data-v="author" hidden>
-                    <span class="wf-stat-num">1 из 3</span>
-                    <span class="wf-stat-sub">Ирина Петрова · 21 ноября, 18:40</span>
-                  </span>
-                </div>
               </div>
 
               <div class="wf-stage-canvas">
@@ -198,20 +224,20 @@
                       <div class="wf-map-bar">
                         <div class="ou-quiz ou-quiz--circle ou-quiz--m" role="group" aria-label="Карта вопросов раздела">
                           <div class="ou-quiz__dots">
-                            <button class="ou-quiz__dot is-answered" data-review-approved="all" aria-label="Вопрос 1">1</button>
-                            <button class="ou-quiz__dot is-answered" data-review-approved="part" aria-label="Вопрос 2">2</button>
-                            <button class="ou-quiz__dot is-answered" data-review-approved="stale" aria-label="Вопрос 3">3</button>
+                            <button class="ou-quiz__dot is-answered" data-au="all" data-rv="all" aria-label="Вопрос 1">1</button>
+                            <button class="ou-quiz__dot is-answered" data-au="part" aria-label="Вопрос 2">2</button>
+                            <button class="ou-quiz__dot is-answered" data-au="stale" data-rv="stale" aria-label="Вопрос 3">3</button>
                             <button class="ou-quiz__dot is-current" data-q4 aria-label="Вопрос 4">4</button>
-                            <button class="ou-quiz__dot" data-review-approved="part" aria-label="Вопрос 5">5</button>
+                            <button class="ou-quiz__dot" data-au="part" data-rv="all" aria-label="Вопрос 5">5</button>
                             <button class="ou-quiz__dot" aria-label="Вопрос 6">6</button>
-                            <button class="ou-quiz__dot" data-review-approved="all" aria-label="Вопрос 7">7</button>
+                            <button class="ou-quiz__dot" data-au="all" data-rv="all" aria-label="Вопрос 7">7</button>
                             <button class="ou-quiz__dot" aria-label="Вопрос 8">8</button>
                             <button class="ou-quiz__dot" aria-label="Вопрос 9">9</button>
                             <button class="ou-quiz__dot" aria-label="Вопрос 10">10</button>
                           </div>
                         </div>
                         <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" disabled aria-label="Предыдущие 10 вопросов"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-chevron-left" /></svg></span></button>
-                        <span class="wf-map-range">1–10 из 16</span>
+                        <span class="wf-map-range"><span class="wf-map-range--wide">1–10 из 16</span><span class="wf-map-range--narrow">1–5 из 16</span></span>
                         <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Следующие 10 вопросов"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-chevron-right" /></svg></span></button>
                         <button class="ou-btn ou-btn--secondary ou-btn--s" aria-expanded="false">Все вопросы</button>
                       </div>
@@ -227,13 +253,13 @@
                         <div class="ou-popover__body">
                           <div class="ou-quiz ou-quiz--circle ou-quiz--l">
                             <div class="ou-quiz__dots wf-map-grid">
-                                <button class="ou-quiz__dot is-answered" data-review-approved="all" aria-label="Вопрос 1">1</button>
-                                <button class="ou-quiz__dot is-answered" data-review-approved="part" aria-label="Вопрос 2">2</button>
-                                <button class="ou-quiz__dot is-answered" data-review-approved="stale" aria-label="Вопрос 3">3</button>
+                                <button class="ou-quiz__dot is-answered" data-au="all" data-rv="all" aria-label="Вопрос 1">1</button>
+                                <button class="ou-quiz__dot is-answered" data-au="part" aria-label="Вопрос 2">2</button>
+                                <button class="ou-quiz__dot is-answered" data-au="stale" data-rv="stale" aria-label="Вопрос 3">3</button>
                                 <button class="ou-quiz__dot is-current" data-q4 aria-label="Вопрос 4">4</button>
-                                <button class="ou-quiz__dot" data-review-approved="part" aria-label="Вопрос 5">5</button>
+                                <button class="ou-quiz__dot" data-au="part" data-rv="all" aria-label="Вопрос 5">5</button>
                                 <button class="ou-quiz__dot" aria-label="Вопрос 6">6</button>
-                                <button class="ou-quiz__dot" data-review-approved="all" aria-label="Вопрос 7">7</button>
+                                <button class="ou-quiz__dot" data-au="all" data-rv="all" aria-label="Вопрос 7">7</button>
                                 <button class="ou-quiz__dot" aria-label="Вопрос 8">8</button>
                                 <button class="ou-quiz__dot" aria-label="Вопрос 9">9</button>
                                 <button class="ou-quiz__dot" aria-label="Вопрос 10">10</button>
@@ -250,9 +276,8 @@
                           <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-current"></span>текущий</span>
                           <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
                           <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot"></span>не отвечен</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>согласовали все</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="part"></span>согласовали не все</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после отметки</span>
+                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
+                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после вашей отметки</span>
                         </div>
                       </div>
                       <!-- Подсказка точки 4 у автора: кто и когда согласовал. -->
@@ -298,6 +323,30 @@
                 <!-- Блок согласования текущего объекта: над лентой комментариев. -->
                 <div class="tb-section-label">Согласование</div>
                 <div class="ou-card ou-card--outlined ou-card--sm">
+                  <div class="ou-card__header"><span class="ou-card__title">Тест в целом</span></div>
+                  <div class="ou-card__body">
+                    <div class="wf-appr-row" data-v="none set stale">
+                      <label class="ou-check"><input class="ou-check__input" type="checkbox" aria-label="Согласовано" /><span class="ou-check__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span><span class="ou-check__text"><span class="ou-check__lbl">Согласовано</span></span></label>
+                      <span class="spacer"></span>
+                    </div>
+                    <div class="wf-appr-row" data-v="test" hidden>
+                      <label class="ou-check"><input class="ou-check__input" type="checkbox" checked aria-label="Согласовано" /><span class="ou-check__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span><span class="ou-check__text"><span class="ou-check__lbl">Согласовано</span></span></label>
+                      <span class="spacer"></span>
+                      <span class="ou-tag ou-tag--success ou-tag--s">22 ноября, 15:12</span>
+                    </div>
+                    <div class="wf-appr-row" data-v="author" hidden>
+                      <span class="spacer"></span>
+                      <span class="ou-tag ou-tag--neutral ou-tag--outline ou-tag--s">согласовали 1 из 3</span>
+                    </div>
+                    <div class="wf-appr-list" data-v="author" hidden>
+                      <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span><span class="wf-thread-who">Ирина Петрова</span><span class="wf-thread-when">21 ноября, 18:40</span></div>
+                    </div>
+                    <div class="wf-appr-list" data-v="test" hidden>
+                      <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АВ</span></span></span><span class="wf-thread-who">Вы</span><span class="wf-thread-when">22 ноября, 15:12</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="ou-card ou-card--outlined ou-card--sm">
                   <div class="ou-card__header"><span class="ou-card__title">Вопрос 4</span></div>
                   <div class="ou-card__body">
                     <!-- Рецензент: чекбокс. -->
@@ -322,14 +371,8 @@
                     </div>
 
                     <!-- Кто согласовал этот объект. -->
-                    <div class="wf-appr-list" data-v="none test">
-                      <span class="wf-note" style="margin:0">Пока никто не согласовал</span>
-                    </div>
                     <div class="wf-appr-list" data-v="set" hidden>
                       <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АВ</span></span></span><span class="wf-thread-who">Вы</span><span class="wf-thread-when">22 ноября, 14:05</span></div>
-                    </div>
-                    <div class="wf-appr-list" data-v="stale" hidden>
-                      <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span><span class="wf-thread-who">Ирина Петрова</span><span class="wf-thread-when">22 ноября, 10:30</span><span class="spacer"></span><span class="ou-tag ou-tag--warning ou-tag--outline ou-tag--s">по прежней редакции</span></div>
                     </div>
                     <div class="wf-appr-list" data-v="author" hidden>
                       <div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span><span class="wf-thread-who">Ирина Петрова</span><span class="wf-thread-when">21 ноября, 18:40</span></div>
@@ -365,9 +408,11 @@
                 <div class="tb-section-label">Обозначения на карте вопросов</div>
                 <div class="ou-quiz ou-quiz--circle ou-quiz--m">
                   <div class="ou-quiz__legend">
-                    <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>согласовали все</span>
-                    <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="part"></span>согласовали не все</span>
-                    <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после отметки</span>
+                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
+                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после вашей отметки</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="all"></span>согласовали все</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="part"></span>согласовали не все</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после отметки</span>
                   </div>
                 </div>
               </div>
@@ -378,34 +423,43 @@
 
       <!-- ░░░ РЕДАКТОР ТЕСТА: ВКЛАДКА «КОММЕНТАРИИ» ░░░ -->
       <div class="wf-state" id="wf-editor">
-        <div class="wf-drawer">
+        <div class="ou-drawer-root" role="dialog" aria-modal="true">
+        <div class="ou-drawer__backdrop"></div>
+        <aside class="ou-drawer ou-drawer--xl ou-drawer--right">
           <header class="ou-drawer__head">
             <div class="ou-drawer__head-text"><h2 class="ou-drawer__title">Сертификационный тест для руководителей</h2></div>
-            <span class="ou-tag ou-tag--neutral ou-tag--outline" aria-label="Статус: черновик">Черновик</span>
-            <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s ou-drawer__close" aria-label="Закрыть редактор"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-x" /></svg></span></button>
+            <span class="ou-tag ou-tag--neutral ou-tag--outline">Черновик</span>
+            <span class="ou-tag ou-tag--neutral ou-tag--outline">v8</span>
+            <button type="button" class="ou-drawer__close" aria-label="Закрыть редактор"><svg width="16" height="16" aria-hidden="true"><use href="#i-x" /></svg></button>
           </header>
-          <div class="ou-tabs ou-tabs--underline ou-tabs--m wf-drawer__tabs">
-            <div class="ou-tabs__list" role="tablist">
-              <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Состав</span></button>
-              <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Настройки</span></button>
-              <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Оформление</span></button>
-              <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Структура</span></button>
-              <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Оценка</span></button>
-              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+          <nav class="ou-tabs ou-tabs--underline ou-tabs--m">
+            <div class="ou-tabs__list" role="tablist" aria-label="Разделы редактора">
+              <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Основное</span></button>
+              <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Состав и сценарий</span></button>
+              <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Правила прохождения</span></button>
+              <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Оценка результата</span></button>
+              <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Обратная связь и итоги</span></button>
+              <button type="button" class="ou-tabs__tab" role="tab" aria-selected="false"><span class="ou-tabs__label">Оформление</span></button>
+              <button type="button" class="ou-tabs__tab is-active" role="tab" aria-selected="true"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
             </div>
-          </div>
-
-          <div class="wf-drawer-body">
-            <section class="ou-formsection">
+          </nav>
+          <div class="ou-drawer__body ou-drawer__body--flush" tabindex="0">
+            <div class="ou-drawer__split">
+              <nav class="ou-drawer__rail" aria-label="Разделы вкладки «Рецензирование»">
+                <button type="button" class="ou-drawer__rail-item is-active" aria-current="page" data-rail="appr" onclick="showRail('appr')">Согласование</button>
+                <button type="button" class="ou-drawer__rail-item" data-rail="comm" onclick="showRail('comm')"><span>Комментарии</span><span class="ou-drawer__rail-badge">3</span></button>
+              </nav>
+              <div class="tb-settings-content">
+            <section class="ou-formsection ou-formsection--stacked" data-rail-panel="appr">
               <div class="ou-formsection__intro"><h3 class="ou-formsection__title">Согласование</h3></div>
               <div class="ou-formsection__body">
-            <div class="tb-section-label">Согласование рецензентами</div>
+            <div class="tb-section-label">Рецензенты</div>
             <table class="tb-table">
               <thead><tr><th>Рецензент</th><th>Тест в целом</th><th>Вопросы</th></tr></thead>
               <tbody>
                 <tr>
                   <td><div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span><span class="wf-thread-who">Ирина Петрова</span></div></td>
-                  <td><span class="ou-tag ou-tag--success ou-tag--s">21 ноября, 18:40</span></td>
+                  <td><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">21 ноября, 18:40</span></td>
                   <td>9 из 16</td>
                 </tr>
                 <tr>
@@ -415,8 +469,8 @@
                 </tr>
                 <tr>
                   <td><div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АВ</span></span></span><span class="wf-thread-who">Анна Воробьёва</span></div></td>
-                  <td><span class="ou-tag ou-tag--warning ou-tag--s">по прежней редакции · 20 ноября, 10:15</span></td>
-                  <td>12 из 16, из них по прежней редакции 2</td>
+                  <td><span class="ou-tag ou-tag--warning ou-tag--s wf-nowrap">до правки · 20 ноября, 10:15</span></td>
+                  <td>12 из 16 · до правки 2</td>
                 </tr>
                 <tr>
                   <td><div class="wf-thread-head"><span class="ou-avatar ou-avatar--xs ou-avatar--c-slate"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ОС</span></span></span><span class="wf-thread-who">Олег Смирнов</span></div></td>
@@ -426,32 +480,86 @@
             </table>
             <div class="wf-sum"><span>Тест целиком согласовали 1 из 3 принявших приглашение</span></div>
 
-            <div class="tb-section-label">Согласование по объектам · Раздел «О компании»</div>
-            <table class="tb-table">
-              <thead><tr><th>Объект</th><th>Согласовали</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td>Вопрос 1 «Миссия и ценности»</td>
-                  <td><div class="wf-tags"><span class="ou-tag ou-tag--success ou-tag--s">Петрова · 21.11 18:40</span><span class="ou-tag ou-tag--success ou-tag--s">Ковалёв · 21.11 19:02</span><span class="ou-tag ou-tag--success ou-tag--s">Воробьёва · 20.11 10:15</span></div></td>
-                </tr>
-                <tr>
-                  <td>Вопрос 2 «Кластер «Кибербезопасность»»</td>
-                  <td><div class="wf-tags"><span class="ou-tag ou-tag--success ou-tag--s">Петрова · 21.11 18:41</span></div></td>
-                </tr>
-                <tr>
-                  <td>Вопрос 3 «Структура холдинга»</td>
-                  <td><div class="wf-tags"><span class="ou-tag ou-tag--warning ou-tag--outline ou-tag--s">Воробьёва · 20.11 10:16 · по прежней редакции</span></div></td>
-                </tr>
-                <tr>
-                  <td>Вопрос 4 «Согласно «Стратегии-2030»…»</td>
-                  <td><span class="wf-thread-when">никто не согласовал</span></td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="tb-section-label">Согласование по объектам</div>
+            <div class="wf-appr-toolbar">
+              <span class="ou-seg ou-seg--s ou-seg--accent" role="group" aria-label="Что показывать">
+                <button type="button" class="ou-seg__item" data-seg="attn">Требуют внимания</button>
+                <button type="button" class="ou-seg__item" data-seg="all">Все</button>
+                <button type="button" class="ou-seg__item" data-seg="none">Не согласованы</button>
+                <button type="button" class="ou-seg__item" data-seg="stale">До правки</button>
+              </span>
+              <div class="ou-field ou-field--s wf-appr-search"><div class="ou-field__box"><span class="ou-field__icon"><svg width="16" height="16"><use href="#i-search" /></svg></span><input class="ou-field__input" type="text" id="wf-appr-q" placeholder="Поиск по тексту вопроса" aria-label="Поиск по тексту вопроса" /></div></div>
+              <div class="ou-select ou-field--s" data-ou-options="Все рецензенты|Ирина Петрова|Сергей Ковалёв|Анна Воробьёва"><button type="button" class="ou-field__box ou-select__trigger"><span class="ou-select__value">Все рецензенты</span><svg class="ou-select__chev" width="14" height="14"><use href="#i-chevron-down" /></svg></button></div>
+            </div>
+            <div class="ou-acc ou-acc--plain wf-acc-wrap" data-ed="attn sum">
+                <div class="ou-acc__item" data-open="attn">
+                  <button type="button" class="ou-acc__trigger" aria-expanded="false">
+                    <span class="ou-acc__trigger-text">
+                      <span class="ou-acc__title wf-nowrap">Раздел «О компании»</span>
+                      <span class="ou-acc__subtitle">согласовано всеми 7 из 16 · до правки 2 · не согласовано 2</span>
+                    </span>
+                    <span class="wf-pbar-inline"><span class="ou-progress ou-progress--xs"><span class="ou-progress__track"><span class="ou-progress__fill" style="width:43%"></span></span></span></span>
+                    <span class="ou-acc__chev" aria-hidden="true"><svg width="16" height="16"><use href="#i-chevron-down" /></svg></span>
+                  </button>
+                  <div class="ou-acc__body">
+                    <table class="tb-table wf-matrix">
+                      <colgroup><col class="wf-col-q" /><col /><col /><col /></colgroup>
+                      <thead><tr><th>Вопрос</th><th class="wf-th-av"><span class="ou-avatar ou-avatar--xs ou-avatar--c-blue" title="Петрова" aria-label="Петрова"><span class="ou-avatar__visual"><span class="ou-avatar__initials">ИП</span></span></span></th><th class="wf-th-av"><span class="ou-avatar ou-avatar--xs ou-avatar--c-purple" title="Ковалёв" aria-label="Ковалёв"><span class="ou-avatar__visual"><span class="ou-avatar__initials">СК</span></span></span></th><th class="wf-th-av"><span class="ou-avatar ou-avatar--xs ou-avatar--c-green" title="Воробьёва" aria-label="Воробьёва"><span class="ou-avatar__visual"><span class="ou-avatar__initials">АВ</span></span></span></th></tr></thead>
+                      <tbody>
+                          <tr><td><span class="wf-ellip" title="Вопрос 2 «Кластер «Кибербезопасность»»">Вопрос 2 «Кластер «Кибербезопасность»»</span></td><td><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">21.11 18:41</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td></tr>
+                          <tr><td><span class="wf-ellip" title="Вопрос 3 «Структура холдинга»">Вопрос 3 «Структура холдинга»</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td><td><span class="ou-tag ou-tag--warning ou-tag--outline ou-tag--s wf-nowrap" aria-label="До правки">20.11 10:16</span></td></tr>
+                          <tr><td><span class="wf-ellip" title="Вопрос 4 «Согласно «Стратегии-2030»…»">Вопрос 4 «Согласно «Стратегии-2030»…»</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td></tr>
+                          <tr><td><span class="wf-ellip" title="Вопрос 5 «Целевые рынки»">Вопрос 5 «Целевые рынки»</span></td><td><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">21.11 18:44</span></td><td><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">21.11 19:05</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td></tr>
+                          <tr><td><span class="wf-ellip" title="Вопрос 6 «Роли и полномочия»">Вопрос 6 «Роли и полномочия»</span></td><td><span class="wf-thread-when" aria-label="Не согласовал">—</span></td><td><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">21.11 19:08</span></td><td><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">20.11 10:20</span></td></tr>
+                      </tbody>
+                    </table>
+                    <div class="wf-legend-row"><span class="wf-legend"><span class="ou-tag ou-tag--success ou-tag--s wf-nowrap">21.11 18:44</span>согласовал<span class="ou-tag ou-tag--warning ou-tag--outline ou-tag--s wf-nowrap">20.11 10:16</span>до правки<span class="wf-thread-when">—</span>не согласовал</span></div>
+                    <div class="wf-sum">
+                      <span>1–5 из 9</span>
+                      <span class="wf-pager">
+                        <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" disabled aria-label="Предыдущая страница"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-chevron-left" /></svg></span></button>
+                        <button class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" aria-label="Следующая страница"><span class="ou-iconbtn__ico"><svg width="16" height="16"><use href="#i-chevron-right" /></svg></span></button>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ou-acc__item">
+                  <button type="button" class="ou-acc__trigger" aria-expanded="false">
+                    <span class="ou-acc__trigger-text">
+                      <span class="ou-acc__title wf-nowrap">Раздел «Финансы»</span>
+                      <span class="ou-acc__subtitle">согласовано всеми 20 из 24 · не согласовано 1</span>
+                    </span>
+                    <span class="wf-pbar-inline"><span class="ou-progress ou-progress--xs"><span class="ou-progress__track"><span class="ou-progress__fill" style="width:83%"></span></span></span></span>
+                    <span class="ou-acc__chev" aria-hidden="true"><svg width="16" height="16"><use href="#i-chevron-down" /></svg></span>
+                  </button>
+                </div>
+                <div class="ou-acc__item">
+                  <button type="button" class="ou-acc__trigger" aria-expanded="false">
+                    <span class="ou-acc__trigger-text">
+                      <span class="ou-acc__title wf-nowrap">Раздел «Кибербезопасность»</span>
+                      <span class="ou-acc__subtitle">согласовано всеми 3 из 12 · до правки 1 · не согласовано 2</span>
+                    </span>
+                    <span class="wf-pbar-inline"><span class="ou-progress ou-progress--xs"><span class="ou-progress__track"><span class="ou-progress__fill" style="width:25%"></span></span></span></span>
+                    <span class="ou-acc__chev" aria-hidden="true"><svg width="16" height="16"><use href="#i-chevron-down" /></svg></span>
+                  </button>
+                </div>
+                <div class="ou-acc__item" data-ed="sum">
+                  <button type="button" class="ou-acc__trigger" aria-expanded="false">
+                    <span class="ou-acc__trigger-text">
+                      <span class="ou-acc__title wf-nowrap">Раздел «Охрана труда»</span>
+                      <span class="ou-acc__subtitle">согласовано всеми 18 из 18</span>
+                    </span>
+                    <span class="wf-pbar-inline"><span class="ou-progress ou-progress--xs"><span class="ou-progress__track"><span class="ou-progress__fill" style="width:100%"></span></span></span></span>
+                    <span class="ou-acc__chev" aria-hidden="true"><svg width="16" height="16"><use href="#i-chevron-down" /></svg></span>
+                  </button>
+                </div>
+            </div>
+            <div class="wf-sum" data-ed="attn"><span>Скрыт 1 раздел: все вопросы согласованы</span></div>
+            <div class="wf-sum" data-ed="empty" hidden><span>Ничего не найдено по запросу «бюджет»</span></div>
               </div>
             </section>
 
-            <section class="ou-formsection">
+            <section class="ou-formsection ou-formsection--stacked" data-rail-panel="comm" hidden>
               <div class="ou-formsection__intro"><h3 class="ou-formsection__title">Комментарии</h3></div>
               <div class="ou-formsection__body">
                 <div class="ou-card ou-card--outlined ou-card--sm">
@@ -470,9 +578,17 @@
                 <div class="wf-sum"><span>Всего 7 комментариев · открытых 3 · от двух экспертов</span></div>
               </div>
             </section>
+              </div>
+            </div>
           </div>
-        </div>
+          <footer class="ou-drawer__foot">
+            <button type="button" class="ou-btn ou-btn--secondary ou-btn--m" disabled>Отменить</button>
+            <button type="button" class="ou-btn ou-btn--primary ou-btn--m" disabled>Применить</button>
+            <button type="button" class="ou-btn ou-btn--ghost ou-btn--m">Закрыть</button>
+          </footer>
+        </aside>
       </div>
+    </div>
 
       <!-- ░░░ ПОЯСНЕНИЯ ░░░ -->
       <div class="wf-state" id="wf-docs">
@@ -490,8 +606,10 @@
             </tbody>
           </table>
           <ul>
-            <li>Правило одно для рецензента и автора: бейдж показывает состояние круга, а не отметку смотрящего.
-              Собственная отметка рецензента видна в его панели и в списке согласовавших.</li>
+            <li>Рецензент не видит согласований других рецензентов (решение владельца 2026-11-23): на точках он
+              видит только свою отметку - сплошной бейдж, если согласовал сам, пунктирный, если объект правили
+              после его отметки. Автор и владелец видят круг: сплошной, контурный, пунктирный. Фильтр по зрителю
+              работает на сервере: рецензенту отдаются только его собственные отметки.</li>
             <li>Бейдж рисует хост окна рецензирования поверх точек пакета (атрибут точки), шаблон и контракт не
               меняются; в боевом пакете бейджа нет.</li>
             <li>Состав круга и знаменатель - только принявшие приглашение (спека, решение 9).</li>
@@ -499,10 +617,10 @@
 
           <h3 class="wf-notes-title">Кто что видит и может</h3>
           <ul>
-            <li>Рецензент: чекбокс «Согласовано» над лентой объекта и кнопка «Согласовать тест» в статусной панели;
-              снятие отметки - тем же чекбоксом или кнопкой «Снять отметку».</li>
-            <li>Автор и владелец теста: чекбокса нет, отметок не ставят; видят список согласовавших и подсказку
-              точки карты.</li>
+            <li>Рецензент: чекбокс «Согласовано» у вопроса и у теста в целом, оба на вкладке «Рецензирование»;
+              снимается тем же чекбоксом. Чужих отметок, имён и счётчиков «N из M» не видит.</li>
+            <li>Автор и владелец теста: чекбокса нет, отметок не ставят; видят всех согласовавших с датой и временем,
+              счётчики и подсказку точки карты.</li>
             <li>После правки объекта отметка не пропадает: рецензент получает кнопку «Согласовать новую редакцию».</li>
           </ul>
 
@@ -527,6 +645,23 @@
     </div>
 
     <script>
+      function showRail(id) {
+        document.querySelectorAll('#wf-editor [data-rail-panel]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-rail-panel') !== id;
+        });
+        document.querySelectorAll('#wf-editor [data-rail]').forEach(function (b) {
+          var on = b.getAttribute('data-rail') === id;
+          b.classList.toggle('is-active', on);
+          if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+        });
+      }
+      function fitStage() {
+        var nav = document.querySelector('.wf-nav');
+        if (nav) document.documentElement.style.setProperty('--wf-nav-h', nav.offsetHeight + 'px');
+        document.body.style.setProperty('--wf-nav-offset', nav.offsetHeight + 'px');
+      }
+      window.addEventListener('resize', fitStage);
+      window.addEventListener('load', fitStage);
       function applyVariant(v) {
         // Панель «Все вопросы» открыта поверх варианта «согласовано».
         var base = v === 'panel' ? 'set' : v;
@@ -534,11 +669,38 @@
           var tokens = el.getAttribute('data-v').split(' ');
           el.hidden = tokens.indexOf(v) === -1 && tokens.indexOf(base) === -1;
         });
-        // Точка 4 меняется с вариантом; в строке и в панели - один и тот же атрибут.
-        var q4 = { set: 'part', panel: 'part', author: 'part', stale: 'stale' }[v];
-        document.querySelectorAll('[data-q4]').forEach(function (d) {
-          if (q4) d.setAttribute('data-review-approved', q4); else d.removeAttribute('data-review-approved');
+        // Рецензент видит только свои отметки (data-rv), автор - круг рецензентов (data-au).
+        var viewer = v === 'author' ? 'au' : 'rv';
+        document.querySelectorAll('[data-au],[data-rv],[data-q4]').forEach(function (d) {
+          var val = d.hasAttribute('data-q4')
+            ? { rv: { set: 'all', panel: 'all', stale: 'stale' }, au: { author: 'part' } }[viewer][v]
+            : d.getAttribute('data-' + viewer);
+          if (val) d.setAttribute('data-review-approved', val); else d.removeAttribute('data-review-approved');
         });
+      }
+      function showEd(btn, mode) {
+        showState(btn, 'editor');
+        setEd(mode);
+      }
+      function setEd(mode) {
+        showRail(mode === 'comm' ? 'comm' : 'appr');
+        var seg = { attn: 'attn', sum: 'all', empty: 'all' }[mode];
+        document.querySelectorAll('#wf-editor [data-seg]').forEach(function (b) {
+          var on = b.getAttribute('data-seg') === seg;
+          b.classList.toggle('is-active', on);
+          if (on) b.setAttribute('aria-pressed', 'true'); else b.removeAttribute('aria-pressed');
+        });
+        document.querySelectorAll('#wf-editor [data-ed]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-ed').split(' ').indexOf(mode) === -1;
+        });
+        document.querySelectorAll('#wf-editor .ou-acc__item').forEach(function (it) {
+          var open = it.getAttribute('data-open') === mode;
+          it.classList.toggle('is-open', open);
+          var t = it.querySelector('.ou-acc__trigger');
+          if (t) t.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        var q = document.getElementById('wf-appr-q');
+        if (q) q.value = mode === 'empty' ? 'бюджет' : '';
       }
       function setActive(btn) {
         document.querySelectorAll('.wf-nav button[onclick*="show"]').forEach(function (b) { b.classList.remove('active'); });
@@ -556,6 +718,8 @@
       }
       (function () {
         applyVariant('none');
+        setEd('attn');
+        fitStage();
         var want = new URLSearchParams(location.search).get('state');
         if (!want) return;
         var btn = document.querySelector('.wf-nav button[onclick*="\'' + want + '\'"]');
