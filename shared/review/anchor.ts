@@ -83,3 +83,20 @@ export function isAnchorNavigable(anchor: ReviewAnchor, state: { orphaned: boole
   if (state.orphaned) return false;
   return resolveAnchorTarget(anchor) !== null;
 }
+
+/**
+ * Ключ якоря для уникальности отметки «Согласовано»: идентификатор объекта или пустая строка у экрана и теста
+ * целиком. Общий для сервера (запись) и клиента (поиск своей отметки по якорю).
+ */
+export function anchorKeyOf(anchor: ReviewAnchor): string {
+  switch (anchor.kind) {
+    case "question":
+      return anchor.questionId ?? "";
+    case "content-page":
+      return anchor.contentPageId ?? "";
+    case "topic":
+      return anchor.topicId ?? "";
+    default:
+      return "";
+  }
+}
