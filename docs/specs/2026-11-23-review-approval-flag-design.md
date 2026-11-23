@@ -85,10 +85,10 @@ NULL). Менять только строки с `access_level = 'review'`.
 | `pinned_content_hash` | text, NULL для экранов и теста | хеш содержимого на момент отметки |
 | `approved_at` | timestamp, not null | дата и время проставления |
 
-Индексы: `(test_id)` для чтения ленты и уникальный индекс на
-`(test_id, reviewer_id, anchor_kind, coalesce(question_id, topic_id, content_page_id))`.
-Выражение в индексе живёт только в SQL миграции, не в модели drizzle (как у
-`users.external_key`), поэтому `db:push` его не знает; это фиксируется в CLAUDE.md.
+Уникальность отметки держит `anchor_key` - идентификатор вопроса, страницы или темы, пустая строка у экрана,
+экрана итогов и теста целиком (колонка `NOT NULL DEFAULT ''`). Индексы: уникальный
+`(test_id, reviewer_id, anchor_kind, anchor_key)` и `(test_id)` для чтения ленты. Оба описаны в модели drizzle, так что
+`db:push` их не теряет; индекса по выражению нет.
 
 ## API
 

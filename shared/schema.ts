@@ -863,6 +863,10 @@ export const testAccessGrants = pgTable("test_access_grants", {
   // run) and nothing else. Stored as plain text, so the value needs no migration.
   accessLevel: text("access_level", { enum: ["edit", "assign", "review"] }).notNull(),
   grantedBy: varchar("granted_by", { length: 36 }), // which admin granted it
+  // PRD-52: when the holder of a `review` grant first opened the review window of this test. NULL for
+  // grants of other levels and for invitations not used yet; the «согласовали N из M» denominator counts
+  // the reviewers whose value is set.
+  acceptedAt: timestamp("accepted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   workIdx: uniqueIndex("test_access_grants_work_idx")
@@ -2982,6 +2986,43 @@ export type ReviewAnchorKind = TestReviewComment["anchorKind"];
 
 /** Исход комментария: открыт, учтён, отклонён. */
 export type ReviewCommentStatus = NonNullable<TestReviewComment["status"]>;
+
+/**
+ * Отметка «Согласовано» (PRD-52, спека 2026-11-23-review-approval-flag-design). Принадлежит паре «рецензент -
+ * объект», а не ветке комментария. Якорь - те же поля, что у комментария, плюс `anchorKey` для уникальности:
+ * идентификатор вопроса, страницы или темы, пустая строка у экрана и теста целиком.
+ */
+export const testReviewApprovals = pgTable("test_review_approvals", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  testId: varchar("test_id", { length: 36 })
+    .notNull()
+    .references(() => tests.id, { onDelete: "cascade" }),
+  reviewerId: varchar("reviewer_id", { length: 36 }).notNull(),
+  anchorKind: text("anchor_kind", {
+    enum: ["question", "content-page", "topic", "start", "results", "test"],
+  }).notNull(),
+  anchorKey: varchar("anchor_key", { length: 36 }).notNull().default(""),
+  questionId: varchar("question_id", { length: 36 }),
+  topicId: varchar("topic_id", { length: 36 }),
+  contentPageId: uuid("content_page_id"),
+  /** Снимок контекста строкой, как у комментария. */
+  contextLabel: text("context_label"),
+  /** Хеш содержимого якоря на момент отметки; NULL для экранов и теста в целом. */
+  pinnedContentHash: text("pinned_content_hash"),
+  approvedAt: timestamp("approved_at").notNull().defaultNow(),
+}, (table) => ({
+  // Один рецензент - одна отметка на объект.
+  uniqueIdx: uniqueIndex("test_review_approvals_unique_idx")
+    .on(table.testId, table.reviewerId, table.anchorKind, table.anchorKey),
+  // Лента теста читается целиком.
+  testIdx: index("test_review_approvals_test_idx").on(table.testId),
+}));
+
+/** Отметка «Согласовано», как её отдаёт база. */
+export type TestReviewApproval = typeof testReviewApprovals.$inferSelect;
+
+/** Отметка «Согласовано» на запись. */
+export type InsertTestReviewApproval = typeof testReviewApprovals.$inferInsert;
 
 // Insert schemas
 export const insertScormPackageSchema = createInsertSchema(scormPackages).omit({ id: true });

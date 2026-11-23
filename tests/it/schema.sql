@@ -370,6 +370,7 @@ CREATE TABLE "test_access_grants" (
 	"user_id" varchar(36) NOT NULL,
 	"access_level" text NOT NULL,
 	"granted_by" varchar(36),
+	"accepted_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 
@@ -421,6 +422,20 @@ CREATE TABLE "test_question_scoring" (
 	"excluded_from_delivery" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "test_review_approvals" (
+	"id" varchar(36) PRIMARY KEY NOT NULL,
+	"test_id" varchar(36) NOT NULL,
+	"reviewer_id" varchar(36) NOT NULL,
+	"anchor_kind" text NOT NULL,
+	"anchor_key" varchar(36) DEFAULT '' NOT NULL,
+	"question_id" varchar(36),
+	"topic_id" varchar(36),
+	"content_page_id" uuid,
+	"context_label" text,
+	"pinned_content_hash" text,
+	"approved_at" timestamp DEFAULT now() NOT NULL
 );
 
 CREATE TABLE "test_review_comments" (
@@ -614,6 +629,7 @@ ALTER TABLE "test_folder_access_grants" ADD CONSTRAINT "test_folder_access_grant
 ALTER TABLE "test_public_links" ADD CONSTRAINT "test_public_links_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "test_question_scoring" ADD CONSTRAINT "test_question_scoring_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "test_question_scoring" ADD CONSTRAINT "test_question_scoring_question_id_questions_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "test_review_approvals" ADD CONSTRAINT "test_review_approvals_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "test_review_comments" ADD CONSTRAINT "test_review_comments_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;
 CREATE INDEX "analytics_slices_owner_idx" ON "analytics_slices" USING btree ("created_by");
 CREATE UNIQUE INDEX "analytics_slices_owner_test_name_uq" ON "analytics_slices" USING btree ("created_by","test_id","name") WHERE "analytics_slices"."kind" = 'slice';
@@ -659,6 +675,8 @@ CREATE UNIQUE INDEX "test_public_links_test_idx" ON "test_public_links" USING bt
 CREATE UNIQUE INDEX "test_public_links_token_idx" ON "test_public_links" USING btree ("token");
 CREATE UNIQUE INDEX "test_question_scoring_test_question_idx" ON "test_question_scoring" USING btree ("test_id","question_id");
 CREATE INDEX "test_question_scoring_question_id_idx" ON "test_question_scoring" USING btree ("question_id");
+CREATE UNIQUE INDEX "test_review_approvals_unique_idx" ON "test_review_approvals" USING btree ("test_id","reviewer_id","anchor_kind","anchor_key");
+CREATE INDEX "test_review_approvals_test_idx" ON "test_review_approvals" USING btree ("test_id");
 CREATE INDEX "test_review_comments_test_idx" ON "test_review_comments" USING btree ("test_id","created_at");
 CREATE INDEX "test_review_comments_test_question_idx" ON "test_review_comments" USING btree ("test_id","question_id");
 CREATE INDEX "test_review_comments_parent_idx" ON "test_review_comments" USING btree ("parent_id");
