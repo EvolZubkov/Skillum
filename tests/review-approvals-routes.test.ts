@@ -30,7 +30,13 @@ const { storageMock, accessMock, anchorMock } = vi.hoisted(() => ({
     markReviewGrantAccepted: vi.fn(),
   },
   accessMock: { canReviewTest: vi.fn(), canEditTest: vi.fn(), canGrantAccess: vi.fn() },
-  anchorMock: { describeAnchor: vi.fn(), isAnchorStale: vi.fn(), isAnchorOrphaned: vi.fn() },
+  anchorMock: {
+    describeAnchor: vi.fn(), isAnchorStale: vi.fn(), isAnchorOrphaned: vi.fn(),
+    anchorChangedAt: vi.fn(),
+    // The real rule: the time counts only when it is AFTER the mark (see review-anchor).
+    changedAfter: (changedAt: Date | null, approvedAt: Date) =>
+      changedAt && changedAt.getTime() > approvedAt.getTime() ? changedAt : null,
+  },
 }));
 
 vi.mock("../server/storage", () => ({ storage: storageMock }));
@@ -162,6 +168,28 @@ describe("GET /:id/review/approvals", () => {
     anchorMock.isAnchorStale.mockResolvedValue(true);
     const res = await request(expertApp()).get("/api/tests/t1/review/approvals");
     expect(res.body.approvals[0].stale).toBe(true);
+  });
+
+  it("называет время правки у устаревшей отметки (issue 61)", async () => {
+    anchorMock.isAnchorStale.mockResolvedValue(true);
+    anchorMock.anchorChangedAt.mockResolvedValue(new Date("2026-11-23T09:10:00Z"));
+    const res = await request(expertApp()).get("/api/tests/t1/review/approvals");
+    expect(res.body.approvals[0].changedAt).toBe("2026-11-23T09:10:00.000Z");
+  });
+
+  it("не отдаёт время правки, когда оно неизвестно или не позже отметки", async () => {
+    anchorMock.isAnchorStale.mockResolvedValue(true);
+    anchorMock.anchorChangedAt.mockResolvedValue(null);
+    expect((await request(expertApp()).get("/api/tests/t1/review/approvals")).body.approvals[0].changedAt).toBeNull();
+    anchorMock.anchorChangedAt.mockResolvedValue(new Date("2026-11-20T00:00:00Z"));
+    expect((await request(expertApp()).get("/api/tests/t1/review/approvals")).body.approvals[0].changedAt).toBeNull();
+  });
+
+  it("у отметки, не устаревшей, времени правки нет", async () => {
+    anchorMock.isAnchorStale.mockResolvedValue(false);
+    anchorMock.anchorChangedAt.mockResolvedValue(new Date("2026-11-23T09:10:00Z"));
+    const res = await request(expertApp()).get("/api/tests/t1/review/approvals");
+    expect(res.body.approvals[0].changedAt).toBeNull();
   });
 
   it("помечает отметку осиротевшей, когда объект удалён", async () => {

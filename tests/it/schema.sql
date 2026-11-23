@@ -203,6 +203,7 @@ CREATE TABLE "questions" (
 	"feedback_incorrect" text,
 	"option_feedback_json" jsonb,
 	"content_hash" text,
+	"content_changed_at" timestamp,
 	"psycho_hash" text,
 	"tags" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"created_by" varchar(36)

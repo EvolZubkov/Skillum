@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReviewApprovalBlock } from "../review-approval-block";
+import { when } from "../review-format";
 import type { ReviewApproval, ReviewApprovalsResponse } from "../review-approval-api";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -105,6 +106,21 @@ describe("<ReviewApprovalBlock /> - рецензент", () => {
     await waitFor(() =>
       expect(apiMock.putReviewApproval).toHaveBeenCalledWith("t1", { kind: "question", questionId: "q1" }),
     );
+  });
+
+  it("у устаревшей отметки называет время правки, когда оно известно (issue 61)", async () => {
+    answer({ approvals: [approval({ stale: true, changedAt: "2026-11-23T09:10:00.000Z" })] });
+    renderBlock();
+    // The time is rendered in the local zone, so the expectation is built by the same formatter.
+    expect(await screen.findByText(
+      `Вопрос изменён ${when("2026-11-23T09:10:00.000Z")}, после вашей отметки от ${when("2026-11-22T14:05:00.000Z")}.`,
+    )).toBeInTheDocument();
+  });
+
+  it("без времени правки строка остаётся без него и без ошибки", async () => {
+    answer({ approvals: [approval({ stale: true, changedAt: null })] });
+    renderBlock();
+    expect(await screen.findByText(/Вопрос изменён после вашей отметки от 22 ноября/)).toBeInTheDocument();
   });
 
   it("не показывает счётчик «согласовали N из M»: чужих отметок рецензент не видит", async () => {

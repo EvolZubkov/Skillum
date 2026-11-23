@@ -26,7 +26,9 @@ import { respondWorkbookReadError, workbookUploadSingle } from "../middleware/up
 import { requireReviewScope } from "../middleware/review-scope";
 import { requireTestScope } from "../middleware/test-scope";
 import { storage } from "../storage";
-import { describeAnchor, isAnchorStale, isAnchorOrphaned } from "../services/review-anchor";
+import {
+  anchorChangedAt, changedAfter, describeAnchor, isAnchorStale, isAnchorOrphaned,
+} from "../services/review-anchor";
 import { openRunSession, servePackageFile, closeRunSession } from "../scorm/debug-player/run-session";
 import { inviteReviewers } from "../services/review-invite";
 import {
@@ -326,7 +328,9 @@ router.get("/:id/review/approvals", ...reviewGate, async (req: Request, res: Res
           isAnchorOrphaned(anchor),
         ]);
         // `stale` и `orphaned` НЕ хранятся: это состояние теста на момент чтения, как у комментариев.
-        return { ...row, reviewerName: names.get(row.reviewerId) ?? null, stale, orphaned };
+        // `changedAt` (issue 61) - когда объект менялся; только у устаревшей отметки и только если время известно.
+        const changedAt = stale ? changedAfter(await anchorChangedAt(anchor), row.approvedAt) : null;
+        return { ...row, reviewerName: names.get(row.reviewerId) ?? null, stale, orphaned, changedAt };
       }),
     );
     if (!isAuthor) return res.json({ viewer, approvals });

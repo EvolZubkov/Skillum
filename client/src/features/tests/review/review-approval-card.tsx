@@ -95,7 +95,11 @@ export function ReviewApprovalCard({
 
           {own?.stale ? (
             <Stack gap={3}>
-              <p className="rva__note">{`${subject} изменён после вашей отметки от ${when(own.approvedAt)}.`}</p>
+              <p className="rva__note">
+                {own.changedAt
+                  ? `${subject} изменён ${when(own.changedAt)}, после вашей отметки от ${when(own.approvedAt)}.`
+                  : `${subject} изменён после вашей отметки от ${when(own.approvedAt)}.`}
+              </p>
               <Cluster gap={2} align="center">
                 <Button variant="primary" size="s" disabled={busy} onClick={onApprove}>
                   Согласовать новую редакцию

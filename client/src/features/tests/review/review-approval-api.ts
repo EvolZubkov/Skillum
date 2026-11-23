@@ -24,6 +24,8 @@ export interface ReviewApproval {
   approvedAt: string;
   /** Объект менялся после отметки. */
   stale: boolean;
+  /** Когда он менялся: только у устаревшей отметки и только если время известно (issue 61), иначе `null`. */
+  changedAt?: string | null;
   /** Объект удалён из теста. */
   orphaned: boolean;
 }

@@ -97,7 +97,9 @@ NULL). Менять только строки с `access_level = 'review'`.
 Файл `server/routes/review.ts`, под тем же `reviewGate`.
 
 - `GET /api/tests/:id/review/approvals` - отметки теста с пометками `stale` и
-  `orphaned` (тот же сервис `review-anchor`) и именем рецензента. Держателю гранта
+  `orphaned` (тот же сервис `review-anchor`), именем рецензента и временем правки `changedAt` (issue 61: только у
+  устаревшей отметки и только если оно известно и позже отметки; у вопроса - `questions.content_changed_at`,
+  у страницы контента - `updated_at`, у темы, экрана и теста целиком - `null`). Держателю гранта
   `review` без доступа на правку возвращаются только его собственные строки; автору и
   владельцу - все.
 - `PUT /api/tests/:id/review/approvals` - поставить отметку своим именем по якорю;

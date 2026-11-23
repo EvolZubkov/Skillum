@@ -386,6 +386,14 @@ export const questions = pgTable("questions", {
   optionFeedbackJson: jsonb("option_feedback_json").$type<Array<string | null>>(),
   contentHash: text("content_hash"),
   /**
+   * PRD-52 (issue 61): when the question's REVIEWED content last changed - the prompt, the options, the key or
+   * the feedback, exactly the fields behind the review content hash (`server/services/review-content-hash`).
+   * Written by the repository in `updateQuestion` and only when that hash moves, so an edit of difficulty,
+   * tags or media does not touch it. NULL = unknown: a row edited before migration `0068` has no date, and
+   * the «изменён после вашей отметки» line then simply carries no time.
+   */
+  contentChangedAt: timestamp("content_changed_at"),
+  /**
    * PRD-66 FR-09a: the fingerprint of the question's CONTENT, by which answers are
    * grouped into an observation series. Written by the repository on every create and
    * update (`shared/questions/psycho-hash`), never by a caller.
@@ -1267,7 +1275,8 @@ export const insertTopicSchema = createInsertSchema(topics).omit({ id: true, upd
   ),
 });
 export const insertQuestionSchema = createInsertSchema(questions)
-  .omit({ id: true })
+  // `contentChangedAt` is written by the repository only (PRD-52, issue 61), never by a caller.
+  .omit({ id: true, contentChangedAt: true })
   // drizzle-zod types jsonb loosely; normalize tags on save (PRD-11 §3a:
   // trim/collapse, dedup, length cap). Scoring left the question in T-40.
   .extend({
