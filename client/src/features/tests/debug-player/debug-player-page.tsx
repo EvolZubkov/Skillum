@@ -30,6 +30,7 @@ import {
 import { ReviewPanel } from "../review/review-panel";
 import { useScreenAnchor } from "../review/use-screen-anchor";
 import { useScreenTitle } from "../review/use-screen-title";
+import { ReviewApprovalTooltip } from "../review/review-approval-tooltip";
 import { useReviewApprovalMarks } from "../review/use-approval-marks";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
 import { useQuery } from "@tanstack/react-query";
@@ -273,6 +274,7 @@ export default function DebugPlayerPage() {
                 {stageSrc ? (
                   <iframe key={runKey} ref={iframeRef} className="dbg__iframe" title="Прогон отладки" src={stageSrc} />
                 ) : null}
+                <ReviewApprovalTooltip frameRef={iframeRef} testId={testId} tick={snap} />
               </div>
             </div>
             {building ? (
