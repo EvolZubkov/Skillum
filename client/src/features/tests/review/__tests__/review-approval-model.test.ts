@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  findApproval, buildApprovalSections, filterSections, type SectionInput,
+  findApproval, approvalsAt, buildApprovalSections, filterSections, type SectionInput,
 } from "../review-approval-model";
 import type { ReviewApproval } from "../review-approval-api";
 
@@ -35,6 +35,13 @@ describe("findApproval", () => {
   });
   it("вид якоря учитывается: отметка на вопрос не находится как отметка на тест", () => {
     expect(findApproval([ap()], { kind: "test" })).toBeUndefined();
+  });
+});
+
+describe("approvalsAt", () => {
+  it("отдаёт отметки всех рецензентов по якорю", () => {
+    const rows = [ap(), ap({ id: "b", reviewerId: "r2" }), ap({ id: "c", anchorKey: "q2", questionId: "q2" })];
+    expect(approvalsAt(rows, { kind: "question", questionId: "q1" }).map((r) => r.id)).toEqual(["a", "b"]);
   });
 });
 

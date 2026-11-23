@@ -17,6 +17,12 @@ export function findApproval(
   return approvals.find((a) => a.anchorKind === anchor.kind && a.anchorKey === key);
 }
 
+/** Все отметки по якорю - для автора, которому видны отметки каждого рецензента. */
+export function approvalsAt(approvals: readonly ReviewApproval[], anchor: ReviewAnchor): ReviewApproval[] {
+  const key = anchorKeyOf(anchor);
+  return approvals.filter((a) => a.anchorKind === anchor.kind && a.anchorKey === key);
+}
+
 /** Раздел и его вопросы - то, что знает ящик теста. */
 export interface SectionInput {
   topicId: string;

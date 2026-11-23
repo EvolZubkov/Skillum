@@ -22,6 +22,8 @@ import { useReviewComments } from "./use-review-comments";
 import { ReviewCommentForm, type ReviewAnchorItem } from "./review-comment-form";
 import type { ReviewThread } from "./review-api";
 import { resolveAnchorTarget, type ReviewAnchor, type AnchorTarget } from "@shared/review/anchor";
+import { initialsOf, when } from "./review-format";
+import { ReviewApprovalBlock, ReviewApprovalLegend } from "./review-approval-block";
 import "./review-panel.css";
 
 export interface ReviewPanelProps {
@@ -47,25 +49,6 @@ function statusTag(thread: ReviewThread) {
   if (thread.status === "accepted") return <Tag size="s" tone="success">учтено</Tag>;
   if (thread.status === "rejected") return <Tag size="s" variant="soft">отклонено</Tag>;
   return <Tag size="s" tone="warning">открыто</Tag>;
-}
-
-/**
- * Инициалы для аватара. Имя может не прийти вовсе (пользователь удалён, ответ сервера
- * без него) — тогда кружок остаётся пустым, но с места не уходит: строка не должна
- * прыгать из-за отсутствующего имени.
- */
-function initialsOf(name: string | null | undefined, mine: boolean): string {
-  const source = (name ?? "").trim() || (mine ? "Вы" : "");
-  if (!source) return "";
-  const parts = source.split(/\s+/).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
-
-/** Дата в том виде, в каком её читают в списке: «2 сентября, 14:20». */
-function when(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 }
 
 export function ReviewPanel({
@@ -131,6 +114,11 @@ export function ReviewPanel({
 
   return (
     <Stack gap={3} className="rvp">
+      {/* PRD-52: согласование стоит над лентой, только там, где есть прогон. */}
+      {mode === "player" && screenAnchor ? (
+        <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} />
+      ) : null}
+      {mode === "player" ? <div className="tb-section-label">Комментарии</div> : null}
       <Cluster gap={3} align="center" className="rvp__bar">
         <Button
           variant="primary"
@@ -365,6 +353,8 @@ export function ReviewPanel({
             : ""}
         </Text>
       </div>
+
+      {mode === "player" ? <ReviewApprovalLegend testId={testId} /> : null}
     </Stack>
   );
 }

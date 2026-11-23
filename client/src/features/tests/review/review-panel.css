@@ -26,3 +26,8 @@
 .rvp__resolve { margin-top: var(--ou-space-3); }
 .rvp__form { margin-top: var(--ou-space-2); }
 .rvp__sum { margin-top: var(--ou-space-2); }
+
+/* PRD-52: карточки согласования. Только раскладка - цвета и элементы из дизайн-системы. */
+.rva__row { flex-wrap: wrap; }
+.rva__note { font: var(--ou-text-body-s); color: var(--ou-fg-muted); margin: 0; }
+.rva__person { flex-wrap: wrap; }
