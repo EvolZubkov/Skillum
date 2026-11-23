@@ -69,9 +69,9 @@ describe("окно рецензента", () => {
     expect(tabs.map((t) => t.textContent)).toEqual(["Комментарии", "Результаты", "Протокол"]);
   });
 
-  it("оба режимных тумблера выключены при открытии", async () => {
+  it("эталон включён при открытии, полная выдача выключена", async () => {
     renderPage();
-    expect(await screen.findByTestId("toggle-reference")).not.toBeChecked();
+    expect(await screen.findByTestId("toggle-reference")).toBeChecked();
     expect(screen.getByTestId("toggle-full-draw")).not.toBeChecked();
   });
 
@@ -83,9 +83,10 @@ describe("окно рецензента", () => {
     // Ждём первый снимок: после него `status.drawn` постоянен до конца прогона,
     // поэтому переход к следующему вопросу его уже не меняет.
     await waitFor(() => expect(snapshotMock.buildSnapshot).toHaveBeenCalled());
-    await userEvent.click(await screen.findByTestId("toggle-reference"));
+    // Эталон включён по умолчанию — тумблер не трогаем.
     const onToggle = applyReference.mock.calls.length;
     expect(onToggle).toBeGreaterThan(0);
+    expect(clearReference).not.toHaveBeenCalled();
     // Переход к следующему вопросу перерисовывает экран внутри пакета — разметка
     // эталона стирается вместе со старым DOM, а `status.drawn` при этом не меняется.
     // Оверлей обязан вернуться сам, на ближайшем тике.

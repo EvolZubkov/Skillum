@@ -40,7 +40,8 @@ export default function ReviewPlayerPage() {
   const { state, runKey, reset } = useDebugSession(testId, "review");
   const [tab, setTab] = useState<ReviewTabId>("comments");
   const [snap, setSnap] = useState<InspectorSnapshot | null>(null);
-  const [reference, setReference] = useState(false);
+  // Reviewer sees the reference (correct answers) highlighted by default.
+  const [reference, setReference] = useState(true);
   const [fullDraw, setFullDraw] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Место комментария — текущий экран прогона; тот же резолвер, что рисует эталон.
