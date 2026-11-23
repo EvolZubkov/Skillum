@@ -12,6 +12,7 @@ import { deliveredQuestionIds } from "./delivery-order";
 import { initialsOf, when } from "./review-format";
 import { useApprovalTooltip } from "./use-approval-tooltip";
 import { useReviewApprovals } from "./use-review-approvals";
+import "./review-panel.css";
 
 export interface ReviewApprovalTooltipProps {
   frameRef: RefObject<HTMLIFrameElement | null>;
@@ -60,9 +61,9 @@ export function ReviewApprovalTooltip({ frameRef, testId, tick }: ReviewApproval
         {tooltip ? (
           <Stack gap={2}>
             {tooltip.rows.map((row) => (
-              <Cluster key={row.userId} gap={2} align="center" className="rva__person">
+              <Cluster key={row.userId} gap={2} align="center" wrap={false} className="rvt__row" data-testid="approval-tooltip-row">
                 <Avatar size="xs" initials={initialsOf(row.name, false)} />
-                <strong className="rvp__who">{row.name || "Рецензент"}</strong>
+                <strong className="rvp__who rvt__name" title={row.name || undefined}>{row.name || "Рецензент"}</strong>
                 {row.iso ? (
                   <span className="rvp__when">{when(row.iso)}</span>
                 ) : (

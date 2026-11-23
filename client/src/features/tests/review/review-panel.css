@@ -55,3 +55,8 @@
 .rvs__legend > .ou-tag:first-child { margin-left: 0; }
 .rvs__pager { display: flex; align-items: center; justify-content: space-between; gap: var(--ou-space-3); }
 .rvs__pager-btns { display: inline-flex; gap: var(--ou-space-1); }
+
+/* Подсказка точки карты у автора (issue 67): строка рецензента без переноса. Длинное имя обрезается многоточием,
+   дата и тег остаются в строке и не сжимаются. */
+.rvt__row > * { flex: none; }
+.rvt__row > .rvt__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
