@@ -159,7 +159,7 @@
 
     <nav class="wf-nav" aria-label="Wireframe state switcher">
       <span class="wf-nav-title">Окно эксперта:</span>
-      <button type="button" class="active" onclick="showState(this, 'run')">прогон · Комментарии</button>
+      <button type="button" class="active" onclick="showState(this, 'run')">прогон · Рецензирование</button>
       <button type="button" onclick="showState(this, 'newnote')">новый комментарий</button>
       <button type="button" onclick="showState(this, 'score')">Результаты</button>
       <button type="button" onclick="showState(this, 'protocol')">Протокол</button>
@@ -277,7 +277,7 @@
                 <div class="wf-ins-head">
                   <div class="ou-tabs ou-tabs--underline ou-tabs--s">
                     <div class="ou-tabs__list" role="tablist" aria-label="Инспектор">
-                      <button type="button" class="ou-tabs__tab is-active" data-tab="review" role="tab" aria-selected="true" onclick="selectTab('review')"><span class="ou-tabs__label">Комментарии</span></button>
+                      <button type="button" class="ou-tabs__tab is-active" data-tab="review" role="tab" aria-selected="true" onclick="selectTab('review')"><span class="ou-tabs__label">Рецензирование</span></button>
                       <button type="button" class="ou-tabs__tab" data-tab="score" role="tab" aria-selected="false" onclick="selectTab('score')"><span class="ou-tabs__label">Результаты</span></button>
                       <button type="button" class="ou-tabs__tab" data-tab="protocol" role="tab" aria-selected="false" onclick="selectTab('protocol')"><span class="ou-tabs__label">Протокол</span></button>
                     </div>
@@ -499,7 +499,7 @@
               инспектором. Открывается по персональной ссылке (внешний эксперт) или обычной сессией при гранте
               <code>review</code> (пользователь платформы).</li>
             <li>Прогон одноразовый: попытка не создаётся, телеметрия выключена, в аналитике теста следа нет.</li>
-            <li>Вкладок ровно три: «Комментарии», «Результаты», «Протокол». «LMS», «Состояние», «Выдача»,
+            <li>Вкладок ровно три: «Рецензирование», «Результаты», «Протокол». «LMS», «Состояние», «Выдача»,
               «Шкалы» и «Показатели» эксперту не показываются — это машинерия рантайма.</li>
           </ul>
 
@@ -628,7 +628,7 @@
         if (want && navBtn(want)) showState(navBtn(want), want);
       })();
     </script>
-    <script>
+      <script>
       window.toggleTheme = function toggleTheme(btn) {
         var dark = document.body.classList.toggle('ou--dark');
         document.body.classList.toggle('ou--light', !dark);
@@ -642,5 +642,5 @@
         btn.classList.toggle('active', compact);
       };
     </script>
-  </body>
+</body>
 </html>
