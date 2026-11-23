@@ -29,6 +29,7 @@ import {
 } from "../run-inspector/panels";
 import { ReviewPanel } from "../review/review-panel";
 import { useScreenAnchor } from "../review/use-screen-anchor";
+import { useReviewApprovalMarks } from "../review/use-approval-marks";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
 import { useQuery } from "@tanstack/react-query";
 import type { Question, Topic } from "@shared/schema";
@@ -177,6 +178,8 @@ export default function DebugPlayerPage() {
   // Выдача фиксируется на первом вопросе — дальше режим не переключить.
   // Место комментария — вопрос текущего экрана прогона (PRD-52 FR-18).
   const screenAnchor = useScreenAnchor(iframeRef, snap);
+  // PRD-52: бейджи «Согласовано» на карте вопросов в кадре пакета - круг рецензентов (автор видит всех).
+  useReviewApprovalMarks(iframeRef, testId, snap);
   const drawStarted = Boolean(snap.draw?.started);
   const stageSrc = state.playUrl ? state.playUrl + drawHash : undefined;
 

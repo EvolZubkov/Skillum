@@ -5,7 +5,7 @@
  * карте (`shared/review/approval-state`), поэтому таблица и карта не расходятся.
  */
 import { anchorKeyOf, type ReviewAnchor } from "@shared/review/anchor";
-import { badgeForAuthor, type ApprovalBadge } from "@shared/review/approval-state";
+import { badgeForAuthor, badgeForReviewer, type ApprovalBadge } from "@shared/review/approval-state";
 import type { ReviewApproval } from "./review-approval-api";
 
 /** Отметка по якорю: в рамках одного зрителя она единственная. */
@@ -130,4 +130,18 @@ export function filterSections(
     else result.push({ ...section, rows });
   }
   return { sections: result, hidden };
+}
+
+/**
+ * Бейдж вопроса на карте. У автора - состояние круга рецензентов, у рецензента - его собственная отметка (сервер
+ * отдаёт ему только его строки, поэтому первая строка по вопросу - его отметка).
+ */
+export function badgeOfQuestion(
+  viewer: "author" | "reviewer",
+  approvals: readonly ReviewApproval[],
+  circleIds: readonly string[],
+  questionId: string,
+): ApprovalBadge | null {
+  const rows = approvals.filter((a) => a.anchorKind === "question" && a.anchorKey === questionId);
+  return viewer === "author" ? badgeForAuthor(rows, circleIds) : badgeForReviewer(rows[0]);
 }

@@ -21,6 +21,7 @@ import { buildSnapshot, type InspectorSnapshot } from "@/features/tests/debug-pl
 import { ScorePanel, ProtocolPanel, PanelEmpty } from "@/features/tests/run-inspector/panels";
 import { ReviewPanel } from "@/features/tests/review/review-panel";
 import { useScreenAnchor } from "@/features/tests/review/use-screen-anchor";
+import { useReviewApprovalMarks } from "@/features/tests/review/use-approval-marks";
 import "@/features/tests/debug-player/debug-player.css";
 
 type ReviewTabId = "comments" | "score" | "protocol";
@@ -46,6 +47,8 @@ export default function ReviewPlayerPage() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Место комментария — текущий экран прогона; тот же резолвер, что рисует эталон.
   const screenAnchor = useScreenAnchor(frameRef, snap);
+  // PRD-52: бейджи «Согласовано» на карте вопросов в кадре пакета - только собственные отметки рецензента.
+  useReviewApprovalMarks(frameRef, testId, snap);
 
   // Снимок инспектора снимается по тику с ЖИВОГО рантайма пакета: подписаться не на
   // что — пакет ничего не публикует наружу, кроме своих глобалей. Тем же тиком

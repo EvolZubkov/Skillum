@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  findApproval, approvalsAt, buildApprovalSections, filterSections, type SectionInput,
+  findApproval, approvalsAt, badgeOfQuestion, buildApprovalSections, filterSections, type SectionInput,
 } from "../review-approval-model";
 import type { ReviewApproval } from "../review-approval-api";
 
@@ -106,5 +106,21 @@ describe("filterSections", () => {
     ], ["r1"]);
     const res = filterSections(rows, { mode: "all", query: "", reviewerId: "r1" });
     expect(res.sections[0].rows.map((r) => r.questionId)).toEqual(["q2", "q3"]);
+  });
+});
+
+describe("badgeOfQuestion", () => {
+  const rows = [ap({ reviewerId: "r1" }), ap({ id: "b", reviewerId: "r2", stale: true })];
+
+  it("у рецензента - его собственная отметка", () => {
+    expect(badgeOfQuestion("reviewer", [rows[0]], [], "q1")).toBe("all");
+    expect(badgeOfQuestion("reviewer", [rows[1]], [], "q1")).toBe("stale");
+  });
+  it("у рецензента без отметки по вопросу бейджа нет", () => {
+    expect(badgeOfQuestion("reviewer", [rows[0]], [], "q9")).toBeNull();
+  });
+  it("у автора - состояние круга", () => {
+    expect(badgeOfQuestion("author", rows, ["r1", "r2"], "q1")).toBe("part");
+    expect(badgeOfQuestion("author", rows, ["r1", "r2"], "q9")).toBeNull();
   });
 });
