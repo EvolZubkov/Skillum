@@ -35,8 +35,10 @@ export function useReviewApprovals(testId: string, options: { enabled?: boolean 
     /** Кто смотрит: от этого зависит и вид экрана, и правило бейджа. `null`, пока ответ не пришёл. */
     viewer: query.data?.viewer ?? null,
     approvals: query.data?.approvals ?? [],
-    /** Круг рецензентов - только у автора. */
+    /** Все приглашённые и поставившие отметку - только у автора. */
     reviewers: query.data?.reviewers ?? [],
+    /** Круг счётчика «согласовали N из M»: принявшие приглашение и поставившие отметку. */
+    circle: (query.data?.reviewers ?? []).filter((r) => r.accepted),
     isLoading: query.isLoading,
     error: query.error as Error | null,
     approve,

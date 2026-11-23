@@ -331,16 +331,22 @@ router.get("/:id/review/approvals", ...reviewGate, async (req: Request, res: Res
     );
     if (!isAuthor) return res.json({ viewer, approvals });
 
-    // Круг рецензентов автора: принявшие приглашение плюс все, кто ставил отметки.
-    const accepted = (await storage.getTestAccessGrants(req.params.id))
-      .filter((grant) => grant.accessLevel === "review" && grant.acceptedAt)
-      .map((grant) => grant.userId);
-    const circle = [...new Set([...accepted, ...rows.map((row) => row.reviewerId)])];
-    const circleNames = await nameMap(circle);
+    // Рецензенты автора: ВСЕ приглашённые и все, кто ставил отметки. Флаг `accepted` отделяет круг, по которому
+    // считается «согласовали N из M» (принявшие приглашение и поставившие отметку), от тех, кто ещё не открыл окно:
+    // таблица рецензентов показывает и их, но в знаменатель они не входят (спека 2026-11-23, решение 9).
+    const grants = (await storage.getTestAccessGrants(req.params.id))
+      .filter((grant) => grant.accessLevel === "review");
+    const approvers = new Set(rows.map((row) => row.reviewerId));
+    const ids = [...new Set([...grants.map((grant) => grant.userId), ...approvers])];
+    const reviewerNames = await nameMap(ids);
     res.json({
       viewer,
       approvals,
-      reviewers: circle.map((id) => ({ userId: id, name: circleNames.get(id) ?? null })),
+      reviewers: ids.map((id) => ({
+        userId: id,
+        name: reviewerNames.get(id) ?? null,
+        accepted: approvers.has(id) || grants.some((grant) => grant.userId === id && Boolean(grant.acceptedAt)),
+      })),
     });
   } catch (error) {
     logger.error("Review approvals read failed: " + (error as Error).message, "review");

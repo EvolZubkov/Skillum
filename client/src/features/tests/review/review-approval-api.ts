@@ -28,11 +28,18 @@ export interface ReviewApproval {
   orphaned: boolean;
 }
 
-/** Ответ `GET`: зритель, отметки и (только автору) круг рецензентов. */
+/** Рецензент в ответе автору: приглашённые и поставившие отметку; `accepted` - вошёл в круг счётчика. */
+export interface ReviewerEntry {
+  userId: string;
+  name: string | null;
+  accepted: boolean;
+}
+
+/** Ответ `GET`: зритель, отметки и (только автору) рецензенты. */
 export interface ReviewApprovalsResponse {
   viewer: "author" | "reviewer";
   approvals: ReviewApproval[];
-  reviewers?: { userId: string; name: string | null }[];
+  reviewers?: ReviewerEntry[];
 }
 
 /** Ключ кэша отметок теста - общий для всех мест экрана. */

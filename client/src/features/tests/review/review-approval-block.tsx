@@ -23,7 +23,7 @@ export interface ReviewApprovalBlockProps {
 }
 
 export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle }: ReviewApprovalBlockProps) {
-  const { viewer, approvals, reviewers, approve, withdraw } = useReviewApprovals(testId);
+  const { viewer, approvals, circle, approve, withdraw } = useReviewApprovals(testId);
   if (!viewer) return null;
 
   const busy = approve.isPending || withdraw.isPending;
@@ -39,7 +39,7 @@ export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle }: Revie
         subject="Тест"
         viewer={viewer}
         approvals={approvalsAt(approvals, testAnchor)}
-        circleSize={reviewers.length}
+        circleSize={circle.length}
         busy={busy}
         onApprove={() => approve.mutate(testAnchor)}
         onWithdraw={(id) => withdraw.mutate(id)}
@@ -51,7 +51,7 @@ export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle }: Revie
           subject="Вопрос"
           viewer={viewer}
           approvals={approvalsAt(approvals, screenAnchor)}
-          circleSize={reviewers.length}
+          circleSize={circle.length}
           busy={busy}
           onApprove={() => approve.mutate(screenAnchor)}
           onWithdraw={(id) => withdraw.mutate(id)}

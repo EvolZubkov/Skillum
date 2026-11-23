@@ -109,6 +109,7 @@ beforeEach(() => {
   storageMock.getTestAccessGrants.mockResolvedValue([
     { testId: "t1", userId: "expert-1", accessLevel: "review", acceptedAt: new Date("2026-11-20") },
     { testId: "t1", userId: "expert-2", accessLevel: "review", acceptedAt: null },
+    { testId: "t1", userId: "expert-3", accessLevel: "review", acceptedAt: null },
   ]);
   accessMock.canReviewTest.mockResolvedValue(true);
   accessMock.canEditTest.mockImplementation(async (_r: unknown, userId: string) => userId === "author-1");
@@ -134,12 +135,22 @@ describe("GET /:id/review/approvals", () => {
     expect(storageMock.listReviewApprovals).toHaveBeenCalledWith("t1", { reviewerId: "expert-1" });
   });
 
-  it("автору отдаёт все строки и круг рецензентов", async () => {
+  it("автору отдаёт все строки и всех приглашённых рецензентов", async () => {
     const res = await request(authorApp()).get("/api/tests/t1/review/approvals");
     expect(res.body.viewer).toBe("author");
     expect(res.body.approvals).toHaveLength(2);
     expect(storageMock.listReviewApprovals).toHaveBeenCalledWith("t1", undefined);
-    expect(res.body.reviewers.map((r: { userId: string }) => r.userId).sort()).toEqual(["expert-1", "expert-2"]);
+    expect(res.body.reviewers.map((r: { userId: string }) => r.userId).sort())
+      .toEqual(["expert-1", "expert-2", "expert-3"]);
+  });
+
+  it("отмечает, кто принял приглашение: открывший окно или поставивший отметку", async () => {
+    const res = await request(authorApp()).get("/api/tests/t1/review/approvals");
+    const accepted = Object.fromEntries(
+      res.body.reviewers.map((r: { userId: string; accepted: boolean }) => [r.userId, r.accepted]),
+    );
+    // expert-1 открыл окно, expert-2 не открывал, но поставил отметку, expert-3 не сделал ничего.
+    expect(accepted).toEqual({ "expert-1": true, "expert-2": true, "expert-3": false });
   });
 
   it("подписывает отметку именем рецензента", async () => {

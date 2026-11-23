@@ -31,3 +31,27 @@
 .rva__row { flex-wrap: wrap; }
 .rva__note { font: var(--ou-text-body-s); color: var(--ou-fg-muted); margin: 0; }
 .rva__person { flex-wrap: wrap; }
+
+/* PRD-52: раздел «Согласование» редактора. Форма не выходит за границы окна: колонки сжимаются, длинный текст
+   вопроса режется многоточием, матрица в узком окне прокручивается внутри раздела. */
+.rvs, .rvs > * { min-width: 0; max-width: 100%; }
+.rvs__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-3); }
+.rvs__search { flex: 1; min-width: 180px; }
+.rvs__nowrap { white-space: nowrap; }
+.rvs__none { font: var(--ou-text-caption); color: var(--ou-fg-muted); }
+.rvs__person { display: inline-flex; align-items: center; gap: var(--ou-space-2); white-space: nowrap; }
+.rvs__title { white-space: nowrap; }
+.rvs__pbar { flex: none; width: 88px; }
+.rvs__acc .ou-acc__trigger { padding: var(--ou-space-3); gap: var(--ou-space-3); }
+.rvs__acc .ou-acc__body { padding: 0 var(--ou-space-3) var(--ou-space-3); overflow-x: auto; }
+.rvs__matrix { table-layout: fixed; width: 100%; min-width: 420px; }
+.rvs__col-q { width: 50%; }
+.rvs__matrix th, .rvs__matrix td { vertical-align: middle; padding-inline: var(--ou-space-2); overflow: hidden; }
+.rvs__matrix td:not(:first-child), .rvs__th-av { text-align: center; }
+.rvs__ellip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rvs__legend-row { margin-top: var(--ou-space-1); }
+.rvs__legend { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-1); font: var(--ou-text-caption); color: var(--ou-fg-muted); }
+.rvs__legend > .ou-tag { margin-left: var(--ou-space-2); }
+.rvs__legend > .ou-tag:first-child { margin-left: 0; }
+.rvs__pager { display: flex; align-items: center; justify-content: space-between; gap: var(--ou-space-3); }
+.rvs__pager-btns { display: inline-flex; gap: var(--ou-space-1); }

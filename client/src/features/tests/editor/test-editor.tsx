@@ -65,6 +65,8 @@ import { ScenarioTaskSection } from "./sections/scenario-task-section";
 import { describeFeasibilityState } from "@/features/content-protection/issue-text";
 import { ReviewPanel } from "../review/review-panel";
 import { ReviewTab } from "../review/review-tab";
+import { ReviewApprovalSummary } from "../review/review-approval-summary";
+import type { SectionInput } from "../review/review-approval-model";
 import type { ReviewAnchorItem } from "../review/review-comment-form";
 import { useReviewComments } from "../review/use-review-comments";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
@@ -715,6 +717,28 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
     return [...questions, ...pages];
   }, [editor.model?.sections, reviewQuestions.data, contentPages.pages]);
 
+  /**
+   * Разделы и их вопросы для раздела «Согласование» (PRD-52). Вопросы - из банка тем теста, нумерация внутри
+   * раздела, как в эскизе: «Вопрос 2 «Кластер…»».
+   */
+  const reviewApprovalSections = useMemo<SectionInput[]>(() => {
+    const byTopic = new Map<string, Question[]>();
+    for (const q of reviewQuestions.data ?? []) {
+      if (!q.topicId) continue;
+      const list = byTopic.get(q.topicId);
+      if (list) list.push(q);
+      else byTopic.set(q.topicId, [q]);
+    }
+    return (editor.model?.sections ?? []).map((section) => ({
+      topicId: section.topicId,
+      title: `Раздел «${section.topicName}»`,
+      questions: (byTopic.get(section.topicId) ?? []).map((q, index) => ({
+        id: q.id,
+        label: `Вопрос ${index + 1} «${questionLabel(q).slice(0, 60)}»`,
+      })),
+    }));
+  }, [editor.model?.sections, reviewQuestions.data]);
+
   // Счётчик открытых веток на вкладке. Запрос тот же, что у панели рецензирования, —
   // React Query отдаёт его из кэша, второго обращения к серверу не будет.
   const { openCount: reviewOpenCount } = useReviewComments(editor.model?.id ?? "", {
@@ -1019,6 +1043,7 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
               openComments={reviewOpenCount}
               // Ссылка `?review=<id>` ведёт к ветке: вкладка открывается сразу на комментариях.
               initialKey={props.focusReviewThreadId ? "comments" : undefined}
+              approval={<ReviewApprovalSummary testId={editor.model.id} sections={reviewApprovalSections} />}
               comments={
                 <ReviewPanel
                   testId={editor.model.id}

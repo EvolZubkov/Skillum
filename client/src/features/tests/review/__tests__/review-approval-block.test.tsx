@@ -123,9 +123,10 @@ describe("<ReviewApprovalBlock /> - автор", () => {
       approval({ id: "a2", reviewerId: "r2", reviewerName: "Сергей Ковалёв", approvedAt: "2026-11-21T19:12:00.000Z" }),
     ],
     reviewers: [
-      { userId: "r1", name: "Ирина Петрова" },
-      { userId: "r2", name: "Сергей Ковалёв" },
-      { userId: "r3", name: "Анна Воробьёва" },
+      { userId: "r1", name: "Ирина Петрова", accepted: true },
+      { userId: "r2", name: "Сергей Ковалёв", accepted: true },
+      { userId: "r3", name: "Анна Воробьёва", accepted: true },
+      { userId: "r4", name: "Олег Смирнов", accepted: false },
     ],
   };
 
