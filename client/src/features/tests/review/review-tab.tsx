@@ -8,6 +8,7 @@
  * ведёт себя как прежняя лента.
  */
 import { useState, type ReactNode } from "react";
+import { FormSection } from "@skillum/ui-kit";
 import { TabRail, type RailItem } from "@/features/tests/editor/sections/tab-rail";
 
 export type ReviewTabKey = "approval" | "comments";
@@ -40,7 +41,12 @@ export function ReviewTab({ openComments, approval, comments, initialKey }: Revi
       ariaLabel="Разделы вкладки «Рецензирование»"
       testIdPrefix="review"
     >
-      {hasApproval && active === "approval" ? approval : comments}
+      {/* Заголовок раздела над содержимым, как в эскизе: рейл называет пункт, заголовок называет страницу. */}
+      {hasApproval && active === "approval" ? (
+        <FormSection title="Согласование" stacked>{approval}</FormSection>
+      ) : (
+        <FormSection title="Комментарии" stacked>{comments}</FormSection>
+      )}
     </TabRail>
   );
 }

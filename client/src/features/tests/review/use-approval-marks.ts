@@ -18,11 +18,13 @@ import { useReviewApprovals } from "./use-review-approvals";
 /** Идентификаторы вопросов в порядке выдачи прогона; пусто, пока пакет не стартовал. */
 function deliveredQuestionIds(win: Window): string[] {
   try {
+    // Элемент порядка выдачи в живом состоянии пакета - `{ question: { id, ... }, ... }` (так, а не `{ id }`:
+    // проверено на живом прогоне). `id` на верхнем уровне оставлен запасным видом на случай другой раскладки.
     const pkg = window.TBInspector?.readPkg?.(win) as
-      | { state?: { flatQuestions?: { id: string }[] } | null }
+      | { state?: { flatQuestions?: { question?: { id?: string }; id?: string }[] } | null }
       | null
       | undefined;
-    return (pkg?.state?.flatQuestions ?? []).map((q) => q.id);
+    return (pkg?.state?.flatQuestions ?? []).map((q) => q.question?.id ?? q.id ?? "");
   } catch {
     // Пакет ещё не построил состояние - бейджи появятся на следующем кадре.
     return [];

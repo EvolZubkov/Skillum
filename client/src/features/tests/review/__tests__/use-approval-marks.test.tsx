@@ -29,7 +29,8 @@ function frameDoc(container: HTMLElement): Document {
 
 beforeEach(() => {
   (window as unknown as { TBInspector: unknown }).TBInspector = {
-    readPkg: () => ({ state: { flatQuestions: [{ id: "q1" }, { id: "q2" }] } }),
+    // Раскладка живого состояния пакета: элемент порядка выдачи держит вопрос в поле `question`.
+    readPkg: () => ({ state: { flatQuestions: [{ question: { id: "q1" } }, { question: { id: "q2" } }] } }),
   };
 });
 afterEach(() => {
