@@ -3434,7 +3434,7 @@
 .tb-miss-body { display: flex; align-items: flex-start; gap: var(--ou-space-4); }
 .tb-miss-body > .tb-miss-map { flex: 1; min-width: 0; }
 
-/* PRD-52 «Согласовано» (эскиз docs/wireframes/prd52-review-approval.html): бейдж на точке карты
+/* PRD-52 «Согласовано» (эскиз docs/wireframes/approved/prd52-review-approval.html): бейдж на точке карты
    вопросов в окне рецензирования. Хост ставит на точку атрибут `data-review-approved`
    (all | part | stale) и всё рисует CSS: узлов в DOM экрана нет, поэтому перерисовка экрана,
    которую делают хосты на каждом вопросе, бейдж не стирает. Тот же селектор красит точки в

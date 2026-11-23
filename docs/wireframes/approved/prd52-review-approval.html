@@ -7,8 +7,8 @@
     Wireframe: PRD-52 - флаг «Согласовано» у рецензента (окно рецензирования: чекбокс в панели,
     бейдж на точке карты вопросов, согласование теста целиком) и его отображение у автора
     (окно, ящик редактора теста). Спека: docs/specs/2026-11-23-review-approval-flag-design.md.
-    Канон окна - approved/prd52-review-player.html, канон ящика - approved/prd52-review-panel.html.
-    ЧЕРНОВИК НА СОГЛАСОВАНИЕ 2026-11-23. Состояния - кнопки навбара (адресуемы через ?state=<id>).
+    Канон окна - prd52-review-player.html, канон ящика - editor-settings-target.html.
+    СОГЛАСОВАН 2026-11-23. Состояния - кнопки навбара (адресуемы через ?state=<id>).
     -->
     <title>PRD-52 - Согласовано</title>
     <link rel="stylesheet" href="/docs/wireframes/ds/skillum-ds.css" />
@@ -176,7 +176,7 @@
       <span class="wf-nav-title">Согласовано:</span>
       <button type="button" class="active" onclick="showVar(this, 'none')">рецензент · не согласовано</button>
       <button type="button" onclick="showVar(this, 'set')">рецензент · согласовано</button>
-      <button type="button" onclick="showVar(this, 'stale')">рецензент · объект правили</button>
+      <button type="button" onclick="showVar(this, 'stale')">рецензент · объект изменён</button>
       <button type="button" onclick="showVar(this, 'test')">рецензент · тест целиком</button>
       <button type="button" onclick="showVar(this, 'author')">окно автора</button>
       <button type="button" onclick="showVar(this, 'panel')">панель «Все вопросы»</button>
@@ -278,7 +278,7 @@
                           <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
                           <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot"></span>не отвечен</span>
                           <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
-                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после вашей отметки</span>
+                          <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после вашей отметки</span>
                         </div>
                       </div>
                       <!-- Подсказка точки 4 у автора: кто и когда согласовал. -->
@@ -410,10 +410,10 @@
                 <div class="ou-quiz ou-quiz--circle ou-quiz--m">
                   <div class="ou-quiz__legend">
                     <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="all"></span>вы согласовали</span>
-                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после вашей отметки</span>
+                    <span class="ou-quiz__legend-item" data-v="none set stale test"><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после вашей отметки</span>
                     <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="all"></span>согласовали все</span>
                     <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="part"></span>согласовали не все</span>
-                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>правили после отметки</span>
+                    <span class="ou-quiz__legend-item" data-v="author" hidden><span class="ou-quiz__legend-dot" data-review-approved="stale"></span>изменено после отметки</span>
                   </div>
                 </div>
               </div>
@@ -608,7 +608,7 @@
           </table>
           <ul>
             <li>Рецензент не видит согласований других рецензентов (решение владельца 2026-11-23): на точках он
-              видит только свою отметку - сплошной бейдж, если согласовал сам, пунктирный, если объект правили
+              видит только свою отметку - сплошной бейдж, если согласовал сам, пунктирный, если объект изменили
               после его отметки. Автор и владелец видят круг: сплошной, контурный, пунктирный. Фильтр по зрителю
               работает на сервере: рецензенту отдаются только его собственные отметки.</li>
             <li>Бейдж рисует хост окна рецензирования поверх точек пакета (атрибут точки), шаблон и контракт не
