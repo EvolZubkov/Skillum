@@ -37,6 +37,7 @@ const { storageMock, accessMock, anchorMock, runMock } = vi.hoisted(() => ({
     deleteReviewComment: vi.fn(),
     resolveReviewComment: vi.fn(),
     reopenReviewComment: vi.fn(),
+    markReviewGrantAccepted: vi.fn(),
   },
   accessMock: { canReviewTest: vi.fn(), canEditTest: vi.fn(), canGrantAccess: vi.fn() },
   runMock: {
@@ -126,6 +127,7 @@ beforeEach(() => {
     async (_id: string, outcome: Record<string, unknown>) => root(outcome),
   );
   storageMock.reopenReviewComment.mockResolvedValue(root({ status: "open" }));
+  storageMock.markReviewGrantAccepted.mockResolvedValue(undefined);
   accessMock.canReviewTest.mockResolvedValue(true);
   accessMock.canGrantAccess.mockImplementation((_r: unknown, userId: string) => userId === "author-1");
   storageMock.getTestAccessGrants.mockResolvedValue([
