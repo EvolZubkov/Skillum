@@ -56,8 +56,8 @@
       .wf-stage-canvas { flex: 1; min-height: 0; position: relative; display: flex; padding: var(--ou-space-5); }
       /* Экран «нет доступа» занимает весь холст: сообщение по центру, а не прижато к верху. */
       .wf-stage-canvas--center { align-items: center; justify-content: center; }
-      .wf-frame { flex: 1; display: flex; flex-direction: column; background: #fff; border: var(--wf-border-w) solid var(--ou-border-default); border-radius: var(--ou-radius-m); box-shadow: var(--ou-shadow-s); overflow: hidden; }
-      .wf-frame-screen { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-6); color: #1f2733; }
+      .wf-frame { flex: 1; display: flex; flex-direction: column; background: var(--ou-bg-elevated); border: var(--wf-border-w) solid var(--ou-border-default); border-radius: var(--ou-radius-m); box-shadow: var(--ou-shadow-s); overflow: hidden; }
+      .wf-frame-screen { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-6); color: var(--ou-fg-default); }
       .wf-frame-screen h4 { margin: 0 0 var(--ou-space-2); font: var(--ou-text-heading-s); }
       .wf-frame-screen p { margin: 0 0 var(--ou-space-4); font: var(--ou-text-body-m); }
       .wf-frame-screen [hidden] { display: none; }
@@ -627,6 +627,20 @@
         var want = new URLSearchParams(location.search).get('state');
         if (want && navBtn(want)) showState(navBtn(want), want);
       })();
+    </script>
+    <script>
+      window.toggleTheme = function toggleTheme(btn) {
+        var dark = document.body.classList.toggle('ou--dark');
+        document.body.classList.toggle('ou--light', !dark);
+        btn.textContent = dark ? 'Light' : 'Dark';
+        btn.classList.toggle('active', dark);
+      };
+      window.toggleDensity = function toggleDensity(btn) {
+        var compact = document.body.classList.toggle('ou--compact');
+        document.body.classList.toggle('ou--normal', !compact);
+        btn.textContent = compact ? 'Normal' : 'Compact';
+        btn.classList.toggle('active', compact);
+      };
     </script>
   </body>
 </html>
