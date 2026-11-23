@@ -717,6 +717,9 @@ function renderStandardQuestion(qData, current, total, progress) {
         // by the `disabled` attribute the builder set on non-reachable pills). The map
         // pills are `.ou-quiz__dot` (revision «Стандартный»); the old `.tb-pill`
         // selector matched nothing, so the navigator was dead on the question screen.
+        // The shared core pages a long map and drives its «Все вопросы» panel; the panel's
+        // dots are `.ou-quiz__dot[data-action]` too, so the loop below wires them as well.
+        if (TB.attachQuestionMaps) TB.attachQuestionMaps(app);
         var pills = app.querySelectorAll('.ou-quiz__dot[data-action]');
         Array.prototype.forEach.call(pills, function (btn) {
             btn.addEventListener('click', function () {

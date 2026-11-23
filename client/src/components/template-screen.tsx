@@ -16,6 +16,7 @@ import type { ProtectionSpec } from "@shared/template/protection/spec";
 import { fitQuestionScene } from "@shared/template/fit-question";
 import { attachPointerDnd } from "@shared/template/dnd/pointer-dnd";
 import { attachQuestionMediaFullscreen } from "@shared/template/question-media";
+import { attachQuestionMaps } from "@shared/template/question-map-dom";
 import { nextScaleIndex } from "@shared/template/scale-keyboard";
 import { resolveSceneTheme } from "@shared/template/themes";
 import { paintSceneTimers, type SceneTimersState } from "@shared/template/scene-timers";
@@ -241,6 +242,7 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
   const screenRef = useRef<HTMLElement | null>(null);
   const appliedVarsRef = useRef<string[]>([]);
   const appliedAttrsRef = useRef<string[]>([]);
+  const qnavDetachRef = useRef<(() => void) | null>(null);
   const onActionRef = useRef(onAction);
   onActionRef.current = onAction;
   const onShadowReadyRef = useRef(onShadowReady);
@@ -428,6 +430,10 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
     // Header countdowns — the layout ships them hidden, exactly as in the package,
     // and the shared painter reveals whichever is running.
     paintSceneTimers(screen, timers ?? {});
+    // Paged question map: the layout ships the hooks, the shared core pages the dots and
+    // drives the «Все вопросы» panel. The previous render's listeners are dropped first.
+    qnavDetachRef.current?.();
+    qnavDetachRef.current = attachQuestionMaps(screen);
     // NB: the countdown values are deliberately NOT in the dependency list — they
     // change every second, and rebuilding the scene at 1 Hz destroyed the very node
     // the pointer was over (flickering hover, clicks landing on a replaced button).
@@ -470,6 +476,9 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
     mql.addEventListener("change", apply);
     return () => mql.removeEventListener("change", apply);
   }, [dataTheme, themed]);
+
+  // Drop the question-map listeners (document-level) when the screen goes away.
+  useEffect(() => () => qnavDetachRef.current?.(), []);
 
   // Delegate clicks on [data-action] elements to the host (bound once).
   //

@@ -282,6 +282,28 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
 .ou-quiz__legend-dot.is-current { background: transparent; box-shadow: inset 0 0 0 2px var(--ou-accent-default); }
 .ou-quiz__legend-dot.is-flagged { background: var(--ou-warning-default); box-shadow: none; }
 
+/* Paged question map (`attachQuestionMap`, hooks `data-qnav-*`). The DS dot / button set
+   their own `display`, which beats the UA `[hidden]` rule, so hidden must be restated. */
+[data-qnav] [hidden] { display: none !important; }
+.tb-qnav__range { flex: none; min-width: 88px; font: var(--ou-text-body-m); color: var(--ou-fg-muted); font-variant-numeric: tabular-nums; }
+.tb-qnav__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The paged row keeps the legend in the panel, not beside the dots. The page of dots
+   keeps ONE fixed width, so the arrows do not jump on the short last page. */
+.tb-scene__map[data-paged="true"] > .ou-quiz__legend { display: none; }
+.tb-scene__map[data-paged="true"] .ou-quiz__dots[data-qnav-dots] { flex: none; min-width: calc(10 * 26px + 9 * 6px); }
+/* The panel hangs under its button and floats over the question — it never pushes it. */
+.tb-qnav__pop { position: relative; flex: none; }
+.tb-qnav__panel {
+  --_w: 480px;
+  position: absolute; top: 100%; left: 0;
+  margin-top: var(--ou-space-2);
+}
+.tb-qnav__grid { gap: var(--ou-space-3); }
+.tb-qnav__legend { justify-content: flex-start; flex-wrap: wrap; gap: var(--ou-space-3) var(--ou-space-4); }
+@container tbhead (max-width: 1000px) {
+  .tb-qnav__panel { left: auto; right: 0; }
+}
+
 /* ── Document scenes (start / intro / results / content) ────────── */
 /* A comfortable reading column and the shared type scale these screens use. */
 .tb-scene__col--doc { gap: var(--ou-space-5); }
@@ -1649,6 +1671,12 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
      INSIDE `.tb-scene__map` in the layout, next to the dots. */
   .tb-scene__map .ou-quiz__dots,
   .tb-scene__map .ou-quiz__legend { display: none; }
+  /* The paged-map controls go with the dots: on a phone the map is the counters only. */
+  .tb-scene__map [data-qnav-prev],
+  .tb-scene__map [data-qnav-next],
+  .tb-scene__map [data-qnav-range],
+  .tb-scene__map [data-qnav-current],
+  .tb-qnav__pop { display: none; }
   .tb-scene__mapcounts { order: 3; }
   .tb-scene__mapcount { font: var(--ou-text-body-s); }
 
@@ -1794,6 +1822,7 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
      primary navigation on a phone (the header map is hidden at S3), so it gets
      the full 44px target. */
   .tb-scene__map .ou-quiz__dot { --qsize: 36px; }
+  .tb-scene__map[data-paged="true"] .ou-quiz__dots[data-qnav-dots] { min-width: calc(10 * 36px + 9 * 6px); }
   .tb-review-map .ou-quiz__dot { --qsize: 44px; }
 
   /* ── Ranking: drag from the grip ────────────────────────────────

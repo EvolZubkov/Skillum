@@ -54,9 +54,27 @@ describe("question.html — scene chrome", () => {
     const root = render();
     expect(root.querySelector(".tb-scene")).toBeTruthy();
     expect(root.querySelector(".ou-quiz")).toBeTruthy();
-    expect(root.querySelectorAll(".ou-quiz__dot").length).toBe(3);
+    expect(root.querySelectorAll("[data-qnav-dots] .ou-quiz__dot").length).toBe(3);
     expect(root.querySelector(".tb-scene__progress")).toBeTruthy();
     expect(root.querySelector('[data-slot="question-interaction"]')).toBeTruthy();
+  });
+
+  it("ships the paged-map hooks: every control hidden, the panel holds one dot per question", () => {
+    const root = render();
+    const map = root.querySelector("[data-qnav]") as HTMLElement;
+    expect(map).toBeTruthy();
+    for (const hook of ["prev", "next", "range", "current", "open", "panel"]) {
+      const el = map.querySelector(`[data-qnav-${hook}]`) as HTMLElement | null;
+      expect(el, hook).toBeTruthy();
+      expect(el!.hasAttribute("hidden"), hook).toBe(true);
+    }
+    expect(map.querySelector("[data-qnav-close]")).toBeTruthy();
+    // The panel dots navigate through the same `goto:` action as the row dots.
+    expect(map.querySelectorAll("[data-qnav-panel] .ou-quiz__dot[data-action^='goto:']").length).toBe(3);
+    // The row dots carry their printed number for the paging code.
+    expect(
+      Array.from(map.querySelectorAll("[data-qnav-dots] .ou-quiz__dot")).map((d) => d.getAttribute("data-number")),
+    ).toEqual(["1", "2", "3"]);
   });
 
   it("binds the title, counter and topic tag, and wires pill goto actions", () => {
