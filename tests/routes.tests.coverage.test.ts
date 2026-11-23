@@ -62,6 +62,7 @@ const {
     getUserTestGrants: vi.fn().mockResolvedValue([]),
     getTestIdsByOwner: vi.fn().mockResolvedValue([]),
     getTestGrantForUser: vi.fn().mockResolvedValue(undefined),
+    getTestReviewGrant: vi.fn().mockResolvedValue(undefined),
     isTestAssignedToUser: vi.fn().mockResolvedValue(false),
     upsertTestAccessGrant: vi.fn(),
     removeTestAccessGrant: vi.fn(),
@@ -193,6 +194,7 @@ function resetDefaults() {
   storageMock.getQuestionMeasurements.mockResolvedValue([]);
   storageMock.getLatestSnapshot.mockResolvedValue(undefined);
   storageMock.getTestGrantForUser.mockResolvedValue(undefined);
+  storageMock.getTestReviewGrant.mockResolvedValue(undefined);
   storageMock.isTestAssignedToUser.mockResolvedValue(false);
   storageMock.getActiveTopicGrantsForGrantees.mockResolvedValue([]);
   storageMock.getTestAccessGrants.mockResolvedValue([]);
@@ -233,6 +235,31 @@ describe("GET /api/tests — scope filter and error branch", () => {
     storageMock.getUserRoles.mockResolvedValue(["administrator"]);
     const asAdm = await asAdmin(request(app).get("/api/tests"));
     expect(asAdm.body[0].canAssign).toBe(true);
+  });
+
+  it("a reviewer finds the test in the list; the row says they may review, not edit (PRD-52)", async () => {
+    storageMock.getTests.mockResolvedValue([{ ...dbTest, id: "test1", ownerId: "someone-else" }]);
+    // developer + author + manager, no owned tests, no working grant: only an invitation.
+    storageMock.getUserRoles.mockResolvedValue(["developer", "author", "manager"]);
+    storageMock.getUserTestGrants.mockResolvedValue([{ testId: "test1", userId: "author1", accessLevel: "review" }]);
+    storageMock.getTestReviewGrant.mockResolvedValue({ testId: "test1", userId: "author1", accessLevel: "review" });
+
+    const res = await asAuthor(request(app).get("/api/tests"));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ id: "test1", canEdit: false, canReview: true, canAssign: false });
+  });
+
+  it("an `assign` grant gives canAssign but neither canEdit nor canReview", async () => {
+    storageMock.getTests.mockResolvedValue([{ ...dbTest, id: "test1", ownerId: "someone-else" }]);
+    storageMock.getUserRoles.mockResolvedValue(["manager"]);
+    storageMock.getUserTestGrants.mockResolvedValue([
+      { testId: "test1", userId: "author1", accessLevel: "assign" },
+    ]);
+    storageMock.getTestGrantForUser.mockResolvedValue({ testId: "test1", userId: "author1", accessLevel: "assign" });
+
+    const res = await asAuthor(request(app).get("/api/tests"));
+    expect(res.body[0]).toMatchObject({ canEdit: false, canAssign: true, canReview: false });
   });
 
   it("500 when storage.getTests throws", async () => {

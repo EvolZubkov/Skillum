@@ -33,7 +33,7 @@ import {
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { requirePermission } from "../middleware/auth";
-import { isAdminOrSuper, readableTestScope, canEditTest } from "../services/test-access";
+import { isAdminOrSuper, listableTestScope, canEditTest } from "../services/test-access";
 import {
   folderRights,
   folderRightsMap,
@@ -121,7 +121,8 @@ router.get("/", requirePermission("folders.manage"), async (req, res) => {
     if (isAdminOrSuper(roles)) {
       return res.json(folders.map((f) => ({ ...f, visibility: "direct", canEdit: true, canManageAccess: true })));
     }
-    const scope = await readableTestScope(roles, userId);
+    // The tree must reach every test of the list, a reviewed one included.
+    const scope = await listableTestScope(roles, userId);
     const levels = new Set<FolderAccessLevel>(roles.includes(ROLES.MANAGER) ? ["edit", "assign"] : ["edit"]);
     const [visibility, rights] = await Promise.all([
       visibleTestFolders(userId, levels, scope.ids),

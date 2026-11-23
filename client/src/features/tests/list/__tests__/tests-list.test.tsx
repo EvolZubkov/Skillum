@@ -312,6 +312,58 @@ describe("<TestsListPage /> — owner column + action gating by role (PRD-13)", 
     expect(screen.getByTestId("test-assign-t-2")).toBeInTheDocument();
   });
 
+  it("a test seen through «Назначение» only (canEdit=false) offers no edit, debug or menu", async () => {
+    // developer + author + manager: the roles open the actions, the test does not.
+    authMock.can = () => true;
+    authMock.roles = [ROLES.DEVELOPER, ROLES.AUTHOR, ROLES.MANAGER];
+    mockMany({
+      "/api/tests": [buildApiTestRow({ canEdit: false, canReview: false, canAssign: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    expect(screen.queryByTestId("test-edit-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-debug-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-more-t-1")).toBeNull();
+    expect(screen.getByTestId("test-assign-t-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("test-review-t-1")).toBeNull();
+  });
+
+  it("a reviewer finds the test and enters the review window from the row (PRD-52)", async () => {
+    authMock.can = () => true;
+    authMock.roles = [ROLES.DEVELOPER, ROLES.AUTHOR, ROLES.MANAGER];
+    mockMany({
+      "/api/tests": [buildApiTestRow({ canEdit: false, canReview: true, canAssign: false })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    const review = screen.getByTestId("test-review-t-1");
+    expect(review.closest("a")).toHaveAttribute("href", "/review/tests/t-1");
+    expect(screen.getByText("Вы рецензент")).toBeInTheDocument();
+    // Nothing of the author's own actions, and no analytics of a test they only review.
+    expect(screen.queryByTestId("test-edit-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-debug-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-assign-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-analytics-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-more-t-1")).toBeNull();
+  });
+
+  it("the owner of a test (canEdit=true, canReview=true) gets the author's actions, not «Рецензировать»", async () => {
+    authMock.can = () => true;
+    authMock.roles = [ROLES.AUTHOR];
+    mockMany({
+      "/api/tests": [buildApiTestRow({ canEdit: true, canReview: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    expect(screen.getByTestId("test-edit-t-1")).toBeInTheDocument();
+    expect(screen.getByTestId("test-debug-t-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("test-review-t-1")).toBeNull();
+    expect(screen.queryByText("Вы рецензент")).toBeNull();
+  });
+
   it("«Общий доступ» shows for the test owner (author, BRC-27)", async () => {
     authMock.can = canForRoles([ROLES.AUTHOR]);
     authMock.roles = [ROLES.AUTHOR];

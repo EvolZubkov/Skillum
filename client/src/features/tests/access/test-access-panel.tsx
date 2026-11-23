@@ -7,7 +7,11 @@
  * The panel is admin/superadmin only — the caller gates the trigger by the
  * `tests.access.grant` capability; the server enforces it on every endpoint.
  *
- * Folder access inheritance: below the grants, the read-only «Унаследовано»
+ * Reviewers (PRD-52, 14.8) have a section of their own below the grants: who is invited to
+ * review the test and how (by account or by link). They are invited from the review dialog;
+ * the panel only lists and revokes them, and a revocation never touches a working grant.
+ *
+ * Folder access inheritance: below the reviewers, the read-only «Унаследовано»
  * section lists who reaches the test through its folder chain; a source folder
  * opens its own panel, where that access is removed.
  */
@@ -24,6 +28,15 @@ import { InheritedAccessTable, type InheritedRow } from "./inherited-access-tabl
 interface GrantRow {
   userId: string;
   accessLevel: AccessLevel;
+}
+
+/** A reviewer as `GET /api/tests/:id/review/reviewers` sends them (PRD-52). */
+interface ReviewerRow {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  /** An external participant enters by the link only; a staff user by their own account. */
+  external: boolean;
 }
 
 interface AccessResponse {
@@ -70,7 +83,20 @@ export function TestAccessPanel({
     enabled: open && !!testId,
   });
 
+  // Reviewers sit in their own slot (PRD-52, 14.8): invited from the review dialog, listed
+  // here read-mostly, revoked here like any other change — on «Сохранить».
+  const { data: reviewers = [] } = useQuery<ReviewerRow[]>({
+    queryKey: [`/api/tests/${testId}/review/reviewers`],
+    queryFn: async () => {
+      const res = await fetch(`/api/tests/${testId}/review/reviewers`, { credentials: "include" });
+      if (!res.ok) throw new Error("Не удалось загрузить рецензентов");
+      return res.json();
+    },
+    enabled: open && !!testId,
+  });
+
   // Local draft, accumulated until "Сохранить" (WF-2 explicit save) ------------
+  const [revokedReviewers, setRevokedReviewers] = useState<Set<string>>(new Set());
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [grants, setGrants] = useState<GrantRow[]>([]);
   const [changingOwner, setChangingOwner] = useState(false);
@@ -85,6 +111,7 @@ export function TestAccessPanel({
     setChangingOwner(false);
     setAddUserId(null);
     setAddLevel("edit");
+    setRevokedReviewers(new Set());
   }, [access]);
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
@@ -131,9 +158,18 @@ export function TestAccessPanel({
           if (!res.ok) throw new Error((await res.json()).error || "Не удалось отозвать доступ");
         }
       }
+      // Reviewer revocations: the review slot only, the person's working grant stays.
+      for (const userId of revokedReviewers) {
+        const res = await fetch(`/api/tests/${testId}/review/reviewers/${userId}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Не удалось отозвать рецензирование");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tests"] });
+      if (testId) queryClient.invalidateQueries({ queryKey: [`/api/tests/${testId}/review/reviewers`] });
       if (testId) queryClient.invalidateQueries({ queryKey: ["/api/tests", testId, "access"] });
       toast({ tone: "success", title: "Доступ сохранён" });
       onClose();
@@ -150,6 +186,12 @@ export function TestAccessPanel({
   const setGrantLevel = (userId: string, level: AccessLevel) =>
     setGrants((prev) => prev.map((g) => (g.userId === userId ? { ...g, accessLevel: level } : g)));
   const removeGrant = (userId: string) => setGrants((prev) => prev.filter((g) => g.userId !== userId));
+  const revokeReviewer = (userId: string) =>
+    setRevokedReviewers((prev) => new Set(prev).add(userId));
+  const visibleReviewers = useMemo(
+    () => reviewers.filter((r) => !revokedReviewers.has(r.userId)),
+    [reviewers, revokedReviewers],
+  );
 
   const owner = ownerId ? usersById.get(ownerId) : undefined;
 
@@ -202,6 +244,7 @@ export function TestAccessPanel({
 
         {/* Grants */}
         <Stack as="section" gap={3}>
+          <Text variant="body-s" weight="semibold" tone="muted" className="tb-caps">Доступ к тесту</Text>
           <Cluster align="end" gap={3}>
             <Combobox
               aria-label="Выбрать пользователя"
@@ -286,6 +329,56 @@ export function TestAccessPanel({
               ]}
             />
           )}
+        </Stack>
+
+        {/* Reviewers: a slot of their own beside the working grants (PRD-52, 14.8). */}
+        <Stack as="section" gap={3}>
+          <Text variant="body-s" weight="semibold" tone="muted" className="tb-caps">Рецензирование</Text>
+          {visibleReviewers.length === 0 ? (
+            <EmptyState well title="Рецензенты не приглашены" />
+          ) : (
+            <Table<ReviewerRow>
+              rowKey={(r) => r.userId}
+              rows={visibleReviewers}
+              columns={[
+                {
+                  key: "user",
+                  header: "Пользователь",
+                  render: (r) => {
+                    const u = usersById.get(r.userId) ?? { id: r.userId, name: r.name, email: r.email };
+                    return (
+                      <Cluster as="span" gap={2} wrap={false}>
+                        <Avatar initials={initials(u)} size="xs" />
+                        <span>{displayName(u)}</span>
+                      </Cluster>
+                    );
+                  },
+                },
+                {
+                  key: "how",
+                  header: "Как приглашён",
+                  width: 200,
+                  render: (r) => (r.external ? "по ссылке" : "по аккаунту"),
+                },
+                {
+                  key: "actions",
+                  header: "Действия",
+                  width: 90,
+                  align: "right",
+                  render: (r) => (
+                    <IconButton
+                      variant="ghost"
+                      size="s"
+                      aria-label="Отозвать рецензирование"
+                      icon={<Trash2 width={14} height={14} />}
+                      onClick={() => revokeReviewer(r.userId)}
+                    />
+                  ),
+                },
+              ]}
+            />
+          )}
+          <Text variant="body-s" tone="muted">Рецензентов приглашают из окна «Отправить на рецензирование».</Text>
         </Stack>
 
         <InheritedAccessTable

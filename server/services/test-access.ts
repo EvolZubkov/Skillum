@@ -160,11 +160,15 @@ export function canChangeOwner(roles: readonly Role[]): boolean {
 }
 
 /**
- * The set of test ids a user may READ, for list and analytics filtering. For
+ * The set of test ids a user may WORK with, for analytics and home filtering. For
  * administrators/superadmin returns `{ all: true }` (no id set needed).
- * Otherwise the union of owned tests and edit-grants (authoring roles) and all
- * grants (manager role), plus the tests of folders where the same levels are
- * inherited along the folder chain.
+ * Otherwise the union of owned tests and edit-grants (authoring roles) and the
+ * working grants, `assign` or `edit` (manager role), plus the tests of folders where
+ * the same levels are inherited along the folder chain.
+ *
+ * A `review` grant (PRD-52) is NOT part of it: it opens the reviewer window of one
+ * test, not its analytics or the author's home. The tests list adds it on top, see
+ * {@link listableTestScope}.
  */
 export async function readableTestScope(
   roles: readonly Role[],
@@ -180,12 +184,33 @@ export async function readableTestScope(
   if (wantsAuthor || wantsManager) {
     const grants = await storage.getUserTestGrants(userId);
     for (const g of grants) {
+      if (g.accessLevel === "review") continue; // the reviewer slot is not a working scope
       if (wantsManager) ids.add(g.testId); // manager: assign or edit grant
       else if (g.accessLevel === "edit") ids.add(g.testId); // author: edit grant only
     }
     // Folder grants count with the same levels as test grants for the role.
     const levels = new Set<FolderAccessLevel>(wantsManager ? ["edit", "assign"] : ["edit"]);
     for (const id of await testIdsByFolderRights(userId, levels)) ids.add(id);
+  }
+  return { all: false, ids };
+}
+
+/**
+ * The set of test ids a user finds in the tests LIST and its folder tree: the working
+ * scope ({@link readableTestScope}) plus every test the user is invited to review
+ * (PRD-52, decision of 2026-11-23 — a reviewer finds the test in the list and enters
+ * the review window from its row, whatever the roles). Which row actions the user gets
+ * is decided per test (`canEditTest`, `canAssignTest`, `canReviewTest`), not by this set.
+ */
+export async function listableTestScope(
+  roles: readonly Role[],
+  userId: string,
+): Promise<{ all: boolean; ids: Set<string> }> {
+  const scope = await readableTestScope(roles, userId);
+  if (scope.all) return scope;
+  const ids = new Set(scope.ids);
+  for (const g of await storage.getUserTestGrants(userId)) {
+    if (g.accessLevel === "review") ids.add(g.testId);
   }
   return { all: false, ids };
 }

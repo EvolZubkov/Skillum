@@ -54,6 +54,17 @@ export type TestListEntry = {
    * The server decides; absence means «an older answer», which keeps the action.
    */
   canAssign?: boolean;
+  /**
+   * May the reader work on THIS test as an author (edit, debug run, publish, export,
+   * delete)? The role opens those actions in principle, the test decides. The server
+   * decides; absence means «an older answer», which keeps the actions.
+   */
+  canEdit?: boolean;
+  /**
+   * May the reader open the review window of THIS test (PRD-52)? True for everyone who
+   * may also edit, so the row offers «Рецензировать» only when `canReview && !canEdit`.
+   */
+  canReview?: boolean;
 };
 
 export type FolderEntry = {

@@ -58,6 +58,7 @@ import {
   Users,
   ArrowRight,
   MessageSquare,
+  MessageSquareText,
 } from "lucide-react";
 import {
   Banner,
@@ -151,6 +152,8 @@ function apiToEntry(row: ApiTestRow): TestListEntry {
     unmappedPageCount: (row as { unmappedPageCount?: number }).unmappedPageCount ?? 0,
     openReviewComments: (row as { openReviewComments?: number }).openReviewComments ?? 0,
     canAssign: (row as { canAssign?: boolean }).canAssign ?? true,
+    canEdit: (row as { canEdit?: boolean }).canEdit,
+    canReview: (row as { canReview?: boolean }).canReview,
   };
 }
 
@@ -1604,20 +1607,25 @@ function TestRow(props: {
 }) {
   const e = props.entry;
   const { can } = useAuth();
-  // PRD-13: gate row actions by capability (the tree is already scope-filtered,
-  // so a visible row is always actionable within the role's allowed actions).
-  const canEdit = can("tests.edit");
-  // The capability opens the action; the test decides (e.entry scope from the server).
+  // PRD-13: the capability opens an action in principle; the test decides (the row
+  // carries the object-level answer from the server). A visible row is NOT always
+  // actionable: a manager sees a test through an «Назначение» grant, a reviewer through
+  // an invitation, and neither may edit it (PRD-52, wireframe prd52-review-access).
+  const mayWork = e.canEdit !== false;
+  const canEdit = can("tests.edit") && mayWork;
   const canAssign = can("assignments.manage") && e.canAssign !== false;
   const canAnalytics = can("analytics.read");
-  const canDebugPlay = can("tests.debug.play");
+  const canDebugPlay = can("tests.debug.play") && mayWork;
+  // Reviewer only: may open the review window, may not edit the test.
+  const canReviewOnly = e.canReview === true && e.canEdit === false;
   const canAnyMenu =
-    canEdit ||
-    can("tests.export.scorm") ||
-    can("tests.debug.play") ||
-    can("tests.publish") ||
-    can("tests.delete") ||
-    can("tests.access.grant");
+    mayWork &&
+    (canEdit ||
+      can("tests.export.scorm") ||
+      can("tests.debug.play") ||
+      can("tests.publish") ||
+      can("tests.delete") ||
+      can("tests.access.grant"));
   // Reactive subscription to warning state written by the editor after save.
   // queryFn is never called (enabled: false); setQueryData in the editor triggers re-render.
   const { data: hasWarnings = false } = useQuery<boolean>({
@@ -1663,7 +1671,13 @@ function TestRow(props: {
         <span>{e.ownerName ?? "—"}</span>
       </div>
       <div className="tb-status-cell">
-        <StatusTag status={e.status} publicationState={e.publicationState} />
+        {/* The status column is 110px wide and the cell never wraps: the reviewer's mark
+            stacks UNDER the status, like «Есть изменения», instead of running into the
+            neighbouring «Режим» column. */}
+        <span className="tb-status-stack">
+          <StatusTag status={e.status} publicationState={e.publicationState} />
+          {canReviewOnly && <Tag tone="info" aria-label="Вы рецензент этого теста">Вы рецензент</Tag>}
+        </span>
         <UnmappedPagesMark count={e.unmappedPageCount ?? 0} testId={e.id} onOpen={props.onOpenStructure} />
         <OpenCommentsMark count={e.openReviewComments ?? 0} />
       </div>
@@ -1732,7 +1746,21 @@ function TestRow(props: {
         )}
         {/* Э3.1, решение владельца 2026-10-03: на уровень теста — туда же, куда ведёт строка
             вкладки «Тесты» в «Аналитике». Отменяет решение Э2 (общий раздел с отбором). */}
-        {canAnalytics && (
+        {/* PRD-52: рецензент находит тест в списке и входит в окно рецензирования отсюда. */}
+        {canReviewOnly && (
+          <Link href={`/review/tests/${e.id}`} onClick={(ev) => ev.stopPropagation()}>
+            <button
+              type="button"
+              className="action-btn"
+              title="Рецензировать"
+              aria-label="Рецензировать"
+              data-testid={`test-review-${e.id}`}
+            >
+              <MessageSquareText width={14} height={14} />
+            </button>
+          </Link>
+        )}
+        {canAnalytics && !canReviewOnly && (
           <Link href={testHref(e.id)} onClick={(ev) => ev.stopPropagation()}>
             <button
               type="button"

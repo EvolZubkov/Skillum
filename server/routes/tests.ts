@@ -17,7 +17,7 @@ import { colorParamKeys } from "@shared/template/theme-params";
 import { resolveTemplateDir, resolveSystemScreenDir } from "../services/template-dir";
 import { requirePermission, requireUserContext } from "../middleware/auth";
 import { requireTestScope } from "../middleware/test-scope";
-import { readableTestScope, canGrantAccess, canAssignTest, isAdminOrSuper } from "../services/test-access";
+import { listableTestScope, canGrantAccess, canAssignTest, canEditTest, canReviewTest, isAdminOrSuper } from "../services/test-access";
 import { folderRights, loadTestFolderNodes } from "../services/test-folder-access";
 import { ancestorChain, inheritedAccess } from "@shared/access";
 import { visibleTopic } from "../services/topic-access";
@@ -442,8 +442,9 @@ router.get("/", requirePermission("tests.read"), async (req, res) => {
       ? allTests.filter((t) => t.status === "archived")
       : allTests.filter((t) => t.status !== "archived");
 
-    // PRD-13: restrict the list to tests this user may read (scope by role).
-    const scope = await readableTestScope(req.effectiveRoles ?? [], req.currentUser?.id ?? "");
+    // PRD-13: restrict the list to tests this user may read (scope by role) plus the
+    // tests they are invited to review (PRD-52): a reviewer finds the test here.
+    const scope = await listableTestScope(req.effectiveRoles ?? [], req.currentUser?.id ?? "");
     const visibleTests = scope.all
       ? filteredTests
       : filteredTests.filter((t) => scope.ids.has(t.id));
@@ -526,6 +527,13 @@ router.get("/", requirePermission("tests.read"), async (req, res) => {
           // whether THIS test may be assigned is the object-level answer, so it
           // travels with the row instead of being guessed from the role.
           canAssign: await canAssignTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
+          // Same rule for the author's actions (edit, debug, publish, SCORM, delete):
+          // the role opens them in principle, the test decides. Without the flag the
+          // row offered a debug run the server then refused with 403.
+          canEdit: await canEditTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
+          // PRD-52: the reviewer window. True for anyone who may also edit, so the
+          // client shows «Рецензировать» only when `canReview && !canEdit`.
+          canReview: await canReviewTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
           sections: sectionsWithDetails,
           adaptiveSettings,
           publication,

@@ -37,6 +37,7 @@ type Access = {
 };
 
 let access: Access;
+let reviewers: { userId: string; name: string | null; email: string | null; external: boolean }[];
 let ownerPatchOk: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 let calls: { url: string; method: string; body: unknown }[];
@@ -44,6 +45,7 @@ let calls: { url: string; method: string; body: unknown }[];
 beforeEach(() => {
   toastMock.mockClear();
   access = { testId: "t1", ownerId: "u1", grants: [{ userId: "u2", accessLevel: "edit" }] };
+  reviewers = [];
   ownerPatchOk = true;
   calls = [];
 
@@ -56,6 +58,7 @@ beforeEach(() => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     if (method !== "GET") calls.push({ url: u, method, body });
     if (u === "/api/tests/t1/access/users") return ok(users());
+    if (u === "/api/tests/t1/review/reviewers" && method === "GET") return ok(reviewers);
     if (u === "/api/tests/t1/access" && method === "GET") return ok(access);
     if (u === "/api/tests/t1/owner") return ownerPatchOk ? ok({}) : fail({ error: "Владельца сменить нельзя" });
     if (u === "/api/tests/t1/access" && method === "POST") return ok({});
@@ -201,6 +204,42 @@ describe("<TestAccessPanel />", () => {
     await waitFor(() =>
       expect(calls.some((c) => c.url === "/api/tests/t1/access/u2" && c.method === "DELETE")).toBe(true),
     );
+  });
+
+  describe("«Рецензирование» (PRD-52, a slot of its own)", () => {
+    it("says so when nobody is invited", async () => {
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Рецензенты не приглашены")).toBeInTheDocument());
+      expect(screen.getByText("Рецензирование")).toBeInTheDocument();
+    });
+
+    it("lists reviewers with how they were invited, next to the working grants", async () => {
+      reviewers = [
+        { userId: "u3", name: "Пётр Смирнов", email: "petr@t.ru", external: false },
+        { userId: "ext", name: "Внешний Эксперт", email: "ext@o.ru", external: true },
+      ];
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Внешний Эксперт")).toBeInTheDocument());
+      expect(within(screen.getByText("Пётр Смирнов").closest("tr")!).getByText("по аккаунту")).toBeInTheDocument();
+      expect(within(screen.getByText("Внешний Эксперт").closest("tr")!).getByText("по ссылке")).toBeInTheDocument();
+      // The working grant is still there and is not mixed with the reviewers.
+      expect(screen.getByText("Мария Сидорова")).toBeInTheDocument();
+    });
+
+    it("a revocation waits for «Сохранить» and touches only the review slot", async () => {
+      reviewers = [{ userId: "u3", name: "Пётр Смирнов", email: "petr@t.ru", external: false }];
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Пётр Смирнов")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Отозвать рецензирование" }));
+      expect(screen.queryByText("Пётр Смирнов")).not.toBeInTheDocument();
+      expect(calls).toHaveLength(0); // nothing sent before the explicit save
+      fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.url === "/api/tests/t1/review/reviewers/u3" && c.method === "DELETE")).toBe(true),
+      );
+      // The person's working access is not revoked by it.
+      expect(calls.some((c) => c.url.startsWith("/api/tests/t1/access/"))).toBe(false);
+    });
   });
 
   describe("«Унаследовано» (folder access inheritance)", () => {
