@@ -756,6 +756,13 @@ export const tests = pgTable("tests", {
   // without return the pills are an indicator, not navigation. Default false so an existing
   // test keeps today's frontier without its author touching anything.
   allowFreeSectionNavigation: boolean("allow_free_section_navigation").notNull().default(false),
+  // PRD-73: the обзор's «Завершить раздел / тест» stays disabled while the scope (current
+  // section, or the whole flat test) still holds a question without an answer — not-yet-
+  // delivered ones included. Skipping and returning stay free. Depends on
+  // allowReturnToUnanswered=true: without return nothing can be left unanswered. Forced
+  // finishes (time running out, PRD-67 closing a section on leave) are not restricted.
+  // Default false so an existing test keeps today's finish.
+  requireAllAnsweredToFinish: boolean("require_all_answered_to_finish").notNull().default(false),
   // PRD-43: independent of allowReturnToUnanswered — whether submitting an answer
   // also advances to the next question in one click, or needs a separate «Далее»
   // click. Default false (today's two-step behaviour for a brand-new test); the

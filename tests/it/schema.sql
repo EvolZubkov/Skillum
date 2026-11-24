@@ -535,6 +535,7 @@ CREATE TABLE "tests" (
 	"allow_return_to_unanswered" boolean DEFAULT true NOT NULL,
 	"allow_answer_change" boolean DEFAULT false NOT NULL,
 	"allow_free_section_navigation" boolean DEFAULT false NOT NULL,
+	"require_all_answered_to_finish" boolean DEFAULT false NOT NULL,
 	"quick_advance" boolean DEFAULT false NOT NULL,
 	"show_section_results" boolean DEFAULT true NOT NULL,
 	"close_section_on_leave" boolean DEFAULT false NOT NULL,

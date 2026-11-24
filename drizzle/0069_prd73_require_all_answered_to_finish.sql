@@ -1,0 +1,1 @@
+ALTER TABLE "tests" ADD COLUMN "require_all_answered_to_finish" boolean DEFAULT false NOT NULL;

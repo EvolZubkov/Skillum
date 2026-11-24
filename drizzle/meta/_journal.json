@@ -484,6 +484,13 @@
       "when": 1795463804645,
       "tag": "0068_question_content_changed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1795532919025,
+      "tag": "0069_prd73_require_all_answered_to_finish",
+      "breakpoints": true
     }
   ]
 }
