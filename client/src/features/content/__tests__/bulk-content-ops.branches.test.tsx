@@ -34,7 +34,7 @@ const folders = [
   { id: "f2", name: "Экономика", parentId: null },
 ] as Folder[];
 // Second user has no `name` → exercises the email/id fallback in userLabel/userOpts.
-const users = [{ id: "u1", name: "Петров", email: "p@corp.ru" }, { id: "u2", email: "e2@corp.ru" }];
+const users = [{ id: "u1", name: "Петров", email: "p@corp.ru", roles: ["author"] }, { id: "u2", email: "e2@corp.ru", roles: ["manager"] }];
 
 // ── fetch stub: route a call to a caller-supplied response descriptor ───────
 interface Route { ok?: boolean; status?: number; body?: unknown }

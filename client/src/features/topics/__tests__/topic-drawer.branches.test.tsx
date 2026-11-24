@@ -187,8 +187,8 @@ describe("<TopicDrawer /> — feedback editor", () => {
 
 describe("<TopicDrawer /> — owner change", () => {
   const usersTwo = [
-    { id: "u1", name: "Марина", email: "m@t" },
-    { id: "u2", name: "Пётр", email: "p@t" },
+    { id: "u1", name: "Марина", email: "m@t", roles: ["author"] },
+    { id: "u2", name: "Пётр", email: "p@t", roles: ["author"] },
   ];
 
   it("admin changes the owner via Select and Save PATCHes /owner", async () => {
@@ -201,8 +201,8 @@ describe("<TopicDrawer /> — owner change", () => {
     );
     // Wait for the access query to sync `ownerId` (so the Select shows «Марина»).
     fireEvent.click(await screen.findByText("Сменить владельца"));
-    fireEvent.click(await screen.findByRole("button", { name: "Марина" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Пётр" }));
+    fireEvent.focus(await screen.findByRole("combobox", { name: "Владелец темы" }));
+    fireEvent.click(within(await screen.findByRole("listbox")).getByText("Пётр"));
     fireEvent.click(screen.getByTestId("button-submit-topic"));
 
     await waitFor(() =>
@@ -221,8 +221,8 @@ describe("<TopicDrawer /> — owner change", () => {
       <TopicDrawer target={{ mode: "edit", topic: editTopic }} folders={[]} isAdmin initialTab="access" onClose={onClose} />,
     );
     fireEvent.click(await screen.findByText("Сменить владельца"));
-    fireEvent.click(await screen.findByRole("button", { name: "Марина" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Пётр" }));
+    fireEvent.focus(await screen.findByRole("combobox", { name: "Владелец темы" }));
+    fireEvent.click(within(await screen.findByRole("listbox")).getByText("Пётр"));
     fireEvent.click(screen.getByTestId("button-submit-topic"));
 
     await waitFor(() =>
@@ -250,8 +250,8 @@ describe("<TopicDrawer /> — grants", () => {
     installFetch({
       access: { topicId: "t1", ownerId: "u1", visibility: "private", grants: [] },
       users: [
-        { id: "u1", name: "Марина", email: "m@t" },
-        { id: "u5", name: "Иван", email: "i@t" },
+        { id: "u1", name: "Марина", email: "m@t", roles: ["author"] },
+        { id: "u5", name: "Иван", email: "i@t", roles: ["manager"] },
       ],
     });
     renderWithClient(
@@ -260,7 +260,7 @@ describe("<TopicDrawer /> — grants", () => {
     await screen.findByText("Гранты доступа");
     // Open the user Combobox and pick the only addable user.
     fireEvent.click(screen.getByRole("combobox"));
-    fireEvent.click(await screen.findByRole("option", { name: "Иван" }));
+    fireEvent.click(within(await screen.findByRole("listbox")).getByText("Иван"));
     // Change the add-form level Select (the only «Уровень доступа» here — no grants yet).
     fireEvent.click(screen.getByRole("button", { name: "Просмотр" }));
     fireEvent.click(await screen.findByRole("option", { name: "Управление" }));

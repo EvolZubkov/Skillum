@@ -74,6 +74,37 @@ export function hasAuthoringRole(roles: readonly Role[]): boolean {
   return AUTHORING_ROLES.some((role) => roles.includes(role));
 }
 
+/**
+ * Roles whose holder may own or be granted access to a content object — a test,
+ * a test folder or a topic (role-model.md section 6.0). These are the
+ * administrative roles: a plain learner and an external participant work with
+ * content only as a test taker, so a grant or ownership given to them opens
+ * nothing and only clutters the panels. The way to give such a person content
+ * access is to assign an administrative role first. Review grants (PRD-52) are a
+ * separate mechanism and are not governed by this list.
+ */
+export const CONTENT_ACCESS_ROLES: readonly Role[] = [
+  ROLES.SUPERADMIN,
+  ROLES.ADMINISTRATOR,
+  ROLES.DEVELOPER,
+  ROLES.AUTHOR,
+  ROLES.MANAGER,
+];
+
+/**
+ * Whether a person may own a content object or receive a working grant on it
+ * (test `edit`/`assign`, test folder `edit`/`assign`, topic `use`/`manage`).
+ *
+ * @param roles - The person's effective roles (stored roles plus superadmin).
+ * @param isExternal - Whether the account is an external participant (PRD-28);
+ *   such an account never qualifies, whatever roles it carries.
+ * @returns `true` when the person holds at least one administrative role.
+ */
+export function mayHoldContentAccess(roles: readonly Role[], isExternal = false): boolean {
+  if (isExternal) return false;
+  return CONTENT_ACCESS_ROLES.some((role) => roles.includes(role));
+}
+
 /** Type guard: is the given string a storable/assignable role. */
 export function isStoredRole(value: string): value is StoredRole {
   return (STORED_ROLES as readonly string[]).includes(value);

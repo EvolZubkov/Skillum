@@ -159,8 +159,8 @@ describe("<FolderAccessPanel />", () => {
     canMock.mockImplementation((cap: string) => cap === "tests.owner.change");
     await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
-    fireEvent.click(screen.getByLabelText("Владелец папки").querySelector("button")!);
-    fireEvent.click(screen.getByRole("option", { name: "Анна Лебедева" }));
+    fireEvent.focus(screen.getByRole("combobox", { name: "Владелец папки" }));
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Анна Лебедева"));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() =>
       expect(calls).toContainEqual({ url: "/api/test-folders/f1/owner", method: "PATCH", body: { ownerId: "u3" } }),

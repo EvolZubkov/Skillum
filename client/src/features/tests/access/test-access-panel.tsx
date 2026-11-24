@@ -14,15 +14,25 @@
  * Folder access inheritance: below the reviewers, the read-only «Унаследовано»
  * section lists who reaches the test through its folder chain; a source folder
  * opens its own panel, where that access is removed.
+ *
+ * Only people with an administrative role are offered as an owner or a grantee
+ * (role-model 6.0); the owner is picked in a searchable field, as a grantee is.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Drawer, Button, IconButton, Avatar, Select, Combobox, EmptyState, Table, Box, Stack, Cluster, Text, useToast } from "@skillum/ui-kit";
 import { Trash2, KeyRound } from "lucide-react";
-import { formatRoles } from "@/lib/roles";
-import type { Role } from "@shared/access";
-import { LEVEL_OPTIONS, displayName, initials, type AccessLevel, type AccessUser } from "./access-people";
+import {
+  LEVEL_OPTIONS,
+  displayName,
+  initials,
+  mayReceiveAccess,
+  ownerOptions,
+  personOption,
+  type AccessLevel,
+  type AccessUser,
+} from "./access-people";
 import { InheritedAccessTable, type InheritedRow } from "./inherited-access-table";
 
 interface GrantRow {
@@ -65,7 +75,7 @@ export function TestAccessPanel({
   const open = test !== null;
   const testId = test?.id ?? null;
 
-  // Users feed the owner select, the add-user combobox and the userId -> name map.
+  // Users feed the owner picker, the add-user combobox and the userId -> name map.
   // Read behind the panel's own gate: `GET /api/users` needs `users.read`, which the
   // author granting access to their own test does not hold.
   const { data: users = [] } = useQuery<AccessUser[]>({
@@ -117,7 +127,7 @@ export function TestAccessPanel({
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const grantedIds = useMemo(() => new Set(grants.map((g) => g.userId)), [grants]);
   const addableUsers = useMemo(
-    () => users.filter((u) => u.id !== ownerId && !grantedIds.has(u.id)),
+    () => users.filter((u) => u.id !== ownerId && !grantedIds.has(u.id) && mayReceiveAccess(u)),
     [users, ownerId, grantedIds],
   );
 
@@ -216,13 +226,14 @@ export function TestAccessPanel({
         <Stack as="section" gap={3}>
           <Text variant="body-s" weight="semibold" tone="muted" className="tb-caps">Владелец</Text>
           {changingOwner ? (
-            <Select
+            <Combobox
               aria-label="Владелец теста"
               fullWidth
-              placeholder="Выберите владельца…"
-              value={ownerId ?? ""}
-              options={users.map((u) => ({ value: u.id, label: displayName(u) }))}
-              onChange={(v) => setOwnerId(v || null)}
+              placeholder="Найдите владельца…"
+              value={ownerId}
+              options={ownerOptions(users, access?.ownerId ?? null)}
+              // Clearing the field does not unset the owner: a test always keeps one.
+              onChange={(v) => v && setOwnerId(v)}
             />
           ) : (
             <Cluster gap={3} wrap={false}>
@@ -251,12 +262,7 @@ export function TestAccessPanel({
               placeholder="Выберите пользователя…"
               value={addUserId}
               onChange={(v) => setAddUserId(v)}
-              options={addableUsers.map((u) => ({
-                value: u.id,
-                label: displayName(u),
-                searchText: `${u.name ?? ""} ${u.email ?? ""}`,
-                meta: formatRoles(u.roles as Role[] | undefined) || undefined,
-              }))}
+              options={addableUsers.map(personOption)}
             />
             <Select<AccessLevel>
               aria-label="Уровень доступа"

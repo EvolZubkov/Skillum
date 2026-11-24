@@ -1059,6 +1059,17 @@ describe("GET /api/tests/:id/access/users", () => {
     ]);
   });
 
+  // Role-model 6.0: a learner is not offered, unless the panel already names them.
+  it("leaves out a learner who holds nothing on the test, keeps one who does", async () => {
+    storageMock.getUserRoles.mockImplementation(async (id: string) => (id === "u3" ? ["learner"] : ["administrator"]));
+    const plain = await asAdmin(request(app).get("/api/tests/test1/access/users"));
+    expect(plain.status).toBe(200);
+    expect(plain.body.map((u: { id: string }) => u.id)).toEqual(["u2"]);
+    storageMock.getTestAccessGrants.mockResolvedValue([{ testId: "test1", userId: "u3", accessLevel: "assign" }]);
+    const named = await asAdmin(request(app).get("/api/tests/test1/access/users"));
+    expect(named.body.map((u: { id: string }) => u.id)).toEqual(["u2", "u3"]);
+  });
+
   it("403 when a non-owner author asks", async () => {
     storageMock.getUserRoles.mockResolvedValue(["author"]);
     storageMock.getTest.mockResolvedValue({ ...dbTest, ownerId: "someone-else" });
@@ -1122,6 +1133,14 @@ describe("POST /api/tests/:id/access", () => {
     const res = await asAdmin(request(app).post("/api/tests/test1/access").send({ userId: "ghost", accessLevel: "edit" }));
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("User not found");
+  });
+
+  it("422 when the grantee holds no administrative role", async () => {
+    storageMock.getUserRoles.mockImplementation(async (id: string) => (id === "admin1" ? ["administrator"] : ["learner"]));
+    const res = await asAdmin(request(app).post("/api/tests/test1/access").send({ userId: "u2", accessLevel: "assign" }));
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.upsertTestAccessGrant).not.toHaveBeenCalled();
   });
 
   it("201 grants access to an existing user", async () => {
@@ -1222,6 +1241,14 @@ describe("PATCH /api/tests/:id/owner", () => {
     expect(res.status).toBe(200);
     expect(res.body.ownerId).toBeNull();
     expect(storageMock.setTestOwner).toHaveBeenCalledWith("test1", null);
+  });
+
+  it("422 when the new owner holds no administrative role", async () => {
+    storageMock.getUserRoles.mockImplementation(async (id: string) => (id === "admin1" ? ["administrator"] : ["learner"]));
+    const res = await asAdmin(request(app).patch("/api/tests/test1/owner").send({ ownerId: "u2" }));
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.setTestOwner).not.toHaveBeenCalled();
   });
 
   it("200 assigns a new existing owner", async () => {

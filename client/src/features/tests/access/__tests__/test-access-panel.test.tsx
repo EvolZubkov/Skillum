@@ -153,6 +153,37 @@ describe("<TestAccessPanel />", () => {
     expect(screen.getByText("Мария Сидорова")).toBeInTheDocument();
   });
 
+  // Role-model 6.0: a learner is never offered, neither as a grantee nor as an owner.
+  describe("only administrative roles are offered", () => {
+    beforeEach(() => {
+      const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+        String(url) === "/api/tests/t1/access/users"
+          ? { ok: true, status: 200, json: async () => [...users(), { id: "u4", name: "Ученик Учеников", email: "l@t.ru", roles: ["learner"] }] }
+          : base(url, init));
+    });
+
+    it("leaves the learner out of the add-user list", async () => {
+      await renderLoaded();
+      fireEvent.focus(screen.getByRole("combobox"));
+      const listbox = screen.getByRole("listbox");
+      expect(within(listbox).getByText("Пётр Смирнов")).toBeInTheDocument();
+      expect(within(listbox).queryByText("Ученик Учеников")).not.toBeInTheDocument();
+    });
+
+    it("searches the owner field and leaves the learner out", async () => {
+      await renderLoaded();
+      fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
+      const field = screen.getByRole("combobox", { name: "Владелец теста" });
+      fireEvent.focus(field);
+      expect(within(screen.getByRole("listbox")).queryByText("Ученик Учеников")).not.toBeInTheDocument();
+      fireEvent.change(field, { target: { value: "maria" } });
+      const found = within(screen.getByRole("listbox")).getAllByRole("option");
+      expect(found).toHaveLength(1);
+      expect(found[0]).toHaveTextContent("Мария Сидорова");
+    });
+  });
+
   it("revokes a grant, collapsing the table to its empty state", async () => {
     await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Отозвать доступ" }));
@@ -172,8 +203,8 @@ describe("<TestAccessPanel />", () => {
   it("saves an owner change → PATCH /owner, success toast and onClose", async () => {
     const { onClose } = await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
-    fireEvent.click(screen.getByLabelText("Владелец теста").querySelector("button")!);
-    fireEvent.click(screen.getByRole("option", { name: "Пётр Смирнов" }));
+    fireEvent.focus(screen.getByRole("combobox", { name: "Владелец теста" }));
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Пётр Смирнов"));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(calls.some((c) => c.url === "/api/tests/t1/owner" && c.method === "PATCH")).toBe(true));
     const owner = calls.find((c) => c.url === "/api/tests/t1/owner")!;
@@ -284,8 +315,8 @@ describe("<TestAccessPanel />", () => {
     ownerPatchOk = false;
     const { onClose } = await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
-    fireEvent.click(screen.getByLabelText("Владелец теста").querySelector("button")!);
-    fireEvent.click(screen.getByRole("option", { name: "Пётр Смирнов" }));
+    fireEvent.focus(screen.getByRole("combobox", { name: "Владелец теста" }));
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Пётр Смирнов"));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith(

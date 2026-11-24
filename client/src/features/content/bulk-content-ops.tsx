@@ -13,7 +13,8 @@
  *     (parentId, container) to one destination; cycle-guarded server-side.
  *   - {@link GroupAccessModal}   — grant / revoke / visibility / owner across the
  *     resolved topics (folders fall through to their topics; folders have no
- *     access model of their own).
+ *     access model of their own). Grant and owner offer only people with an
+ *     administrative role (role-model 6.0); revoke lists everyone.
  *   - {@link FolderDeleteDialog} — two-mode folder delete (reparent contents /
  *     cascade through the content guard), for the ⋯-menu and for a selection
  *     that contains folders.
@@ -31,8 +32,17 @@ import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { FolderTreeSelect } from "@/components/folder-tree-select";
 import { t, pluralize } from "@/lib/i18n";
 import type { Folder } from "@shared/schema";
+import { mayHoldContentAccess, type Role } from "@shared/access";
 
-export interface UserLite { id: string; name?: string | null; email?: string | null }
+export interface UserLite {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  /** Stored roles, as `GET /api/users` sends them; decide who may hold access. */
+  roles?: string[];
+  /** External participant (PRD-28): never offered as an owner or a grantee. */
+  isExternal?: boolean;
+}
 
 const c = () => t.content;
 /** «тему / темы / тем» (accusative) for a topic count. */
@@ -256,6 +266,12 @@ export function GroupAccessModal(props: GroupAccessModalProps) {
   }, [open]);
 
   const userOpts = users.map((u) => ({ value: u.id, label: userLabel(u), searchText: `${u.name ?? ""} ${u.email ?? ""}` }));
+  // Only people with an administrative role may receive a grant or own a topic
+  // (role-model 6.0); revoking stays open to everyone, legacy grants included.
+  const holderIds = new Set(
+    users.filter((u) => mayHoldContentAccess((u.roles ?? []) as Role[], u.isExternal === true)).map((u) => u.id),
+  );
+  const holderOpts = userOpts.filter((o) => holderIds.has(o.value));
   const applyDisabled =
     ((op === "grant" || op === "revoke") && !granteeId) || (op === "owner" && !ownerId) || topicIds.length === 0;
 
@@ -377,7 +393,7 @@ export function GroupAccessModal(props: GroupAccessModalProps) {
           <>
             <Stack gap={1}>
               <Label>{c().user}</Label>
-              <Combobox aria-label={c().user} placeholder={c().pickUser} value={granteeId} onChange={setGranteeId} options={userOpts} />
+              <Combobox aria-label={c().user} placeholder={c().pickUser} value={granteeId} onChange={setGranteeId} options={holderOpts} />
             </Stack>
             <Stack gap={1}>
               <Label>{c().accessLevel}</Label>
@@ -424,7 +440,7 @@ export function GroupAccessModal(props: GroupAccessModalProps) {
         {op === "owner" && (
           <Stack gap={1}>
             <Label>{c().newOwner}</Label>
-            <Combobox aria-label={c().newOwner} placeholder={c().pickUser} value={ownerId} onChange={setOwnerId} options={userOpts} />
+            <Combobox aria-label={c().newOwner} placeholder={c().pickUser} value={ownerId} onChange={setOwnerId} options={holderOpts} />
             <Text variant="caption" tone="muted">{c().ownerHint}</Text>
           </Stack>
         )}

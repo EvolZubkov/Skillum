@@ -1,3 +1,12 @@
+/**
+ * @module server/routes/topics
+ *
+ * Topic API (`/api/topics`): CRUD, duplication, bulk operations and the topic
+ * access model of PRD-15 block C (owner, visibility, `use`/`manage` grants with
+ * soft and hard revoke). Only a person with an administrative role may own a
+ * topic or receive a grant on it (role-model 6.0); anybody else is refused with
+ * `422 grantee_not_staff`, in the single and in the bulk routes alike.
+ */
 import { Router } from "express";
 import { logger } from "../logger";
 import { storage } from "../storage";
@@ -28,6 +37,7 @@ import {
   duplicateNameGroups,
 } from "../services/topic-access";
 import { normalizeTopicName } from "@shared/topics/naming";
+import { NOT_CONTENT_ACCESS_HOLDER, userMayHoldContentAccess } from "../services/access";
 import {
   feedbackContentSchema,
   interpretationSchema,
@@ -525,8 +535,10 @@ router.post("/bulk-owner", requirePermission("topics.owner.change"), async (req,
     if (!canChangeTopicOwner(req.effectiveRoles ?? [])) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    if (typeof ownerId === "string" && !(await storage.getUser(ownerId))) {
-      return res.status(404).json({ error: "User not found" });
+    if (typeof ownerId === "string") {
+      const owner = await storage.getUser(ownerId);
+      if (!owner) return res.status(404).json({ error: "User not found" });
+      if (!(await userMayHoldContentAccess(owner))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     }
     let updatedCount = 0;
     for (const id of ids) {
@@ -555,9 +567,9 @@ router.post("/bulk-grant", requirePermission("topics.access.grant"), async (req,
     if (accessLevel !== "use" && accessLevel !== "manage") {
       return res.status(400).json({ error: "accessLevel must be 'use' or 'manage'" });
     }
-    if (!(await storage.getUser(granteeId))) {
-      return res.status(404).json({ error: "Grantee not found" });
-    }
+    const grantee = await storage.getUser(granteeId);
+    if (!grantee) return res.status(404).json({ error: "Grantee not found" });
+    if (!(await userMayHoldContentAccess(grantee))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     const roles = req.effectiveRoles ?? [];
     const userId = req.currentUser?.id ?? "";
     let grantedCount = 0;
@@ -749,9 +761,9 @@ router.post("/:id/access", requirePermission("topics.access.grant"), async (req,
     if (accessLevel !== "use" && accessLevel !== "manage") {
       return res.status(400).json({ error: "accessLevel must be 'use' or 'manage'" });
     }
-    if (!(await storage.getUser(granteeId))) {
-      return res.status(404).json({ error: "Grantee not found" });
-    }
+    const grantee = await storage.getUser(granteeId);
+    if (!grantee) return res.status(404).json({ error: "Grantee not found" });
+    if (!(await userMayHoldContentAccess(grantee))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     const grant = await storage.upsertTopicGrant({
       topicId: topic.id,
       granteeId,
@@ -861,8 +873,10 @@ router.patch("/:id/owner", requirePermission("topics.owner.change"), async (req,
     if (ownerId !== null && typeof ownerId !== "string") {
       return res.status(400).json({ error: "ownerId must be a string or null" });
     }
-    if (typeof ownerId === "string" && !(await storage.getUser(ownerId))) {
-      return res.status(404).json({ error: "User not found" });
+    if (typeof ownerId === "string") {
+      const owner = await storage.getUser(ownerId);
+      if (!owner) return res.status(404).json({ error: "User not found" });
+      if (!(await userMayHoldContentAccess(owner))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     }
     await storage.setTopicOwner(topic.id, ownerId);
     res.json({ topicId: topic.id, ownerId });

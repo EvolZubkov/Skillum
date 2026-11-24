@@ -37,7 +37,7 @@ const folders = [
   { id: "f1", name: "Финансы", parentId: null },
   { id: "f2", name: "Экономика", parentId: null },
 ] as Folder[];
-const users = [{ id: "u1", name: "Петров", email: "p@corp.ru" }];
+const users = [{ id: "u1", name: "Петров", email: "p@corp.ru", roles: ["author"] }];
 
 // ── fetch stub: route a call to a caller-supplied response descriptor ───────
 interface Route {
@@ -179,6 +179,24 @@ describe("GroupAccessModal — apply operations", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(hit(fetchMock, "/api/topics/bulk-owner", "POST")).toBe(true);
     expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Владелец изменён у тем: 2" }));
+  });
+
+  // Role-model 6.0: grant and owner offer only administrative roles; revoke lists everyone,
+  // so a legacy grant to a learner can still be taken back.
+  it("offers a learner and an external participant to revoke only", () => {
+    stubFetch(() => ({ ok: true, body: {} }));
+    renderAccess({
+      users: [
+        ...users,
+        { id: "u2", name: "Учащийся", email: "l@corp.ru", roles: ["learner"] },
+        { id: "u3", name: "Внешний", email: "e@corp.ru", roles: ["author"], isExternal: true },
+      ],
+    });
+    fireEvent.focus(screen.getByRole("combobox"));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Петров — p@corp.ru"]);
+    fireEvent.click(screen.getByText("Отозвать"));
+    fireEvent.focus(screen.getByRole("combobox"));
+    expect(screen.getAllByRole("option")).toHaveLength(3);
   });
 
   it("soft revoke: POSTs bulk-revoke without a mode", async () => {

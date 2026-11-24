@@ -76,16 +76,22 @@ import testsRouter from "../server/routes/tests";
 
 // ─── App and identities ──────────────────────────────────────────────────────
 
-const users: Record<string, { id: string; name?: string; status: string }> = {
+const users: Record<string, { id: string; name?: string; status: string; isExternal?: boolean }> = {
   author1: { id: "author1", name: "Автор Один", status: "active" },
   author2: { id: "author2", name: "Автор Два", status: "active" },
   admin1: { id: "admin1", name: "Админ", status: "active" },
   u9: { id: "u9", name: "Грантополучатель", status: "active" },
+  // Role-model 6.0: neither may own a topic or receive a grant on it.
+  learner1: { id: "learner1", name: "Учащийся", status: "active" },
+  ext1: { id: "ext1", name: "Внешний", status: "active", isExternal: true },
 };
 const rolesByUser: Record<string, string[]> = {
   author1: ["author"],
   author2: ["author"],
   admin1: ["administrator"],
+  u9: ["manager"],
+  learner1: ["learner"],
+  ext1: ["learner"],
 };
 
 function makeApp() {
@@ -258,6 +264,17 @@ describe("POST /api/topics/:id/access — grant use/manage", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  it.each(["learner1", "ext1"])("refuses a grantee without an administrative role (%s, 422)", async (granteeId) => {
+    const res = await asAuthor1(
+      request(makeApp())
+        .post("/api/topics/t1/access")
+        .send({ granteeType: "user", granteeId, accessLevel: "use" }),
+    );
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.upsertTopicGrant).not.toHaveBeenCalled();
+  });
 });
 
 describe("DELETE /api/topics/:id/access/:grantId — two-mode revoke (T-29)", () => {
@@ -362,6 +379,31 @@ describe("PATCH /api/topics/:id/owner — admin only", () => {
     );
     expect(res.status).toBe(403);
     expect(storageMock.setTopicOwner).not.toHaveBeenCalled();
+  });
+
+  it.each(["learner1", "ext1"])("refuses an owner without an administrative role (%s, 422)", async (ownerId) => {
+    const res = await asAdmin(request(makeApp()).patch("/api/topics/t1/owner").send({ ownerId }));
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.setTopicOwner).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bulk owner change to a learner (422)", async () => {
+    const res = await asAdmin(
+      request(makeApp()).post("/api/topics/bulk-owner").send({ ids: ["t1"], ownerId: "learner1" }),
+    );
+    expect(res.status).toBe(422);
+    expect(storageMock.setTopicOwner).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bulk grant to a learner (422)", async () => {
+    const res = await asAdmin(
+      request(makeApp())
+        .post("/api/topics/bulk-grant")
+        .send({ ids: ["t1"], granteeId: "learner1", accessLevel: "use" }),
+    );
+    expect(res.status).toBe(422);
+    expect(storageMock.upsertTopicGrant).not.toHaveBeenCalled();
   });
 });
 

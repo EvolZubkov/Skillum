@@ -14,6 +14,8 @@
  *   are managed by its owner or an administrator; `GET /:id/access/users` names
  *   the people the access panel offers, behind the same gate;
  * - the folder owner is changed with `tests.owner.change`, as a test owner;
+ * - only a person with an administrative role may own a folder or receive a grant
+ *   on it (role-model 6.0); anybody else is refused with `422 grantee_not_staff`;
  * - a move of a test or a folder keeps the rights inherited from the old chain
  *   (copied as direct grants) and answers `409 access_gain` with the people it
  *   would add, until the client repeats it with `confirmGain: true`.
@@ -34,6 +36,11 @@ import { logger } from "../logger";
 import { storage } from "../storage";
 import { requirePermission } from "../middleware/auth";
 import { isAdminOrSuper, listableTestScope, canEditTest } from "../services/test-access";
+import {
+  accessPanelPeople,
+  NOT_CONTENT_ACCESS_HOLDER,
+  userMayHoldContentAccess,
+} from "../services/access";
 import {
   folderRights,
   folderRightsMap,
@@ -339,16 +346,22 @@ router.get("/:id/access", requirePermission("folders.manage"), async (req, res) 
 
 // GET /api/test-folders/:id/access/users — the people the folder access panel names and offers.
 // Behind the panel's own gate, not `users.read`: a folder owner grants access yet holds no
-// registry right. Only what the panel shows leaves: id, name, email and roles.
+// registry right. Only what the panel shows leaves: id, name, email and roles — and only for
+// the people who may hold access (role-model 6.0) plus those the panel already names.
 router.get("/:id/access/users", requirePermission("folders.manage"), async (req, res) => {
   try {
     const { roles, userId } = who(req);
     const folder = await folderOr404(res, req.params.id);
     if (!folder) return;
     if (!allowOr403(res, await canManageFolder(roles, userId, folder.id))) return;
-    const users = await storage.getUsers();
-    const userRoles = await Promise.all(users.map((user) => storage.getUserRoles(user.id)));
-    res.json(users.map((user, i) => ({ id: user.id, name: user.name, email: user.email, roles: userRoles[i] })));
+    const [nodes, grants] = await Promise.all([loadTestFolderNodes(), storage.getTestFolderGrants()]);
+    // The panel names the owner, the folder's own grantees and everyone it inherits.
+    const referenced = new Set<string>([
+      ...grants.filter((g) => g.folderId === folder.id).map((g) => g.userId),
+      ...inheritedAccess(ancestorChain(folder.parentId, nodes), grants, new Set()).map((row) => row.userId),
+    ]);
+    if (folder.ownerId) referenced.add(folder.ownerId);
+    res.json(await accessPanelPeople(referenced));
   } catch (error) {
     logger.error("Get test folder access users error: " + (error as Error).message);
     res.status(500).json({ error: "Failed to get users" });
@@ -364,8 +377,10 @@ router.patch("/:id/owner", requirePermission("tests.owner.change"), async (req, 
     if (ownerId !== null && typeof ownerId !== "string") {
       return res.status(400).json({ error: "ownerId must be a string or null" });
     }
-    if (ownerId && !(await storage.getUser(ownerId))) {
-      return res.status(404).json({ error: "Owner user not found" });
+    if (ownerId) {
+      const owner = await storage.getUser(ownerId);
+      if (!owner) return res.status(404).json({ error: "Owner user not found" });
+      if (!(await userMayHoldContentAccess(owner))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     }
     await storage.setTestFolderOwner(folder.id, ownerId ?? null);
     res.json({ folderId: folder.id, ownerId: ownerId ?? null });
@@ -386,9 +401,9 @@ router.put("/:id/access", requirePermission("folders.manage"), async (req, res) 
     if (!granteeId || !LEVELS.includes(accessLevel as FolderAccessLevel)) {
       return res.status(400).json({ error: "invalid_grant" });
     }
-    if (!(await storage.getUser(granteeId))) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    const grantee = await storage.getUser(granteeId);
+    if (!grantee) return res.status(404).json({ error: "User not found" });
+    if (!(await userMayHoldContentAccess(grantee))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     const grant = await storage.upsertTestFolderGrant({
       folderId: folder.id,
       userId: granteeId,

@@ -19,6 +19,7 @@ import { requirePermission, requireUserContext } from "../middleware/auth";
 import { requireTestScope } from "../middleware/test-scope";
 import { listableTestScope, canGrantAccess, canAssignTest, canEditTest, canReviewTest, isAdminOrSuper } from "../services/test-access";
 import { folderRights, loadTestFolderNodes } from "../services/test-folder-access";
+import { accessPanelPeople, NOT_CONTENT_ACCESS_HOLDER, userMayHoldContentAccess } from "../services/access";
 import { ancestorChain, inheritedAccess } from "@shared/access";
 import { visibleTopic } from "../services/topic-access";
 import { testReferencedTopicIds } from "../services/test-topic-context";
@@ -1935,7 +1936,8 @@ router.get("/:id/access", requirePermission("tests.access.grant"), async (req, r
 // Behind the panel's own gate, not `users.read`: the author grants access to their
 // own tests yet holds no registry right, so `GET /api/users` answered the panel with
 // a 403 and left the owner, the grantees and the add-user list nameless and empty.
-// Only what the panel shows leaves: id, name, email and roles — no groups, no hashes.
+// Only what the panel shows leaves: id, name, email and roles — no groups, no hashes — and
+// only for the people who may hold access (role-model 6.0) plus those the panel already names.
 router.get("/:id/access/users", requirePermission("tests.access.grant"), async (req, res) => {
   try {
     const test = await storage.getTest(req.params.id);
@@ -1943,9 +1945,18 @@ router.get("/:id/access/users", requirePermission("tests.access.grant"), async (
     if (!canGrantAccess(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test)) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const users = await storage.getUsers();
-    const roles = await Promise.all(users.map((user) => storage.getUserRoles(user.id)));
-    res.json(users.map((user, i) => ({ id: user.id, name: user.name, email: user.email, roles: roles[i] })));
+    const [grants, nodes, folderGrants] = await Promise.all([
+      storage.getTestAccessGrants(test.id),
+      loadTestFolderNodes(),
+      storage.getTestFolderGrants(),
+    ]);
+    // The panel names the owner, the grantees (reviewers included) and everyone the test inherits.
+    const referenced = new Set<string>([
+      ...grants.map((grant) => grant.userId),
+      ...inheritedAccess(ancestorChain(test.folderId ?? null, nodes), folderGrants, new Set()).map((row) => row.userId),
+    ]);
+    if (test.ownerId) referenced.add(test.ownerId);
+    res.json(await accessPanelPeople(referenced));
   } catch (error) {
     logger.error("Get test access users error: " + (error as Error).message, "tests");
     res.status(500).json({ error: "Failed to get users" });
@@ -1969,6 +1980,7 @@ router.post("/:id/access", requirePermission("tests.access.grant"), async (req, 
     }
     const grantee = await storage.getUser(userId);
     if (!grantee) return res.status(404).json({ error: "User not found" });
+    if (!(await userMayHoldContentAccess(grantee))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     const grant = await storage.upsertTestAccessGrant({
       testId: test.id,
       userId,
@@ -2011,6 +2023,7 @@ router.patch("/:id/owner", requirePermission("tests.owner.change"), async (req, 
     if (ownerId) {
       const owner = await storage.getUser(ownerId);
       if (!owner) return res.status(404).json({ error: "Owner user not found" });
+      if (!(await userMayHoldContentAccess(owner))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     }
     await storage.setTestOwner(test.id, ownerId ?? null);
     res.json({ testId: test.id, ownerId: ownerId ?? null });

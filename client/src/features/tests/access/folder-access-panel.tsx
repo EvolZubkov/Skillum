@@ -14,6 +14,9 @@
  * opened by the folder owner or an administrator (`canManageAccess` of the
  * folder row); the server checks it on every endpoint. «Сменить владельца» is
  * offered to the holders of `tests.owner.change`, the right of a test owner change.
+ *
+ * Only people with an administrative role are offered as an owner or a grantee
+ * (role-model 6.0); the owner is picked in a searchable field, as a grantee is.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -34,10 +37,17 @@ import {
   useToast,
 } from "@skillum/ui-kit";
 import { KeyRound, Trash2 } from "lucide-react";
-import { formatRoles } from "@/lib/roles";
 import { useAuth } from "@/lib/auth";
-import type { Role } from "@shared/access";
-import { LEVEL_OPTIONS, displayName, initials, type AccessLevel, type AccessUser } from "./access-people";
+import {
+  LEVEL_OPTIONS,
+  displayName,
+  initials,
+  mayReceiveAccess,
+  ownerOptions,
+  personOption,
+  type AccessLevel,
+  type AccessUser,
+} from "./access-people";
 import { InheritedAccessTable, type InheritedRow } from "./inherited-access-table";
 
 interface GrantRow {
@@ -121,7 +131,7 @@ export function FolderAccessPanel({
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const grantedIds = useMemo(() => new Set(grants.map((g) => g.userId)), [grants]);
   const addableUsers = useMemo(
-    () => users.filter((u) => u.id !== ownerId && !grantedIds.has(u.id)),
+    () => users.filter((u) => u.id !== ownerId && !grantedIds.has(u.id) && mayReceiveAccess(u)),
     [users, ownerId, grantedIds],
   );
 
@@ -201,13 +211,14 @@ export function FolderAccessPanel({
         <Stack as="section" gap={3}>
           <Text variant="body-s" weight="semibold" tone="muted" className="tb-caps">Владелец</Text>
           {changingOwner ? (
-            <Select
+            <Combobox
               aria-label="Владелец папки"
               fullWidth
-              placeholder="Выберите владельца…"
-              value={ownerId ?? ""}
-              options={users.map((u) => ({ value: u.id, label: displayName(u) }))}
-              onChange={(v) => setOwnerId(v || null)}
+              placeholder="Найдите владельца…"
+              value={ownerId}
+              options={ownerOptions(users, access?.ownerId ?? null)}
+              // Clearing the field does not unset the owner: a folder always keeps one.
+              onChange={(v) => v && setOwnerId(v)}
             />
           ) : (
             <Cluster gap={3} wrap={false}>
@@ -237,12 +248,7 @@ export function FolderAccessPanel({
               placeholder="Выберите пользователя…"
               value={addUserId}
               onChange={(v) => setAddUserId(v)}
-              options={addableUsers.map((u) => ({
-                value: u.id,
-                label: displayName(u),
-                searchText: `${u.name ?? ""} ${u.email ?? ""}`,
-                meta: formatRoles(u.roles as Role[] | undefined) || undefined,
-              }))}
+              options={addableUsers.map(personOption)}
             />
             <Select<AccessLevel>
               aria-label="Уровень доступа"

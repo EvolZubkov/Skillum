@@ -23,6 +23,8 @@ const { storageMock, state, rolesByUser } = vi.hoisted(() => {
     author1: ["author"],
     author2: ["author"],
     admin1: ["administrator"],
+    // Role-model 6.0: a plain learner may neither own a folder nor receive a grant on it.
+    learner1: ["learner"],
   };
   const state = {
     folders: [] as Array<{ id: string; name: string; parentId: string | null; ownerId: string | null }>,
@@ -297,6 +299,23 @@ describe("folder grants", () => {
     const denied = await request(app).get("/api/test-folders/A/access/users").use(as("author1"));
     expect(denied.status).toBe(403);
   });
+
+  it("leaves a learner out of the panel's people unless the panel already names them", async () => {
+    const plain = await request(app).get("/api/test-folders/B/access/users").use(as("author2"));
+    expect(plain.body.map((u: { id: string }) => u.id)).not.toContain("learner1");
+    // A legacy grant on an ancestor keeps its holder named in «Унаследовано».
+    state.grants = [{ id: "g1", folderId: "A", userId: "learner1", accessLevel: "assign" }];
+    const named = await request(app).get("/api/test-folders/B/access/users").use(as("author2"));
+    expect(named.body.map((u: { id: string }) => u.id)).toContain("learner1");
+  });
+
+  it("refuses a grant to a person without an administrative role (422)", async () => {
+    const res = await request(app).put("/api/test-folders/A/access").use(as("author2"))
+      .send({ userId: "learner1", accessLevel: "assign" });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(state.grants).toEqual([]);
+  });
 });
 
 describe("folder owner", () => {
@@ -305,6 +324,13 @@ describe("folder owner", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ folderId: "A", ownerId: "author1" });
     expect(state.folders[0].ownerId).toBe("author1");
+  });
+
+  it("refuses an owner without an administrative role (422)", async () => {
+    const res = await request(app).patch("/api/test-folders/A/owner").use(as("admin1")).send({ ownerId: "learner1" });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.setTestFolderOwner).not.toHaveBeenCalled();
   });
 
   it("refuses the folder owner without the owner-change right", async () => {
