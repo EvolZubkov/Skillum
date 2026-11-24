@@ -209,6 +209,8 @@ export interface TestPayload {
   skipReviewWhenComplete?: boolean;
   /** PRD-67: leaving a started section with a time limit closes it. */
   closeSectionOnLeave?: boolean;
+  /** PRD-73: the обзор's finish stays disabled while the scope has an unanswered question. */
+  requireAllAnsweredToFinish?: boolean;
   /** Что SCORM-пакет отдаёт в LMS при нескольких попытках: лучшую или последнюю. */
   lmsAttemptResult?: "best" | "last";
   // PRD-34 (FR-01): настройки защиты от копирования.
@@ -412,6 +414,8 @@ export class TestSettingsService {
         skipReviewWhenComplete: payload.test.skipReviewWhenComplete ?? false,
         // PRD-67: новый тест — выход из раздела лишь замораживает время, как прежде.
         closeSectionOnLeave: payload.test.closeSectionOnLeave ?? false,
+        // PRD-73: новый тест — завершение раздела и теста как прежде, без запрета.
+        requireAllAnsweredToFinish: payload.test.requireAllAnsweredToFinish ?? false,
         // Результат в LMS: новый тест отчитывается за ТЕКУЩУЮ попытку, как того ждёт
         // платформа; какую засчитать — решает LMS. Тесты, заведённые раньше, остались
         // на «лучшей» (миграция 0022) и поведения не меняют.

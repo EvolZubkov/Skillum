@@ -359,6 +359,12 @@ export function buildTestJson(data: ExportData): string {
     // PRD-67: baked ONLY when on — the runtime reads absence as the old freeze-on-leave, so
     // the package of a test that never touched the setting stays byte-for-byte the same.
     ...(data.test.closeSectionOnLeave ? { closeSectionOnLeave: true } : {}),
+    // PRD-73: baked ONLY when on and never for an adaptive test (no skipping there, FR-09).
+    // The runtime reads absence as «off», so a package that never touched the setting stays
+    // byte-for-byte the same.
+    ...(data.test.mode !== "adaptive" && data.test.requireAllAnsweredToFinish
+      ? { requireAllAnsweredToFinish: true }
+      : {}),
     // PRD-34 (FR-01, FR-26): настройки защиты для рантайма пакета. `protectionActive`
     // отдельным полем: в отладочном прогоне защита и скрытие выключены, а водяной знак
     // остаётся (FR-19, FR-25).

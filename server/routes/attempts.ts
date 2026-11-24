@@ -126,6 +126,11 @@ function prd19RuntimeSettings(test: Test) {
     skipReviewWhenComplete: test.skipReviewWhenComplete ?? false,
     // PRD-67: absence in an OLD publication snapshot = the pre-PRD-67 freeze-on-leave.
     closeSectionOnLeave: test.closeSectionOnLeave ?? false,
+    // PRD-73: the обзор's finish stays disabled while the scope has an unanswered question.
+    // An adaptive test has no skipping, so there is nothing to forbid (FR-09); absence in an
+    // OLD publication snapshot reads as «off», i.e. today's finish.
+    requireAllAnsweredToFinish:
+      test.mode === "adaptive" ? false : (test.requireAllAnsweredToFinish ?? false),
     // PRD-34 (FR-01, FR-05): настройки защиты. Отсутствие поля в СТАРОМ снимке
     // публикации читается как умолчание — тест, опубликованный до PRD-34, получает защиту.
     copyProtection: test.copyProtection ?? true,

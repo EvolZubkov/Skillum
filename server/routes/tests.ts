@@ -195,6 +195,8 @@ const testBodyBaseSchema = z.object({
   skipReviewWhenComplete: z.boolean().optional(),
   // PRD-67: leaving a started section with a time limit closes it (see schema).
   closeSectionOnLeave: z.boolean().optional(),
+  // PRD-73: the обзор's finish stays disabled while the scope has an unanswered question.
+  requireAllAnsweredToFinish: z.boolean().optional(),
   // Что SCORM-пакет отдаёт в LMS при нескольких попытках (в вебе не применяется).
   lmsAttemptResult: z.enum(["best", "last"]).optional(),
   // PRD-34 (FR-01): настройки защиты от копирования.
@@ -803,6 +805,7 @@ router.post("/", requirePermission("tests.create"), async (req, res) => {
       showAttemptsCount,
       skipReviewWhenComplete,
       closeSectionOnLeave,
+      requireAllAnsweredToFinish,
       lmsAttemptResult,
       copyProtection,
       protectionWatermark,
@@ -909,6 +912,7 @@ router.post("/", requirePermission("tests.create"), async (req, res) => {
         showAttemptsCount,
         skipReviewWhenComplete,
         closeSectionOnLeave,
+        requireAllAnsweredToFinish,
         lmsAttemptResult,
         copyProtection,
         protectionWatermark,
@@ -1308,6 +1312,7 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
       showAttemptsCount,
       skipReviewWhenComplete,
       closeSectionOnLeave,
+      requireAllAnsweredToFinish,
       lmsAttemptResult,
       copyProtection,
       protectionWatermark,
@@ -1387,6 +1392,7 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
         showAttemptsCount,
         skipReviewWhenComplete,
         closeSectionOnLeave,
+        requireAllAnsweredToFinish,
         lmsAttemptResult,
         copyProtection,
         protectionWatermark,

@@ -268,6 +268,34 @@ describe("POST .../attempts/start — branches", () => {
     expect(legacy.body.allowFreeSectionNavigation).toBe(false);
   });
 
+  // PRD-73: запрет завершения при неотвеченных. Веб-хост читает его из ответа старта.
+  it("отдаёт запрет завершения хосту, а адаптивному тесту гасит его (PRD-73)", async () => {
+    const liveRun = () => {
+      storageMock.getTestSections.mockResolvedValue([{ topicId: "t1", drawCount: 1 }]);
+      storageMock.getTopics.mockResolvedValue([{ id: "t1", name: "JS" }]);
+      storageMock.getQuestionsByTopic.mockResolvedValue([dbQuestion]);
+      storageMock.getQuestionsByIds.mockResolvedValue([dbQuestion]);
+      storageMock.createAttempt.mockResolvedValue(dbAttempt);
+    };
+    liveRun();
+    storageMock.getTest.mockResolvedValue({ ...dbTest, requireAllAnsweredToFinish: true });
+    const on = await asLearner(request(app).post("/api/tests/test1/attempts/start"));
+    expect(on.status).toBe(201);
+    expect(on.body.requireAllAnsweredToFinish).toBe(true);
+
+    // В адаптивном режиме пропуска нет, запрещать нечего (FR-09).
+    liveRun();
+    storageMock.getTest.mockResolvedValue({ ...dbTest, mode: "adaptive", requireAllAnsweredToFinish: true });
+    const adaptive = await asLearner(request(app).post("/api/tests/test1/attempts/start"));
+    expect(adaptive.body.requireAllAnsweredToFinish).toBe(false);
+
+    // Тест и снимок публикации до колонки: завершение как прежде.
+    liveRun();
+    storageMock.getTest.mockResolvedValue({ ...dbTest });
+    const legacy = await asLearner(request(app).post("/api/tests/test1/attempts/start"));
+    expect(legacy.body.requireAllAnsweredToFinish).toBe(false);
+  });
+
   it("falls back to live storage when a published test has no snapshot", async () => {
     storageMock.getTest.mockResolvedValue({ ...dbTest, status: "published" });
     storageMock.getLatestSnapshot.mockResolvedValue(undefined);
