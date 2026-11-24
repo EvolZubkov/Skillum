@@ -1072,6 +1072,36 @@ describe("свободная навигация внутри раздела (PRD
   });
 });
 
+// ─── Требовать ответ на все вопросы перед завершением (PRD-73) ───────────────
+
+describe("запрет завершения при неотвеченных (PRD-73)", () => {
+  it("новый тест заводится с выключенным запретом", () => {
+    expect(emptyEditorModel({ folderId: null }).runtime.requireAllAnsweredToFinish).toBe(false);
+  });
+
+  it("тест без колонки читается как ВЫКЛ", () => {
+    expect(apiToEditorModel({}).runtime.requireAllAnsweredToFinish).toBe(false);
+  });
+
+  it("явное значение читается дословно и уезжает в полезную нагрузку", () => {
+    expect(
+      apiToEditorModel({ requireAllAnsweredToFinish: true, allowReturnToUnanswered: true }).runtime
+        .requireAllAnsweredToFinish,
+    ).toBe(true);
+    const model = emptyEditorModel({ folderId: null });
+    model.runtime.allowReturnToUnanswered = true;
+    model.runtime.requireAllAnsweredToFinish = true;
+    expect(editorModelToPayload(model).requireAllAnsweredToFinish).toBe(true);
+  });
+
+  it("без возврата к неотвеченным уезжает выключенным — запрещать нечего", () => {
+    const model = emptyEditorModel({ folderId: null });
+    model.runtime.allowReturnToUnanswered = false;
+    model.runtime.requireAllAnsweredToFinish = true;
+    expect(editorModelToPayload(model).requireAllAnsweredToFinish).toBe(false);
+  });
+});
+
 // ─── PRD-50 FR-11/FR-12: section-group (block) round-trip ────────────────────
 
 describe("PRD-50 FR-44 положение показа разреза (Э4)", () => {
