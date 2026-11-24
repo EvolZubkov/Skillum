@@ -26,6 +26,7 @@ import {
 } from "@skillum/ui-kit";
 import { Trash2, KeyRound, RotateCcw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { rightsOfTopic } from "@shared/access";
 import { FolderTreeSelect } from "@/components/folder-tree-select";
 import { FeedbackEditorModal } from "@/features/tests/editor/sections/feedback-editor-modal";
 import { FeedbackPreview } from "@/features/tests/editor/sections/feedback-preview";
@@ -153,6 +154,9 @@ export function TopicDrawer({
   const isEdit = target?.mode === "edit";
   const topic = target?.mode === "edit" ? target.topic : null;
   const topicId = topic?.id ?? null;
+  // role-model.md 6.6: the «Доступ» tab reads and changes visibility and grants — the owner's
+  // and the administrator's business. Without the right its request would only answer 403.
+  const canGrant = isEdit && rightsOfTopic(topic).grant;
 
   // ── Properties draft ──────────────────────────────────────────────────────
   const [tab, setTab] = useState<TopicTab>(initialTab);
@@ -177,7 +181,7 @@ export function TopicDrawer({
   // Reset the draft whenever a new target is opened.
   useEffect(() => {
     if (!target) return;
-    setTab(target.mode === "create" ? "props" : initialTab);
+    setTab(target.mode === "create" || !rightsOfTopic(target.mode === "edit" ? target.topic : null).grant ? "props" : initialTab);
     if (target.mode === "edit") {
       setName(target.topic.name ?? "");
       setCode(target.topic.code ?? "");
@@ -204,7 +208,7 @@ export function TopicDrawer({
   // ── Users (for owner + grants) ──────────────────────────────────────────────
   const { data: users = [] } = useQuery<AccessUser[]>({
     queryKey: ["/api/users"],
-    enabled: open && isEdit,
+    enabled: open && canGrant,
   });
 
   // ── Access state (edit only) ────────────────────────────────────────────────
@@ -215,7 +219,7 @@ export function TopicDrawer({
       if (!res.ok) throw new Error("Не удалось загрузить доступ");
       return res.json();
     },
-    enabled: open && isEdit && !!topicId,
+    enabled: open && canGrant && !!topicId,
   });
   useEffect(() => {
     if (!access) return;
@@ -364,7 +368,7 @@ export function TopicDrawer({
 
   const grants = access?.grants ?? [];
   const owner = ownerId ? usersById.get(ownerId) : undefined;
-  const tabItems = isEdit
+  const tabItems = canGrant
     ? [{ id: "props" as const, label: "Свойства" }, { id: "access" as const, label: "Доступ" }]
     : [{ id: "props" as const, label: "Свойства" }];
 
@@ -479,7 +483,7 @@ export function TopicDrawer({
           </Stack>
         )}
 
-        {tab === "access" && isEdit && (
+        {tab === "access" && canGrant && (
           <Stack gap={6} padTop={4}>
             {/* Owner */}
             <Stack as="section" gap={3}>

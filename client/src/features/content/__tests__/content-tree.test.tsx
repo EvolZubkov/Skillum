@@ -56,6 +56,7 @@ vi.mock("@/features/content/bulk-content-ops", () => ({
 }));
 
 import { ContentTree } from "../content-tree";
+import { FULL_TOPIC_RIGHTS } from "@shared/access";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 // f1 (root) ⊃ f2 (subfolder) + t1 «Бюджетирование» ⊃ q1, q2
@@ -65,8 +66,8 @@ const folders = [
   { id: "f2", name: "Аналитика", parentId: "f1" },
 ];
 const topics = [
-  { id: "t1", name: "Бюджетирование", folderId: "f1", ownerId: "u1", visibility: "shared" },
-  { id: "t2", name: "Инвестиции", folderId: null, ownerId: "u1", visibility: "shared" },
+  { id: "t1", name: "Бюджетирование", folderId: "f1", ownerId: "u1", visibility: "shared", rights: FULL_TOPIC_RIGHTS },
+  { id: "t2", name: "Инвестиции", folderId: null, ownerId: "u1", visibility: "shared", rights: FULL_TOPIC_RIGHTS },
 ];
 const questions = [
   { id: "q1", topicId: "t1", type: "single", prompt: "Сколько будет 2+2?", difficulty: 50, tags: [], mediaType: null, createdBy: "u1" },
@@ -454,7 +455,7 @@ describe("<ContentTree /> — ссылка на вопрос из аналити
     // t3 lives in f2 ⊂ f1; folders start open, but the path must be walked all the way.
     const deep = {
       folders,
-      topics: [...topics, { id: "t3", name: "Прогнозы", folderId: "f2", ownerId: "u1", visibility: "shared" }],
+      topics: [...topics, { id: "t3", name: "Прогнозы", folderId: "f2", ownerId: "u1", visibility: "shared", rights: FULL_TOPIC_RIGHTS }],
       questions: [...questions, { id: "q9", topicId: "t3", type: "single", prompt: "Глубокий вопрос", difficulty: null, tags: [], mediaType: null, createdBy: "u1" }],
     };
     window.history.replaceState(null, "", "/author/content?questionId=q9");
@@ -531,7 +532,7 @@ describe("<ContentTree /> — счётчики в подписях строк", 
   it("склоняет существительные по числу", async () => {
     const one = {
       folders: [{ id: "f1", name: "Одна", parentId: null }],
-      topics: [{ id: "t1", name: "Тема", folderId: "f1", ownerId: "u1", visibility: "shared" }],
+      topics: [{ id: "t1", name: "Тема", folderId: "f1", ownerId: "u1", visibility: "shared", rights: FULL_TOPIC_RIGHTS }],
       questions: [
         { id: "q1", topicId: "t1", type: "single", prompt: "Раз?", difficulty: null, tags: [], mediaType: null, createdBy: "u1" },
       ],

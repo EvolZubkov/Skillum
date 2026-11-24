@@ -72,6 +72,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { t } from "@/lib/i18n";
 import type { Folder, Question, Topic } from "@shared/schema";
+import { NO_TOPIC_RIGHTS, rightsOfTopic, type TopicRights } from "@shared/access";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
 import { QuestionPreview } from "@/features/content/question-preview";
 import { TopicDrawer, type TopicDrawerTarget } from "@/features/topics/topic-drawer";
@@ -291,6 +292,18 @@ export function ContentTree() {
   const { data: users = [] } = useQuery<UserLite[]>({ queryKey: ["/api/users"], enabled: can("users.read") });
   // PRD-70 FR-14: качество вопросов по тестам читателя — из аналитики, поэтому только с правом на неё.
   const canAnalytics = can("analytics.read");
+  // role-model.md 6.6: the role opens an action in principle, the topic decides. A row
+  // without `rights` grants nothing.
+  const rightsById = useMemo(
+    () => new Map(topics.map((tp) => [tp.id, rightsOfTopic(tp)] as const)),
+    [topics],
+  );
+  const rightsFor = useMemo(
+    () => (topicId: string | null | undefined): Readonly<TopicRights> =>
+      (topicId ? rightsById.get(topicId) : undefined) ?? NO_TOPIC_RIGHTS,
+    [rightsById],
+  );
+  const manageableTopics = useMemo(() => topics.filter((tp) => rightsOfTopic(tp).manage), [topics]);
   const { data: bankQualityData } = useQuery<{ questions: BankQuestionQuality[] }>({
     queryKey: ["/api/analytics/bank/quality"],
     enabled: canAnalytics,
@@ -356,6 +369,12 @@ export function ContentTree() {
   const [topicTarget, setTopicTarget] = useState<TopicDrawerTarget | null>(null);
   const [topicTab, setTopicTab] = useState<"props" | "access">("props");
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const topicOfQuestion = useMemo(() => new Map(questions.map((q) => [q.id, q.topicId] as const)), [questions]);
+  // Moving goes question by question, so ONE question without the right would stop it midway.
+  const selectedQuestionsMovable = useMemo(
+    () => Array.from(selected).every((id) => rightsFor(topicOfQuestion.get(id)).manage),
+    [selected, rightsFor, topicOfQuestion],
+  );
   const [selectedTopics, setSelectedTopics] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedFolders, setSelectedFolders] = useState<ReadonlySet<string>>(() => new Set());
   const [moveQ, setMoveQ] = useState<{ ids: string[]; topicId: string } | null>(null);
@@ -491,8 +510,11 @@ export function ContentTree() {
     }
     setExpandedTopics((prev) => new Set(prev).add(q.topicId));
     setScrollToQuestionId(q.id);
-    setEditorTarget({ question: q });
-  }, [linkedQuestionId, dataLoading, questions, topics, folders, toast]);
+    // role-model.md 6.6: without the right on its topic the question opens as a row, not in an
+    // editor whose save the server would refuse.
+    if (rightsFor(q.topicId).manage) setEditorTarget({ question: q });
+    else setExpandedQuestions((prev) => new Set(prev).add(q.id));
+  }, [linkedQuestionId, dataLoading, questions, topics, folders, toast, rightsFor]);
 
   // Прокрутка дерева: вернуть, когда дерево отрисовано, и запоминать по ходу.
   const scrollRestored = useRef(false);
@@ -729,6 +751,16 @@ export function ContentTree() {
     const open = contentActive || expandedTopics.has(topic.id);
     const menuOpen = menu?.kind === "topic" && menu.id === topic.id;
     const topicSel = selectedTopics.has(topic.id);
+    const tr = rightsFor(topic.id);
+    const topicActs = {
+      addQuestion: can("questions.manage") && tr.manage,
+      exportExcel: can("questions.importExport"),
+      settings: can("topics.manage") && tr.manage,
+      access: can("topics.access.grant") && tr.grant,
+      move: can("topics.manage") && tr.manage,
+      remove: can("topics.manage") && tr.delete,
+    };
+    const hasTopicActions = Object.values(topicActs).some(Boolean);
     rows.push(
       <div key={`t-${topic.id}`} className={`ct-row ct-row--topic ${depthClass(depth)}${open ? " is-open" : ""}${topicSel ? " is-tselected" : ""}`} onClick={() => toggleTopic(topic.id)} role="button" tabIndex={0}>
         <div className="ct-name">
@@ -748,14 +780,16 @@ export function ContentTree() {
             <div className="ct-cell">{contentActive ? `${shown.length} / ${total}` : `${total}`}</div>
           </>
         )}
-        <RowActions open={menuOpen} label={t.content.actionsTopic} onToggle={() => setMenu(menuOpen ? null : { kind: "topic", id: topic.id })}>
-          {can("questions.manage") && <MenuItem icon={<Plus size={16} />} onClick={() => { setMenu(null); setEditorTarget({ question: null, defaultTopicId: topic.id }); }} testId={`ct-topic-addq-${topic.id}`}>{t.content.addQuestion}</MenuItem>}
-          {can("questions.importExport") && <MenuItem icon={<Download size={16} />} onClick={() => { setMenu(null); exportTopicsToExcel([topic.id]); }} testId={`ct-topic-export-${topic.id}`}>{t.content.exportToExcel}</MenuItem>}
-          {can("topics.manage") && <MenuItem icon={<Pencil size={16} />} onClick={() => { setMenu(null); setTopicTab("props"); setTopicTarget({ mode: "edit", topic }); }}>{t.content.topicSettings}</MenuItem>}
-          {can("topics.access.grant") && <MenuItem icon={<KeyRound size={16} />} onClick={() => { setMenu(null); setTopicTab("access"); setTopicTarget({ mode: "edit", topic }); }}>{t.content.topicAccess}</MenuItem>}
-          {can("topics.manage") && <MenuItem icon={<Move size={16} />} onClick={() => { setMenu(null); setMoveTopicTarget({ id: topic.id, folderId: topic.folderId ?? "" }); }}>{t.content.moveTopicToFolder}</MenuItem>}
-          {can("topics.manage") && <MenuItem danger icon={<Trash2 size={16} />} onClick={() => { setMenu(null); setDeleteTopicIds([topic.id]); }}>{t.content.deleteTopic}</MenuItem>}
-        </RowActions>
+        {hasTopicActions ? (
+          <RowActions open={menuOpen} label={t.content.actionsTopic} onToggle={() => setMenu(menuOpen ? null : { kind: "topic", id: topic.id })}>
+            {topicActs.addQuestion && <MenuItem icon={<Plus size={16} />} onClick={() => { setMenu(null); setEditorTarget({ question: null, defaultTopicId: topic.id }); }} testId={`ct-topic-addq-${topic.id}`}>{t.content.addQuestion}</MenuItem>}
+            {topicActs.exportExcel && <MenuItem icon={<Download size={16} />} onClick={() => { setMenu(null); exportTopicsToExcel([topic.id]); }} testId={`ct-topic-export-${topic.id}`}>{t.content.exportToExcel}</MenuItem>}
+            {topicActs.settings && <MenuItem icon={<Pencil size={16} />} onClick={() => { setMenu(null); setTopicTab("props"); setTopicTarget({ mode: "edit", topic }); }}>{t.content.topicSettings}</MenuItem>}
+            {topicActs.access && <MenuItem icon={<KeyRound size={16} />} onClick={() => { setMenu(null); setTopicTab("access"); setTopicTarget({ mode: "edit", topic }); }}>{t.content.topicAccess}</MenuItem>}
+            {topicActs.move && <MenuItem icon={<Move size={16} />} onClick={() => { setMenu(null); setMoveTopicTarget({ id: topic.id, folderId: topic.folderId ?? "" }); }}>{t.content.moveTopicToFolder}</MenuItem>}
+            {topicActs.remove && <MenuItem danger icon={<Trash2 size={16} />} onClick={() => { setMenu(null); setDeleteTopicIds([topic.id]); }}>{t.content.deleteTopic}</MenuItem>}
+          </RowActions>
+        ) : <div className="ct-acts" />}
       </div>,
     );
     if (open) for (const q of shown) pushQuestion(q, depth + 1);
@@ -793,6 +827,9 @@ export function ContentTree() {
     const menuOpen = menu?.kind === "question" && menu.id === q.id;
     const isSel = selected.has(q.id);
     const qOpen = expandedQuestions.has(q.id);
+    // role-model.md 6.6: every change of a question is a write into its topic.
+    const canChangeQ = can("questions.manage") && rightsFor(q.topicId).manage;
+    const hasQActions = canChangeQ || canAnalytics;
     rows.push(
       <div key={`q-${q.id}`} data-question-id={q.id} className={`ct-row ct-row--q ${depthClass(depth)}${isSel ? " is-selected" : ""}${qOpen ? " is-open" : ""}`} onClick={() => toggleQuestion(q.id)} role="button" tabIndex={0}>
         <div className="ct-name">
@@ -824,14 +861,16 @@ export function ContentTree() {
             <div className="ct-cell" />
           </>
         )}
-        <RowActions open={menuOpen} label={t.content.actionsQuestion} onToggle={() => setMenu(menuOpen ? null : { kind: "question", id: q.id })}>
-          <MenuItem icon={<Pencil size={16} />} onClick={() => { setMenu(null); setEditorTarget({ question: q }); }} testId={`ct-q-edit-${q.id}`}>{t.content.editQuestion}</MenuItem>
-          {/* PRD-70 FR-25: статистика вопроса по всем тестам читателя. */}
-          {canAnalytics && <MenuItem icon={<BarChart3 size={16} />} onClick={() => { setMenu(null); openStatistics(q.id); }} testId={`ct-q-stats-${q.id}`}>Статистика</MenuItem>}
-          {can("questions.manage") && <MenuItem icon={<Copy size={16} />} onClick={() => { setMenu(null); duplicateQuestionMut.mutate(q.id); }}>{t.questions.duplicate}</MenuItem>}
-          {can("questions.manage") && <MenuItem icon={<Move size={16} />} onClick={() => { setMenu(null); setMoveQ({ ids: [q.id], topicId: q.topicId }); }}>{t.content.moveQuestionToTopic}</MenuItem>}
-          {can("questions.manage") && <MenuItem danger icon={<Trash2 size={16} />} onClick={() => { setMenu(null); deleteQuestion(q); }}>{t.content.deleteSelected}</MenuItem>}
-        </RowActions>
+        {hasQActions ? (
+          <RowActions open={menuOpen} label={t.content.actionsQuestion} onToggle={() => setMenu(menuOpen ? null : { kind: "question", id: q.id })}>
+            {canChangeQ && <MenuItem icon={<Pencil size={16} />} onClick={() => { setMenu(null); setEditorTarget({ question: q }); }} testId={`ct-q-edit-${q.id}`}>{t.content.editQuestion}</MenuItem>}
+            {/* PRD-70 FR-25: статистика вопроса по всем тестам читателя. */}
+            {canAnalytics && <MenuItem icon={<BarChart3 size={16} />} onClick={() => { setMenu(null); openStatistics(q.id); }} testId={`ct-q-stats-${q.id}`}>Статистика</MenuItem>}
+            {canChangeQ && <MenuItem icon={<Copy size={16} />} onClick={() => { setMenu(null); duplicateQuestionMut.mutate(q.id); }}>{t.questions.duplicate}</MenuItem>}
+            {canChangeQ && <MenuItem icon={<Move size={16} />} onClick={() => { setMenu(null); setMoveQ({ ids: [q.id], topicId: q.topicId }); }}>{t.content.moveQuestionToTopic}</MenuItem>}
+            {canChangeQ && <MenuItem danger icon={<Trash2 size={16} />} onClick={() => { setMenu(null); deleteQuestion(q); }}>{t.content.deleteSelected}</MenuItem>}
+          </RowActions>
+        ) : <div className="ct-acts" />}
       </div>,
     );
     if (qOpen) {
@@ -959,7 +998,16 @@ export function ContentTree() {
           <span className="ct-bulkbar__count">{t.content.selectedCount} {selected.size}</span>
           <span className="ct-bulkbar__spacer" />
           {can("questions.manage") && (
-            <Button variant="secondary" size="s" leadingIcon={<Move size={16} />} onClick={() => setMoveQ({ ids: Array.from(selected), topicId: "" })}>{t.content.moveSelected}</Button>
+            <Button
+              variant="secondary"
+              size="s"
+              leadingIcon={<Move size={16} />}
+              disabled={!selectedQuestionsMovable}
+              onClick={() => setMoveQ({ ids: Array.from(selected), topicId: "" })}
+              data-testid="ct-bulk-move-questions"
+            >
+              {t.content.moveSelected}
+            </Button>
           )}
           <Button variant="ghost" size="s" onClick={() => setSelected(new Set())}>{t.content.clearSelection}</Button>
         </div>
@@ -974,10 +1022,10 @@ export function ContentTree() {
           </span>
           <span className="ct-bulkbar__spacer" />
           {can("topics.manage") && (
-            <Button variant="ghost" size="s" leadingIcon={<Move size={16} />} onClick={() => setGroupMoveOpen(true)} data-testid="ct-group-move">{t.content.moveSelected}</Button>
+            <Button variant="ghost" size="s" leadingIcon={<Move size={16} />} disabled={selectedFolders.size === 0 && !resolvedTopicIds.some((id) => rightsFor(id).manage)} onClick={() => setGroupMoveOpen(true)} data-testid="ct-group-move">{t.content.moveSelected}</Button>
           )}
           {can("topics.access.grant") && (
-            <Button variant="ghost" size="s" leadingIcon={<KeyRound size={16} />} onClick={() => setGroupAccessOpen(true)} data-testid="ct-group-access">{t.content.groupAccess}</Button>
+            <Button variant="ghost" size="s" leadingIcon={<KeyRound size={16} />} disabled={!resolvedTopicIds.some((id) => rightsFor(id).grant)} onClick={() => setGroupAccessOpen(true)} data-testid="ct-group-access">{t.content.groupAccess}</Button>
           )}
           {can("questions.importExport") && (
             <Button variant="ghost" size="s" leadingIcon={<Download size={16} />} onClick={() => exportTopicsToExcel(resolvedTopicIds)} data-testid="ct-export-topics">{t.content.exportToExcel}</Button>
@@ -987,6 +1035,7 @@ export function ContentTree() {
               variant="ghost"
               size="s"
               leadingIcon={<Trash2 size={16} />}
+              disabled={selectedFolders.size === 0 && !resolvedTopicIds.some((id) => rightsFor(id).delete)}
               data-testid="ct-group-delete"
               onClick={() => {
                 if (selectedFolders.size > 0) {
@@ -1061,7 +1110,7 @@ export function ContentTree() {
                 <button type="button" className="ct-fab-action-btn" aria-label={t.content.fabAddTopic} onClick={() => { setFabOpen(false); setTopicTab("props"); setTopicTarget({ mode: "create" }); }} data-testid="ct-fab-topic"><Bookmark size={18} /></button>
               </div>
             )}
-            {can("questions.manage") && (
+            {can("questions.manage") && manageableTopics.length > 0 && (
               <div className="ct-fab-action">
                 <span className="ct-fab-action-label">{t.content.fabAddQuestion}</span>
                 <button type="button" className="ct-fab-action-btn" aria-label={t.content.fabAddQuestion} onClick={() => { setFabOpen(false); setEditorTarget({ question: null }); }} data-testid="ct-fab-question"><CircleDot size={18} /></button>
@@ -1085,7 +1134,7 @@ export function ContentTree() {
         open={editorTarget !== null}
         question={editorTarget?.question ?? null}
         defaultTopicId={editorTarget?.defaultTopicId}
-        topics={topics}
+        topics={manageableTopics}
         tagSuggestions={tagOptions}
         onClose={() => setEditorTarget(null)}
         onSaved={invalidateAll}
@@ -1129,7 +1178,7 @@ export function ContentTree() {
           onChange={(v) => setMoveQ((prev) => (prev ? { ...prev, topicId: v } : prev))}
           placeholder={t.questions.selectTopic}
           fullWidth
-          options={topics.map((tp) => ({ value: tp.id, label: tp.name }))}
+          options={manageableTopics.map((tp) => ({ value: tp.id, label: tp.name }))}
         />
       </ModalDialog>
 

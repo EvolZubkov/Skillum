@@ -16,6 +16,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TopicDrawer } from "../topic-drawer";
 import type { Topic } from "@shared/schema";
+import { FULL_TOPIC_RIGHTS } from "@shared/access";
 import { ToastProvider } from "@skillum/ui-kit";
 
 // ─── fetch harness ──────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ const editTopic = {
   folderId: null,
   ownerId: null,
   visibility: "private",
+  rights: FULL_TOPIC_RIGHTS,
 } as unknown as Topic;
 
 // ─── Feedback normalisation + property inputs ────────────────────────────────

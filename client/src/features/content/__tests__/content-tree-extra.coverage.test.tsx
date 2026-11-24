@@ -54,14 +54,15 @@ vi.mock("@/features/content/bulk-content-ops", () => ({
 }));
 
 import { ContentTree } from "../content-tree";
+import { FULL_TOPIC_RIGHTS } from "@shared/access";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 // Owners: t1 = self (u1), t2 = other (u2) + shared, t3 = common pool (null).
 const folders = [{ id: "f1", name: "Финансы", parentId: null }];
 const topics = [
-  { id: "t1", name: "Бюджетирование", folderId: "f1", ownerId: "u1", visibility: "private" },
-  { id: "t2", name: "Инвестиции", folderId: null, ownerId: "u2", visibility: "shared" },
-  { id: "t3", name: "Налоги", folderId: null, ownerId: null, visibility: "private" },
+  { id: "t1", name: "Бюджетирование", folderId: "f1", ownerId: "u1", visibility: "private", rights: FULL_TOPIC_RIGHTS },
+  { id: "t2", name: "Инвестиции", folderId: null, ownerId: "u2", visibility: "shared", rights: FULL_TOPIC_RIGHTS },
+  { id: "t3", name: "Налоги", folderId: null, ownerId: null, visibility: "private", rights: FULL_TOPIC_RIGHTS },
 ];
 const questions = [
   { id: "q1", topicId: "t1", type: "single", prompt: "Вопрос про бюджет", difficulty: 50, tags: ["a"], mediaType: "image", createdBy: "u1" },
