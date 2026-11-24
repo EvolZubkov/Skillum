@@ -1,5 +1,110 @@
 # Changelog
 
+## [2.63.0](https://github.com/vvlad1973/Fullstack-MVP-testing/compare/v2.62.2...v2.63.0)
+
+### Features
+
+- **feat**(prd-73): макет обзора «Стандартного» связывает подсказку с кнопкой (1.29.0) (2026-11-24) [`e907633f0dc5542f140b6c90513c3c10c4f10b58`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/e907633f0dc5542f140b6c90513c3c10c4f10b58)
+
+- **feat**(prd-73): запрет завершения на обзоре SCORM-пакета (2026-11-24) [`b3e7a72a782619538e5008b52647f7a69122edbc`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/b3e7a72a782619538e5008b52647f7a69122edbc)
+
+- **feat**(prd-73): запрет завершения на обзоре веб-хоста (2026-11-24) [`cfc2243148090b66d75a7a3f7b3ee1d622ccd250`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/cfc2243148090b66d75a7a3f7b3ee1d622ccd250)
+
+- **feat**(prd-73): TemplateScreen рисует запрещённые действия неактивными (2026-11-24) [`77b72eaa8f537a725ac14a8ec6cc22919e546eb0`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/77b72eaa8f537a725ac14a8ec6cc22919e546eb0)
+
+- **feat**(prd-73): переключатель «Требовать ответ на все вопросы перед завершением» (2026-11-24) [`234df5337349f4c3139c6bc188da6045c996a36f`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/234df5337349f4c3139c6bc188da6045c996a36f)
+
+- **feat**(prd-73): настройка в модели редактора теста (2026-11-24) [`afd667d48158f7cf216aa6cdafa626bd8addc7e5`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/afd667d48158f7cf216aa6cdafa626bd8addc7e5)
+
+- **feat**(prd-73): параметр листа «Настройки» книги Excel (2026-11-24) [`85174a1db4b5b9cd1de04d155f6e1be0cbf1a20f`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/85174a1db4b5b9cd1de04d155f6e1be0cbf1a20f)
+
+- **feat**(prd-73): проброс настройки в API, попытку и пакет (2026-11-24) [`334de14c9695d76766d013d0277325dfa1bd048f`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/334de14c9695d76766d013d0277325dfa1bd048f)
+
+- **feat**(prd-73): колонка tests.require_all_answered_to_finish (2026-11-24) [`3c0bff50d8f1ea4360d0b2b691fee6eaa4de156b`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/3c0bff50d8f1ea4360d0b2b691fee6eaa4de156b)
+
+- **feat**(prd-73): общее отключение запрещённых действий экрана (2026-11-24) [`092ea8d83cba222a36575553915b52e5f8e39a52`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/092ea8d83cba222a36575553915b52e5f8e39a52)
+
+- **feat**(prd-73): признак finishBlocked и подсказка в контексте обзора (2026-11-24) [`8d3422c2eeb0f4a69ce2d4e78d1c78d166aa2205`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/8d3422c2eeb0f4a69ce2d4e78d1c78d166aa2205)
+
+- **feat**(prd-73): общее правило запрета завершения и действующего скрытия обзора (2026-11-24) [`4b01997e7d6867d66452109e3a47568379997f2b`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/4b01997e7d6867d66452109e3a47568379997f2b)
+
+- **feat**(access): GET /api/tests/:id/questions — вопросы тем теста для того, кто его правит (2026-11-24) [`09c1de9d25ab7cf046e61e3e5bc9a0219e83533d`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/09c1de9d25ab7cf046e61e3e5bc9a0219e83533d)
+  Сервис test-topic-context отдаёт вопросы тем разделов и банков сценариев теста и список тем
+  только для чтения; гейт — право правки теста. Сохранение теста берёт тот же набор тем.
+
+### Fixes
+
+- **fix**(import): посторонние символы в номерах правильных ответов дают ошибку строки (2026-11-24) [`6b8fb7cce8eedb8321fda927b81dc2123ebb1f43`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/6b8fb7cce8eedb8321fda927b81dc2123ebb1f43)
+  parseInt читал 1#2 и 1) как 1, и вопрос импортировался с неверным ключом
+  без сообщения. Теперь номер правильного ответа (одиночный выбор) и каждый
+  элемент списка (множественный) должны состоять из цифр.
+
+- **fix**(access): доступ и владение только для административных ролей, поиск владельца (2026-11-24) [`bfd7f1a2665ebf40b830cb1a054c554879d13c01`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/bfd7f1a2665ebf40b830cb1a054c554879d13c01)
+  Владельцем теста, папки тестов или темы и получателем рабочего гранта может быть
+  только пользователь с административной ролью (администратор, разработчик, автор,
+  менеджер по обучению, суперадминистратор из конфигурации). Обычный пользователь и
+  внешний участник сначала получают роль, потом доступ (role-model 6.0).
+  
+  \- Сервер отвечает 422 grantee_not_staff на выдачу гранта и смену владельца у тестов,
+    папок и тем, включая массовые операции тем. Правило одно для клиента и сервера:
+    mayHoldContentAccess в shared/access/roles.ts.
+  \- GET .../access/users теста и папки отдают только подходящих людей плюс тех, кого
+    панель уже показывает (владелец, получатели, унаследованный доступ): прежний грант
+    обычному пользователю остаётся виден и снимается как обычно.
+  \- Смена владельца в «Общем доступе» теста и папки и во вкладке «Доступ» темы - поле с
+    поиском по имени и почте вместо выпадающего списка; списки «Выбрать пользователя» и
+    массовые выдача и смена владельца тем предлагают только административные роли,
+    массовый отзыв по-прежнему показывает всех.
+  \- Приглашение рецензентов (PRD-52) правилом не затронуто.
+
+- **fix**(tests-list): фильтр «Область» учитывает владельца папки и счётчик корня (2026-11-24) [`a0ea065111e01bd9914d56faee3971451b3bbddf`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/a0ea065111e01bd9914d56faee3971451b3bbddf)
+  Под «Мои» в дереве оставались все папки, в том числе чужие с нулём тестов:
+  область отбирала только тесты, а владелец папки (test_folders.owner_id)
+  терялся при разборе ответа /api/test-folders. Теперь «Мои» показывает мои
+  папки, даже пустые, а чужую - только как путь к моему содержимому;
+  «Доступные» - наоборот. Счётчик «Все тесты» считает показанные тесты, а не
+  весь список.
+
+- **fix**(import): номера правильных ответов множественного выбора принимают разделители ; и # (2026-11-24) [`937f465e9b963d064a469346a5674a9680452682`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/937f465e9b963d064a469346a5674a9680452682)
+  Ячейка вида 1#2 раньше не делилась: parseInt брал только первое число, и
+  вопрос импортировался с одним правильным вариантом без ошибки. Руководство
+  и тест обновлены.
+
+- **fix**(content): банк не предлагает действий, которые сервер отклонит (2026-11-24) [`5172cb1c42fededb426fd0543f5aad85d566bd8f`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/5172cb1c42fededb426fd0543f5aad85d566bd8f)
+  Действия над темой и вопросом без права скрыты, групповые — недоступны, если не применимы ни к
+  одному выбранному объекту; перенос вопросов — только при праве на все. Вкладка «Доступ» ящика
+  темы — только у владельца и администратора.
+
+- **fix**(editor): ящик теста видит вопросы тем теста без прав на тему (2026-11-24) [`c92b0ff1aafcaf36357247cad6149b35bc2bedbe`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/c92b0ff1aafcaf36357247cad6149b35bc2bedbe)
+  Хук useEditorQuestions сливает банк с вопросами в контексте теста; на него переведены «Вопросы
+  теста», «Оценка», варианты, квоты, обратная связь, вклады в шкалы и проверки черновика. Тема
+  только для чтения — без перехода в ящик вопроса и «Добавить вопрос», ссылка открывает просмотр.
+  Новый вопрос из ящика теста — только в тему с правом на содержимое.
+
+- **fix**(access): права на тему в списке тем, проверки дублирования вопроса и темы (2026-11-24) [`52b9cc8c9d3a3dcd08828f2591a2cf53df9eb7c9`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/52b9cc8c9d3a3dcd08828f2591a2cf53df9eb7c9)
+  GET /api/topics несёт rights (manage/delete/grant) по тем же функциям, что проверяют действия.
+  Дублирование вопроса требует права на содержимое его темы (копия ложилась в чужую тему без
+  проверки), дублирование темы — видимости исходной темы.
+
+### Documentation
+
+- **docs**(prd-73): итоги приёмки в браузере (2026-11-24) [`13b070b65fb81694151c57d68740f8a74574e838`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/13b070b65fb81694151c57d68740f8a74574e838)
+
+- **docs**(prd-73): руководства автора и импорта, PRD-19, матрица StartExam и ROADMAP (2026-11-24) [`c404f8c4d9497457738b271cfe72fc23039e40f3`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/c404f8c4d9497457738b271cfe72fc23039e40f3)
+
+- **docs**(prd-73): контракт шаблонов 3.23.0 — review.finishBlocked (2026-11-24) [`1a8f6d9e4e5b98de5b90bdb7575b9c38fe1306fa`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/1a8f6d9e4e5b98de5b90bdb7575b9c38fe1306fa)
+
+- **docs**(prd-73): скрытый обзор в спецификации и план реализации (2026-11-24) [`2199b7982e698e0827cf8be88d4933b62bf7f65a`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/2199b7982e698e0827cf8be88d4933b62bf7f65a)
+
+- **docs**(prd-73): эскиз и спецификация запрета завершения при неотвеченных вопросах (2026-11-24) [`f3c06b7aeb9a768f042dd2051c28cd447853ee91`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/f3c06b7aeb9a768f042dd2051c28cd447853ee91)
+
+- **docs**: чтение темы в контексте теста и права в банке в руководстве и анализе (2026-11-24) [`78fb49e9f5e8ad29053e8d2f9b298dc5e4a9abe6`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/78fb49e9f5e8ad29053e8d2f9b298dc5e4a9abe6)
+
+- **docs**(access): чтение темы в контексте теста и права на действия с темой (role-model 6.5.1, 6.6) (2026-11-24) [`a1c6da5504039a2031b8f11f65cc135d08812237`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/a1c6da5504039a2031b8f11f65cc135d08812237)
+  Право на тест открывает чтение вопросов тем, на которые тест ссылается, без доступа к банку
+  (обобщение PRD-15 FR-25). Интерфейс не предлагает действие над темой, которое сервер отклонит:
+  строка темы несёт rights. План реализации — docs/plans/2026-11-24-topic-read-in-test-context.md.
+
 ## [2.62.2](https://github.com/vvlad1973/Fullstack-MVP-testing/compare/v2.62.1...v2.62.2)
 
 ### Fixes
