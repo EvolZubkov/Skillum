@@ -219,6 +219,18 @@ describe("создание комментария", () => {
   });
 });
 
+describe("карточка ветки", () => {
+  it("содержимое лежит в теле карточки: у ветки есть внутренний отступ, ничего не липнет к рамке", async () => {
+    renderPanel();
+    const card = await screen.findByTestId("thread-c1");
+    const body = card.querySelector(".ou-card__body");
+    expect(body).not.toBeNull();
+    // Шапка, текст и кнопки - внутри тела, а не прямые дети карточки.
+    expect(body!.textContent).toContain("Формулировка допускает два прочтения");
+    expect(Array.from(card.children).every((child) => child === body)).toBe(true);
+  });
+});
+
 describe("окно прогона: рейл «Согласование / Комментарии»", () => {
   const anchor = { kind: "question" as const, questionId: "q7", topicId: "tp1" };
 

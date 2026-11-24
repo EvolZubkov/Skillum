@@ -67,3 +67,8 @@
 .rvp-rail > .ou-drawer__split { width: 100%; }
 .rvp-rail .ou-drawer__rail { width: 176px; padding: var(--ou-space-3); }
 .rvp-rail .tb-settings-content { min-width: 0; padding: var(--ou-space-3) var(--ou-space-4) var(--ou-space-5); }
+
+/* Карточка ветки внутри панели рейла (`.tb-settings-content`): общее правило «16 px между детьми карточки» делает
+   ленту рыхлее эскиза, где ритм строк тесный: подпись места на 4 px, остальное на 8 px. */
+.tb-settings-content .rvp__thread .ou-card__body > * + * { margin-top: var(--ou-space-2); }
+.tb-settings-content .rvp__thread .ou-card__body > .rvp__ctx { margin-top: var(--ou-space-1); }

@@ -13,7 +13,7 @@
  */
 import { useState } from "react";
 import {
-  Avatar, Banner, Button, Card, Cluster, EmptyState, SegmentedControl, Stack, Switch, Tag, Text,
+  Avatar, Banner, Button, Card, CardBody, Cluster, EmptyState, SegmentedControl, Stack, Switch, Tag, Text,
   Textarea,
 } from "@skillum/ui-kit";
 import { ArrowRight, MessageSquarePlus } from "lucide-react";
@@ -211,139 +211,141 @@ export function ReviewPanel({
                 data-testid={`thread-${thread.id}`}
                 data-expanded={thread.id === focusThreadId ? "true" : "false"}
               >
-                <Cluster gap={2} align="center" className="rvp__head">
-                  {/* Аватар с инициалами: в ветке на десяток реплик имя читается медленнее,
-                      чем цветной кружок, — по нему взгляд и находит своего собеседника. */}
-                  <Avatar size="xs" initials={initialsOf(thread.authorName, mine)} />
-                  <strong className="rvp__who">{thread.authorName || (mine ? "Вы" : thread.authorId)}</strong>
-                  <span className="rvp__when">{when(thread.createdAt)}</span>
-                  <span className="rvp__spacer" />
-                  {statusTag(thread)}
-                </Cluster>
-                {thread.contextLabel ? <div className="rvp__ctx">{thread.contextLabel}</div> : null}
-                <p className="rvp__text">{thread.body}</p>
+                <CardBody>
+                  <Cluster gap={2} align="center" className="rvp__head">
+                    {/* Аватар с инициалами: в ветке на десяток реплик имя читается медленнее,
+                        чем цветной кружок, — по нему взгляд и находит своего собеседника. */}
+                    <Avatar size="xs" initials={initialsOf(thread.authorName, mine)} />
+                    <strong className="rvp__who">{thread.authorName || (mine ? "Вы" : thread.authorId)}</strong>
+                    <span className="rvp__when">{when(thread.createdAt)}</span>
+                    <span className="rvp__spacer" />
+                    {statusTag(thread)}
+                  </Cluster>
+                  {thread.contextLabel ? <div className="rvp__ctx">{thread.contextLabel}</div> : null}
+                  <p className="rvp__text">{thread.body}</p>
 
-                {thread.replies.length ? (
-                  <div className="rvp__replies">
-                    {thread.replies.map((reply) => (
-                      <div key={reply.id}>
-                        <Cluster gap={2} align="center" className="rvp__head">
-                          <Avatar
-                            size="xs"
-                            initials={initialsOf(reply.authorName, reply.authorId === currentUserId)}
-                          />
-                          <strong className="rvp__who">
-                            {reply.authorName || (reply.authorId === currentUserId ? "Вы" : reply.authorId)}
-                          </strong>
-                          <span className="rvp__when">{when(reply.createdAt)}</span>
-                        </Cluster>
-                        <p className="rvp__text">{reply.body}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {replyTo === thread.id ? (
-                  <ReviewCommentForm
-                    mode="reply"
-                    busy={review.create.isPending}
-                    onCancel={() => setReplyTo(null)}
-                    onSubmit={async (input) => {
-                      await review.create.mutateAsync({ body: input.body, parentId: thread.id });
-                      setReplyTo(null);
-                    }}
-                  />
-                ) : null}
-
-                {resolving?.id === thread.id ? (
-                  <Stack gap={2} className="rvp__resolve">
-                    {/* Исход — выбор ОДНОГО из двух, а не две команды: эскиз ставит здесь
-                        переключатель с подписью поля. Двумя кнопками выбранный исход
-                        читался как «нажми обе». */}
-                    <div className="ou-formfield">
-                      <span className="ou-formfield__lbl">Исход</span>
-                      <SegmentedControl<"accepted" | "rejected">
-                        size="s"
-                        variant="accent"
-                        aria-label="Исход комментария"
-                        value={resolving.status}
-                        items={[
-                          { value: "accepted", label: "Учтено" },
-                          { value: "rejected", label: "Отклонено" },
-                        ]}
-                        onChange={(status) => setResolving({ id: thread.id, status })}
-                      />
+                  {thread.replies.length ? (
+                    <div className="rvp__replies">
+                      {thread.replies.map((reply) => (
+                        <div key={reply.id}>
+                          <Cluster gap={2} align="center" className="rvp__head">
+                            <Avatar
+                              size="xs"
+                              initials={initialsOf(reply.authorName, reply.authorId === currentUserId)}
+                            />
+                            <strong className="rvp__who">
+                              {reply.authorName || (reply.authorId === currentUserId ? "Вы" : reply.authorId)}
+                            </strong>
+                            <span className="rvp__when">{when(reply.createdAt)}</span>
+                          </Cluster>
+                          <p className="rvp__text">{reply.body}</p>
+                        </div>
+                      ))}
                     </div>
-                    {resolving.status === "rejected" ? (
-                      <Textarea
-                        label="Ответ автора"
-                        hint="При отклонении ответ обязателен: эксперт должен увидеть причину."
-                        placeholder="Почему комментарий отклонён"
-                        rows={3}
-                        value={rejectReply}
-                        onChange={(e) => setRejectReply(e.target.value)}
-                        data-testid="reject-reply"
-                      />
-                    ) : null}
-                    <Cluster gap={2} align="center">
-                      <Button variant="ghost" size="s" onClick={() => { setResolving(null); setRejectReply(""); }}>
-                        Отмена
+                  ) : null}
+
+                  {replyTo === thread.id ? (
+                    <ReviewCommentForm
+                      mode="reply"
+                      busy={review.create.isPending}
+                      onCancel={() => setReplyTo(null)}
+                      onSubmit={async (input) => {
+                        await review.create.mutateAsync({ body: input.body, parentId: thread.id });
+                        setReplyTo(null);
+                      }}
+                    />
+                  ) : null}
+
+                  {resolving?.id === thread.id ? (
+                    <Stack gap={2} className="rvp__resolve">
+                      {/* Исход — выбор ОДНОГО из двух, а не две команды: эскиз ставит здесь
+                          переключатель с подписью поля. Двумя кнопками выбранный исход
+                          читался как «нажми обе». */}
+                      <div className="ou-formfield">
+                        <span className="ou-formfield__lbl">Исход</span>
+                        <SegmentedControl<"accepted" | "rejected">
+                          size="s"
+                          variant="accent"
+                          aria-label="Исход комментария"
+                          value={resolving.status}
+                          items={[
+                            { value: "accepted", label: "Учтено" },
+                            { value: "rejected", label: "Отклонено" },
+                          ]}
+                          onChange={(status) => setResolving({ id: thread.id, status })}
+                        />
+                      </div>
+                      {resolving.status === "rejected" ? (
+                        <Textarea
+                          label="Ответ автора"
+                          hint="При отклонении ответ обязателен: эксперт должен увидеть причину."
+                          placeholder="Почему комментарий отклонён"
+                          rows={3}
+                          value={rejectReply}
+                          onChange={(e) => setRejectReply(e.target.value)}
+                          data-testid="reject-reply"
+                        />
+                      ) : null}
+                      <Cluster gap={2} align="center">
+                        <Button variant="ghost" size="s" onClick={() => { setResolving(null); setRejectReply(""); }}>
+                          Отмена
+                        </Button>
+                        <span className="rvp__spacer" />
+                        <Button
+                          variant="primary"
+                          size="s"
+                          disabled={rejectBlocked || review.resolve.isPending}
+                          onClick={submitResolve}
+                          data-testid="confirm-resolve"
+                        >
+                          Закрыть комментарий
+                        </Button>
+                      </Cluster>
+                    </Stack>
+                  ) : (
+                    <Cluster gap={2} align="center" className="rvp__actions">
+                      {thread.stale ? (
+                        <Tag size="s" variant="outline">изменено после комментария</Tag>
+                      ) : null}
+                      {thread.orphaned ? <Tag size="s" variant="soft">объект удалён</Tag> : null}
+                      {target ? (
+                        <Button
+                          variant="secondary"
+                          size="s"
+                          disabled={!canNavigate}
+                          onClick={() => canNavigate && onNavigate!(target!, thread)}
+                          data-testid={`goto-${thread.id}`}
+                          trailingIcon={<ArrowRight size={13} aria-hidden="true" />}
+                        >
+                          Перейти к вопросу
+                        </Button>
+                      ) : null}
+                      <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
+                        Ответить
                       </Button>
                       <span className="rvp__spacer" />
-                      <Button
-                        variant="primary"
-                        size="s"
-                        disabled={rejectBlocked || review.resolve.isPending}
-                        onClick={submitResolve}
-                        data-testid="confirm-resolve"
-                      >
-                        Закрыть комментарий
-                      </Button>
+                      {canResolve && thread.status === "open" ? (
+                        <Button
+                          variant="secondary"
+                          size="s"
+                          onClick={() => setResolving({ id: thread.id, status: "accepted" })}
+                          data-testid={`resolve-${thread.id}`}
+                        >
+                          Закрыть комментарий
+                        </Button>
+                      ) : null}
+                      {canResolve && thread.status !== "open" ? (
+                        <Button
+                          variant="secondary"
+                          size="s"
+                          onClick={() => review.reopen.mutate(thread.id)}
+                        >
+                          Открыть заново
+                        </Button>
+                      ) : null}
                     </Cluster>
-                  </Stack>
-                ) : (
-                  <Cluster gap={2} align="center" className="rvp__actions">
-                    {thread.stale ? (
-                      <Tag size="s" variant="outline">изменено после комментария</Tag>
-                    ) : null}
-                    {thread.orphaned ? <Tag size="s" variant="soft">объект удалён</Tag> : null}
-                    {target ? (
-                      <Button
-                        variant="secondary"
-                        size="s"
-                        disabled={!canNavigate}
-                        onClick={() => canNavigate && onNavigate!(target!, thread)}
-                        data-testid={`goto-${thread.id}`}
-                        trailingIcon={<ArrowRight size={13} aria-hidden="true" />}
-                      >
-                        Перейти к вопросу
-                      </Button>
-                    ) : null}
-                    <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
-                      Ответить
-                    </Button>
-                    <span className="rvp__spacer" />
-                    {canResolve && thread.status === "open" ? (
-                      <Button
-                        variant="secondary"
-                        size="s"
-                        onClick={() => setResolving({ id: thread.id, status: "accepted" })}
-                        data-testid={`resolve-${thread.id}`}
-                      >
-                        Закрыть комментарий
-                      </Button>
-                    ) : null}
-                    {canResolve && thread.status !== "open" ? (
-                      <Button
-                        variant="secondary"
-                        size="s"
-                        onClick={() => review.reopen.mutate(thread.id)}
-                      >
-                        Открыть заново
-                      </Button>
-                    ) : null}
-                  </Cluster>
-                )}
+                  )}
+                </CardBody>
               </Card>
             );
           })}
