@@ -600,6 +600,9 @@ export const SETTING_PARAMS: SettingParam[] = [
   intParam("Лимит времени теста", (s) => s.timeLimitMinutes, "test", "timeLimitMinutes", { zeroIsNull: true }),
   intParam("Балл за вопрос по умолчанию", (s) => s.defaultQuestionPoints, "test", "defaultQuestionPoints"),
   boolParam("Разрешить возврат к неотвеченным вопросам", (s) => s.allowReturnToUnanswered, "test", "allowReturnToUnanswered"),
+  // PRD-73: the row is ADDED, never renamed — a workbook issued before it must still read,
+  // and its absence means «the setting does not change».
+  boolParam("Требовать ответ на все вопросы перед завершением", (s) => s.requireAllAnsweredToFinish, "test", "requireAllAnsweredToFinish"),
   boolParam("Свободная навигация внутри раздела", (s) => s.allowFreeSectionNavigation, "test", "allowFreeSectionNavigation"),
   boolParam("Позволить изменять ответ до завершения", (s) => s.allowAnswerChange, "test", "allowAnswerChange"),
   boolParam("Не показывать обзор, если отвечены все вопросы", (s) => s.skipReviewWhenComplete, "test", "skipReviewWhenComplete"),
