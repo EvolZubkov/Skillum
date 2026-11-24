@@ -18,7 +18,7 @@
  * assignment, so losing topic access must not break published tests (FR-24).
  */
 
-import { ROLES, hasAuthoringRole, type Role } from "@shared/access";
+import { ROLES, hasAuthoringRole, type Role, type TopicRights } from "@shared/access";
 import { storage } from "../storage";
 import { normalizeTopicName } from "@shared/topics/naming";
 import type { Topic, Test } from "@shared/schema";
@@ -133,6 +133,30 @@ export async function manageableTopicScope(
     if (g.accessLevel === "manage") ids.add(g.topicId);
   }
   return { all: false, ids };
+}
+
+/**
+ * Per-topic rights for a row of the topic list (role-model.md 6.6) — the same predicates the
+ * routes guard with, so a screen never offers what the server refuses. `manageable` is
+ * {@link manageableTopicScope}, read once per list instead of once per row.
+ *
+ * @param roles - the reader's effective roles.
+ * @param userId - the reader's id.
+ * @param topic - the row's topic.
+ * @param manageable - the reader's manageable scope.
+ * @returns the reader's rights on that topic.
+ */
+export function topicRightsFor(
+  roles: readonly Role[],
+  userId: string,
+  topic: TopicRef,
+  manageable: { all: boolean; ids: Set<string> },
+): TopicRights {
+  return {
+    manage: manageable.all || manageable.ids.has(topic.id),
+    delete: canDeleteTopic(roles, userId, topic),
+    grant: canGrantTopicAccess(roles, userId, topic),
+  };
 }
 
 /** A grantee's test that references the topic — one line of the FR-26 report. */

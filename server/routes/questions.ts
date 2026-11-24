@@ -780,6 +780,16 @@ router.post(
   requirePermission("questions.manage"),
   async (req: Request, res: Response) => {
     try {
+      const original = await storage.getQuestion(req.params.id);
+      if (!original) {
+        return res.status(404).json({ error: "Question not found" });
+      }
+      // The copy lands in the SAME topic, so duplicating is a write into that topic
+      // (role-model.md 6.6) — the same gate as creating a question there.
+      if (!(await canManageQuestion(req, original.topicId))) {
+        respondForbiddenContent(res);
+        return;
+      }
       const result = await storage.duplicateQuestion(req.params.id);
       if (!result) {
         return res.status(404).json({ error: "Question not found" });

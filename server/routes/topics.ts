@@ -14,6 +14,9 @@ import {
 import type { Role } from "@shared/access";
 import {
   visibleTopicScope,
+  visibleTopic,
+  manageableTopicScope,
+  topicRightsFor,
   canManageTopicContent,
   canDeleteTopic,
   canGrantTopicAccess,
@@ -76,7 +79,12 @@ function parseInterpretationJson(
 // shared; admin sees all).
 router.get("/", requirePermission("topics.read"), async (req, res) => {
   try {
-    const scope = await visibleTopicScope(req.effectiveRoles ?? [], req.currentUser?.id ?? "");
+    const roles = req.effectiveRoles ?? [];
+    const userId = req.currentUser?.id ?? "";
+    const scope = await visibleTopicScope(roles, userId);
+    // role-model.md 6.6: each row says what the reader may do with it, so the bank hides what
+    // the server would refuse.
+    const manageable = await manageableTopicScope(roles, userId);
     const allTopics = await storage.getTopics();
     const topics = scope.all ? allTopics : allTopics.filter((t) => scope.ids.has(t.id));
     const topicsWithDetails = await Promise.all(
@@ -89,6 +97,7 @@ router.get("/", requirePermission("topics.read"), async (req, res) => {
           courses: topicCoursesFromFeedback(topic),
           events: topicEventsFromFeedback(topic),
           questionCount: questions.length,
+          rights: topicRightsFor(roles, userId, topic, manageable),
         };
       })
     );
@@ -652,6 +661,12 @@ router.post("/bulk-revoke", requirePermission("topics.access.grant"), async (req
 // POST /api/topics/:id/duplicate - Дублировать тему с вопросами
 router.post("/:id/duplicate", requirePermission("topics.manage"), async (req, res) => {
   try {
+    // role-model.md §9: the source must be in the reader's visible scope. An invisible topic
+    // answers like a missing one, so the route does not confirm it exists.
+    const source = await storage.getTopic(req.params.id);
+    if (!source || !(await visibleTopic(req.effectiveRoles ?? [], req.currentUser?.id ?? "", source))) {
+      return res.status(404).json({ error: "Topic not found" });
+    }
     const result = await storage.duplicateTopicWithQuestions(
       req.params.id,
       req.currentUser?.id,

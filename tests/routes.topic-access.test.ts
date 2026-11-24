@@ -47,6 +47,9 @@ const { storageMock } = vi.hoisted(() => ({
     getGroupUsers: vi.fn(),
     // questions
     getQuestions: vi.fn(),
+    getQuestion: vi.fn(),
+    duplicateQuestion: vi.fn(),
+    duplicateTopicWithQuestions: vi.fn(),
     // tests router extras pulled in by import
     getTests: vi.fn(),
     getTestIdsByOwner: vi.fn(),
@@ -62,6 +65,10 @@ vi.mock("../server/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("../server/scorm-exporter", () => ({ generateScormPackage: vi.fn() }));
+vi.mock("../server/services/media/usage-index", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../server/services/media/usage-index")>()),
+  syncEntityUsages: vi.fn(),
+}));
 
 import topicsRouter from "../server/routes/topics";
 import questionsRouter from "../server/routes/questions";
@@ -138,6 +145,14 @@ beforeEach(() => {
   storageMock.setTopicOwner.mockResolvedValue(undefined);
   storageMock.getTestsUsingTopic.mockResolvedValue([]);
   storageMock.getGroupUsers.mockResolvedValue([]);
+  storageMock.getQuestion.mockImplementation(async (id: string) =>
+    ({ qA: { id: "qA", topicId: "t1" }, qB: { id: "qB", topicId: "t2" }, qC: { id: "qC", topicId: "tS" } } as Record<string, unknown>)[id],
+  );
+  storageMock.duplicateQuestion.mockImplementation(async (id: string) => ({ id: `${id}-copy` }));
+  storageMock.duplicateTopicWithQuestions.mockImplementation(async (id: string) => ({
+    topic: { id: `${id}-copy`, feedbackJson: null },
+    questions: [],
+  }));
   storageMock.getQuestions.mockResolvedValue([
     { id: "qA", topicId: "t1", prompt: "A" },
     { id: "qB", topicId: "t2", prompt: "B" },
@@ -434,5 +449,71 @@ describe("Topic same-name policy (FR-27)", () => {
     expect(ok.status).toBe(200);
     const group = ok.body.groups.find((g: { nameNormalized: string }) => g.nameNormalized === "общая");
     expect(group.topics.map((t: { id: string }) => t.id).sort()).toEqual(["dup", "tS"]);
+  });
+});
+
+// ─── GET /api/topics — per-topic rights (role-model 6.6) ─────────────────────
+
+describe("GET /api/topics — every row carries the reader's rights", () => {
+  it("gives the owner every right and a shared legacy topic none", async () => {
+    const res = await asAuthor1(request(makeApp()).get("/api/topics"));
+    const byId = Object.fromEntries(res.body.map((t: { id: string; rights: unknown }) => [t.id, t.rights]));
+    expect(byId.t1).toEqual({ manage: true, delete: true, grant: true });
+    expect(byId.tS).toEqual({ manage: false, delete: false, grant: false });
+  });
+
+  it("gives a manage grant the content but neither deletion nor access", async () => {
+    storageMock.getActiveTopicGrantsForGrantees.mockResolvedValue([{ topicId: "t2", accessLevel: "manage" }]);
+    const res = await asAuthor1(request(makeApp()).get("/api/topics"));
+    const t2Row = res.body.find((t: { id: string }) => t.id === "t2");
+    expect(t2Row.rights).toEqual({ manage: true, delete: false, grant: false });
+  });
+
+  it("gives a use grant nothing beyond reading", async () => {
+    storageMock.getActiveTopicGrantsForGrantees.mockResolvedValue([{ topicId: "t2", accessLevel: "use" }]);
+    const res = await asAuthor1(request(makeApp()).get("/api/topics"));
+    const t2Row = res.body.find((t: { id: string }) => t.id === "t2");
+    expect(t2Row.rights).toEqual({ manage: false, delete: false, grant: false });
+  });
+
+  it("gives an administrator every right on every topic", async () => {
+    const res = await asAdmin(request(makeApp()).get("/api/topics"));
+    for (const row of res.body) expect(row.rights).toEqual({ manage: true, delete: true, grant: true });
+  });
+});
+
+// ─── Duplicates are writes / reads of a specific topic (role-model 6.6, §9) ──
+
+describe("POST /api/questions/:id/duplicate — the copy is a write into the question's topic", () => {
+  it("refuses a question of a topic the author may not manage (403)", async () => {
+    const res = await asAuthor1(request(makeApp()).post("/api/questions/qC/duplicate"));
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("content_forbidden");
+    expect(storageMock.duplicateQuestion).not.toHaveBeenCalled();
+  });
+
+  it("duplicates a question of the author's own topic (201)", async () => {
+    const res = await asAuthor1(request(makeApp()).post("/api/questions/qA/duplicate"));
+    expect(res.status).toBe(201);
+    expect(storageMock.duplicateQuestion).toHaveBeenCalledWith("qA");
+  });
+
+  it("answers 404 for an unknown question", async () => {
+    const res = await asAuthor1(request(makeApp()).post("/api/questions/nope/duplicate"));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/topics/:id/duplicate — the source must be visible", () => {
+  it("answers 404 for a topic outside the author's scope and copies nothing", async () => {
+    const res = await asAuthor1(request(makeApp()).post("/api/topics/t2/duplicate"));
+    expect(res.status).toBe(404);
+    expect(storageMock.duplicateTopicWithQuestions).not.toHaveBeenCalled();
+  });
+
+  it("duplicates a visible shared topic into the author's own copy (201)", async () => {
+    const res = await asAuthor1(request(makeApp()).post("/api/topics/tS/duplicate"));
+    expect(res.status).toBe(201);
+    expect(storageMock.duplicateTopicWithQuestions).toHaveBeenCalledWith("tS", "author1");
   });
 });
