@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.62.2](https://github.com/vvlad1973/Fullstack-MVP-testing/compare/v2.62.1...v2.62.2)
+
+### Fixes
+
+- **fix**(template): экраны и отчёт встроенного шаблона без подгонки букв под пиксели (1.28.2) (2026-11-24) [`82b7dda616ad3845bcdb4c24a2d4ffdabecaf962`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/82b7dda616ad3845bcdb4c24a2d4ffdabecaf962)
+  Веб-шрифт без инструкций хинтинга на Linux с полным хинтингом рисуется
+  вразнобой и на экране: буквы мелкого кегля и заголовков слипаются и расходятся
+  внутри слова. text-rendering: geometricPrecision у .tb-scene и .tb-report
+  снимает подгонку. Версия default 1.28.1 -&gt; 1.28.2, preview.html пересобран.
+
+- **fix**(report): буквы PDF отчёта больше не наезжают друг на друга на Linux (2026-11-24) [`1edcdd7ee872c4cad5625297512121e2ff4ea350`](https://github.com/vvlad1973/Fullstack-MVP-testing/commit/1edcdd7ee872c4cad5625297512121e2ff4ea350)
+  Шрифт без инструкций хинтинга (RostelecomBasis шаблонов РТК) на Linux, где
+  fontconfig велит полный хинтинг, Chromium прогоняет через автохинтер FreeType:
+  ширины глифов мелкого кегля подгоняются под целые пиксели, и буквы внутри слова
+  слипаются и расходятся («Це левой уровень», «процентеситуаций»). html2canvas
+  рисует слово целиком холстом, а холст режим geometricPrecision не соблюдает ни
+  через CSS, ни через ctx.textRendering — проверено на Linux Chromium.
+  
+  Контейнер отчёта получает text-rendering: geometricPrecision, а элементы с
+  нулевым межбуквенным интервалом — интервал 0.01 px до раскладки по страницам.
+  При ненулевом интервале html2canvas ставит каждую букву в позицию, измеренную
+  DOM без хинтинга. Авторская разрядка не трогается; Windows и macOS не меняются.
+
 ## [2.62.1](https://github.com/vvlad1973/Fullstack-MVP-testing/compare/v2.62.0...v2.62.1)
 
 ### Bug Fixes
