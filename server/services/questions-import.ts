@@ -355,7 +355,7 @@ export async function importQuestionRows(
           correctJson = { correctIndex: idx };
         } else {
           const indices = correctStr
-            .split(/[,.\s]+/)
+            .split(/[,.;#\s]+/)
             .map((s) => parseInt(s.trim(), 10) - 1)
             .filter((n) => !isNaN(n));
 
