@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+    Wireframe: PRD-73 — Завершение только после ответа на все вопросы.
+    Спека: docs/specs/prd-73/finish-requires-all-answered.md.
+    Основа (пути от docs/wireframes/):
+      1) Настройки — editor-settings-target.html, состояние «Правила прохождения» →
+         «Навигация»: раздел берётся БЕЗ изменений, PRD-73 добавляет один переключатель
+         сразу под «Разрешить возврат к неотвеченным вопросам» (настройка держится на нём,
+         как «Свободная навигация» и «Изменение ответа»). Компоновка панели — как в
+         согласованном approved/prd67-section-close-on-leave.html.
+      2) Обзор — по МАКЕТУ шаблона server/scorm/templates/default/layouts/review.html
+         (шапка с таймерами без карты, карта в теле, карточка «Без ответа», подвал);
+         сцена скопирована с согласованного approved/prd57-question-input.html
+         (s-review-dash), таймеры шапки — с prohozhdenie/Обзор ответов.html.
+         Дельта ровно две вещи: кнопка завершения `disabled` и строка подсказки
+         (`review.hint`) с новым текстом.
+    Состояния:
+      s-on          — настройки: возврат включён, новый переключатель включён
+      s-no-return   — настройки: возврат выключен, переключатель погашен с причиной
+      s-blocked     — обзор в конце раздела: есть вопросы без ответа, завершить нельзя
+      s-midflow     — обзор, открытый кнопкой «К обзору»: впереди невыданные вопросы
+      s-complete    — обзор: отвечено всё, кнопка активна (как сегодня)
+      s-docs        — Пояснения, карточки состояний, DS Mapping
+    СОГЛАСОВАН 2026-11-24.
+    -->
+    <title>PRD-73 — Завершение только после ответа на все вопросы</title>
+    <link rel="stylesheet" href="/docs/wireframes/ds/skillum-ds.css" />
+    <link rel="stylesheet" href="/docs/wireframes/prd7-shared.css" />
+    <script defer src="/docs/wireframes/prd7-shared.js"></script>
+    <link rel="stylesheet" href="/docs/wireframes/ds/wf-utils.css" />
+    <link rel="stylesheet" href="/docs/wireframes/tb-components.css" />
+    <style>
+      .wf-sprite { display: none; }
+      .wf-pane { max-width: var(--wf-size-720); }
+      /* Annotation badges: copied from approved/prd57-question-input.html. */
+      .wf-annot-wrap { position: relative; display: inline-flex; }
+      .wf-annot-wrap--block { position: relative; display: block; }
+      .wf-annot {
+        display: none;
+        position: absolute;
+        top: calc(-1 * var(--ou-space-2));
+        right: calc(-1 * var(--ou-space-1));
+        z-index: 200;
+        background: var(--ou-warning-default);
+        color: var(--ou-fg-default);
+        border-radius: var(--ou-radius-s);
+        padding: 0 var(--ou-space-1);
+        font-weight: 700;
+        font-size: var(--wf-space-10);
+        line-height: var(--ou-space-5);
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: var(--ou-shadow-sm);
+      }
+      body.wf-annots-on .wf-annot { display: block; }
+      /* Scene frame: copied from approved/prd57-question-input.html. */
+      .wf-scene {
+        height: calc(100vh - var(--wf-nav-offset, var(--wf-size-52)));
+        display: flex; flex-direction: column; overflow: hidden;
+        font-family: var(--ou-font-family-base);
+      }
+    </style>
+
+    <style data-wf-template-overrides>
+      .wf-nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        display: flex; align-items: center; gap: var(--ou-space-2);
+        padding: var(--ou-space-2) var(--ou-space-4);
+        background: var(--ou-bg-elevated);
+        border-bottom: var(--wf-border-w) solid var(--ou-border-soft);
+        box-shadow: var(--ou-shadow-xs); color: var(--ou-fg-default); flex-wrap: wrap;
+      }
+      .wf-nav-title { font: var(--ou-text-body-s); font-weight: 600; color: var(--ou-fg-muted); margin-right: var(--ou-space-2); white-space: nowrap; }
+      .wf-nav button {
+        padding: var(--ou-space-1) var(--ou-space-3);
+        border: var(--wf-border-w) solid var(--ou-border-default);
+        border-radius: var(--ou-radius-s); background: transparent;
+        color: var(--ou-fg-default); font: var(--ou-text-body-s); cursor: pointer;
+      }
+      .wf-nav button:hover { background: var(--ou-bg-hover); }
+      .wf-nav button.active { background: var(--ou-accent-default); color: var(--ou-fg-on-accent); border-color: var(--ou-accent-default); }
+      .wf-nav-sep { width: var(--wf-border-w); height: var(--ou-space-5); background: var(--ou-border-soft); margin: 0 var(--ou-space-2); }
+      .wf-nav-link { font: var(--ou-text-body-s); color: var(--ou-accent-default); white-space: nowrap; }
+      .wf-state { display: none; padding: var(--wf-size-72) var(--ou-space-6) var(--ou-space-10); max-width: var(--wf-size-720); }
+      .wf-state.active { display: block; }
+      /* Learner screens take the whole viewport under the switcher. */
+      .wf-state.wf-state--scene { max-width: none; padding: var(--wf-nav-offset, var(--wf-size-52)) 0 0; }
+      .wf-doc { padding: var(--ou-space-6) var(--ou-space-6) var(--ou-space-10); }
+    </style>
+  </head>
+  <body class="ou ou--light ou--normal">
+    <svg class="wf-sprite" xmlns="http://www.w3.org/2000/svg">
+      <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></symbol>
+    </svg>
+
+    <nav class="wf-nav" aria-label="Wireframe state switcher">
+      <span class="wf-nav-title">Настройки:</span>
+      <button type="button" class="active" onclick="showState(this, 'on')">возврат вкл</button>
+      <button type="button" onclick="showState(this, 'no-return')">возврат выкл</button>
+      <span class="wf-nav-sep"></span>
+      <span class="wf-nav-title">Обзор:</span>
+      <button type="button" onclick="showState(this, 'blocked')">конец раздела · есть без ответа</button>
+      <button type="button" onclick="showState(this, 'midflow')">«К обзору» · впереди вопросы</button>
+      <button type="button" onclick="showState(this, 'complete')">отвечено всё</button>
+      <span class="wf-nav-sep"></span>
+      <button type="button" onclick="showState(this, 'docs')">Пояснения</button>
+      <span class="wf-nav-sep"></span>
+      <button type="button" onclick="toggleTheme(this)">Dark</button>
+      <button type="button" onclick="toggleDensity(this)">Compact</button>
+      <button type="button" onclick="toggleAnnots(this)">Аннотации</button>
+      <span class="wf-nav-sep"></span>
+      <a class="wf-nav-link" href="../editor-settings-target.html">&harr; Навигация</a>
+    </nav>
+
+    <!-- ════════════════ s-on: возврат включён, новый переключатель включён ════════════════ -->
+    <div id="wf-on" class="wf-state active">
+      <div class="tb-settings-content wf-pane">
+        <div class="ou-formsection ou-formsection--stacked">
+          <div class="ou-formsection__intro">
+            <h3 class="ou-formsection__title">Навигация</h3>
+          </div>
+          <div class="ou-formsection__body">
+            <div class="ou-formfield">
+              <label class="ou-switch-field">
+                <span class="ou-switch ou-switch--m is-on" role="switch" aria-checked="true"><input type="checkbox" class="ou-switch__input" checked /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Разрешить возврат к неотвеченным вопросам</span></span>
+              </label>
+            </div>
+            <!-- PRD-73: новый переключатель — сразу под «Разрешить возврат» -->
+            <div class="ou-formfield">
+              <span class="wf-annot-wrap wf-annot-wrap--block">
+                <span class="wf-annot">FR-01</span>
+                <label class="ou-switch-field">
+                  <span class="ou-switch ou-switch--m is-on" role="switch" aria-checked="true"><input type="checkbox" class="ou-switch__input" checked /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                  <span class="ou-switch-field__text">
+                    <span class="ou-switch-field__label">Требовать ответ на все вопросы перед завершением</span>
+                    <span class="ou-switch-field__desc">Кнопка «Завершить раздел» или «Завершить тест» станет активной, когда ответ дан на каждый вопрос. Когда истекает время, раздел или тест завершается как обычно.</span>
+                  </span>
+                </label>
+              </span>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field">
+                <span class="ou-switch ou-switch--m" role="switch" aria-checked="false"><input type="checkbox" class="ou-switch__input" /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Свободная навигация внутри раздела</span></span>
+              </label>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field is-disabled">
+                <span class="ou-switch ou-switch--m is-disabled" role="switch" aria-checked="false" aria-disabled="true"><input type="checkbox" class="ou-switch__input" disabled /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Позволить изменять ответ до завершения</span></span>
+              </label>
+              <div class="ou-banner ou-banner--subtle ou-banner--warning ou-banner--sm" role="status">
+                <div class="ou-banner__body">
+                  <div class="ou-banner__desc">Недоступно при включённом показе правильных ответов (раздел «Ограничения»): иначе ученик увидит правильный ответ и переправит свой.</div>
+                </div>
+              </div>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field is-disabled">
+                <span class="ou-switch ou-switch--m is-disabled" role="switch" aria-checked="false" aria-disabled="true"><input type="checkbox" class="ou-switch__input" disabled /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Переходить к следующему вопросу сразу после ответа</span></span>
+              </label>
+              <div class="ou-banner ou-banner--subtle ou-banner--warning ou-banner--sm" role="status">
+                <div class="ou-banner__body">
+                  <div class="ou-banner__desc">Недоступно при включённом показе правильных ответов (раздел «Ограничения»): нужно увидеть правильный ответ, прежде чем переходить дальше.</div>
+                </div>
+              </div>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field">
+                <span class="ou-switch ou-switch--m" role="switch" aria-checked="false"><input type="checkbox" class="ou-switch__input" /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Не показывать обзор, если отвечены все вопросы</span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ s-no-return: возврат выключен ════════════════ -->
+    <div id="wf-no-return" class="wf-state">
+      <div class="tb-settings-content wf-pane">
+        <div class="ou-formsection ou-formsection--stacked">
+          <div class="ou-formsection__intro">
+            <h3 class="ou-formsection__title">Навигация</h3>
+          </div>
+          <div class="ou-formsection__body">
+            <div class="ou-formfield">
+              <label class="ou-switch-field">
+                <span class="ou-switch ou-switch--m" role="switch" aria-checked="false"><input type="checkbox" class="ou-switch__input" /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Разрешить возврат к неотвеченным вопросам</span></span>
+              </label>
+            </div>
+            <!-- PRD-73: без возврата пропустить вопрос нельзя — запрещать нечего -->
+            <div class="ou-formfield">
+              <span class="wf-annot-wrap wf-annot-wrap--block">
+                <span class="wf-annot">FR-02</span>
+                <label class="ou-switch-field is-disabled">
+                  <span class="ou-switch ou-switch--m is-disabled" role="switch" aria-checked="false" aria-disabled="true"><input type="checkbox" class="ou-switch__input" disabled /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                  <span class="ou-switch-field__text"><span class="ou-switch-field__label">Требовать ответ на все вопросы перед завершением</span></span>
+                </label>
+              </span>
+              <div class="ou-banner ou-banner--subtle ou-banner--warning ou-banner--sm" role="status">
+                <div class="ou-banner__body">
+                  <div class="ou-banner__desc">Доступно только при включённом возврате к неотвеченным.</div>
+                </div>
+              </div>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field is-disabled">
+                <span class="ou-switch ou-switch--m is-disabled" role="switch" aria-checked="false" aria-disabled="true"><input type="checkbox" class="ou-switch__input" disabled /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Свободная навигация внутри раздела</span></span>
+              </label>
+              <div class="ou-banner ou-banner--subtle ou-banner--warning ou-banner--sm" role="status">
+                <div class="ou-banner__body">
+                  <div class="ou-banner__desc">Доступно только при включённом возврате к неотвеченным.</div>
+                </div>
+              </div>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field is-disabled">
+                <span class="ou-switch ou-switch--m is-disabled" role="switch" aria-checked="false" aria-disabled="true"><input type="checkbox" class="ou-switch__input" disabled /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Позволить изменять ответ до завершения</span></span>
+              </label>
+              <div class="ou-banner ou-banner--subtle ou-banner--warning ou-banner--sm" role="status">
+                <div class="ou-banner__body">
+                  <div class="ou-banner__desc">Доступно только при включённом возврате к неотвеченным.</div>
+                </div>
+              </div>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field">
+                <span class="ou-switch ou-switch--m" role="switch" aria-checked="false"><input type="checkbox" class="ou-switch__input" /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Переходить к следующему вопросу сразу после ответа</span></span>
+              </label>
+            </div>
+            <div class="ou-formfield">
+              <label class="ou-switch-field">
+                <span class="ou-switch ou-switch--m" role="switch" aria-checked="false"><input type="checkbox" class="ou-switch__input" /><span class="ou-switch__track"><span class="ou-switch__thumb"></span></span></span>
+                <span class="ou-switch-field__text"><span class="ou-switch-field__label">Не показывать обзор, если отвечены все вопросы</span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ s-blocked: обзор в конце раздела, есть вопросы без ответа ════════════════ -->
+    <div id="wf-blocked" class="wf-state wf-state--scene">
+      <div class="wf-scene">
+        <header style="background:var(--ou-bg-elevated);border-bottom:1px solid var(--ou-border-soft);padding:var(--ou-space-4) 24px;display:flex;align-items:flex-start;gap:var(--ou-space-4)">
+          <span style="width:44px;height:44px;flex:none;border-radius:var(--ou-radius-m);background:var(--ou-accent-soft);color:var(--ou-accent-default);display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;letter-spacing:.02em">РТ</span>
+          <div style="min-width:0;display:flex;flex-direction:column;gap:2px;padding-top:2px">
+            <h1 style="margin:0;font:var(--ou-text-display-s);color:var(--ou-fg-default);letter-spacing:-.01em;text-wrap:pretty">Основы информационной безопасности</h1>
+            <span style="font:var(--ou-text-body-s);color:var(--ou-fg-muted)">Обязательный курс · Попытка 1 из 2</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:flex-start;gap:var(--ou-space-6);flex:none"><div class="ou-timer ou-timer--digital ou-timer--s"><span class="ou-timer__lbl">тест</span><span class="ou-timer__num">44:51</span></div><div class="ou-timer ou-timer--digital ou-timer--s is-critical"><span class="ou-timer__lbl">раздел</span><span class="ou-timer__num">4:12</span></div></div>
+        </header>
+
+        <main style="flex:1;min-height:0;overflow:auto;padding:24px">
+          <div style="width:75%;display:flex;flex-direction:column;gap:var(--ou-space-4)">
+            <div style="display:flex;flex-direction:column;gap:var(--ou-space-2)">
+              <h2 style="margin:0;font-weight:600;font-size:24px;line-height:1.25;color:var(--ou-fg-default);letter-spacing:-.015em">Раздел «Базовые угрозы» · обзор</h2>
+              <span class="wf-annot-wrap" style="display:inline-block">
+                <span class="wf-annot">FR-05 · review.hint</span>
+                <span id="blocked-hint" style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">Чтобы завершить раздел, ответьте на все вопросы. Осталось без ответа: 2.</span>
+              </span>
+            </div>
+
+            <div class="ou-quiz ou-quiz--circle ou-quiz--l" role="group" aria-label="Карта вопросов">
+              <div class="ou-quiz__dots">
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 1">1</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 2">2</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 3">3</button>
+                <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 4">4</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 5">5</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 6">6</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 7">7</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 8">8</button>
+                <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 9">9</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 10">10</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 11">11</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 12">12</button>
+              </div>
+              <div class="ou-quiz__legend">
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-flagged"></span>пропущен</span>
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
+              </div>
+              <span style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">отвечено <strong style="color:var(--ou-fg-default);font-weight:600">10</strong> из 12 · пропущено 2</span>
+            </div>
+
+            <hr class="ou-separator ou-separator--horizontal">
+
+            <div style="width:100%;text-align:left;border:1px solid var(--ou-border-soft);border-radius:var(--ou-radius-l);background:var(--ou-bg-surface-2);padding:var(--ou-space-5);display:flex;flex-direction:column;gap:var(--ou-space-2)">
+              <span style="font:var(--ou-text-heading-s);color:var(--ou-fg-default)">Без ответа: 2</span>
+              <div style="display:flex;flex-direction:column;gap:var(--ou-space-1)">
+                <div class="ou-stat-row">
+                  <div class="ou-stat-row__body">
+                    <div class="ou-stat-row__title">Вопрос 4 · Что делать при получении подозрительного вложения?</div>
+                  </div>
+                  <button type="button" class="ou-btn ou-btn--ghost ou-btn--s">Перейти</button>
+                </div>
+                <div class="ou-stat-row">
+                  <div class="ou-stat-row__body">
+                    <div class="ou-stat-row__title">Вопрос 9 · Сопоставьте вид угрозы с примером из практики</div>
+                  </div>
+                  <button type="button" class="ou-btn ou-btn--ghost ou-btn--s">Перейти</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <footer style="background:var(--ou-bg-elevated);border-top:1px solid var(--ou-border-soft);padding:var(--ou-space-4) 24px;display:flex;align-items:center;gap:var(--ou-space-3)">
+          <div style="margin-left:auto"></div>
+          <span class="wf-annot-wrap">
+            <span class="wf-annot">FR-04 · disabled</span>
+            <button type="button" class="ou-btn ou-btn--primary ou-btn--l" disabled aria-describedby="blocked-hint">Завершить раздел</button>
+          </span>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ════════════════ s-midflow: обзор, открытый «К обзору», впереди невыданные вопросы ════════════════ -->
+    <div id="wf-midflow" class="wf-state wf-state--scene">
+      <div class="wf-scene">
+        <header style="background:var(--ou-bg-elevated);border-bottom:1px solid var(--ou-border-soft);padding:var(--ou-space-4) 24px;display:flex;align-items:flex-start;gap:var(--ou-space-4)">
+          <span style="width:44px;height:44px;flex:none;border-radius:var(--ou-radius-m);background:var(--ou-accent-soft);color:var(--ou-accent-default);display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;letter-spacing:.02em">РТ</span>
+          <div style="min-width:0;display:flex;flex-direction:column;gap:2px;padding-top:2px">
+            <h1 style="margin:0;font:var(--ou-text-display-s);color:var(--ou-fg-default);letter-spacing:-.01em;text-wrap:pretty">Основы информационной безопасности</h1>
+            <span style="font:var(--ou-text-body-s);color:var(--ou-fg-muted)">Обязательный курс · Попытка 1 из 2</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:flex-start;gap:var(--ou-space-6);flex:none"><div class="ou-timer ou-timer--digital ou-timer--s"><span class="ou-timer__lbl">тест</span><span class="ou-timer__num">51:07</span></div><div class="ou-timer ou-timer--digital ou-timer--s"><span class="ou-timer__lbl">раздел</span><span class="ou-timer__num">10:28</span></div></div>
+        </header>
+
+        <main style="flex:1;min-height:0;overflow:auto;padding:24px">
+          <div style="width:75%;display:flex;flex-direction:column;gap:var(--ou-space-4)">
+            <div style="display:flex;flex-direction:column;gap:var(--ou-space-2)">
+              <h2 style="margin:0;font-weight:600;font-size:24px;line-height:1.25;color:var(--ou-fg-default);letter-spacing:-.015em">Раздел «Базовые угрозы» · обзор</h2>
+              <span class="wf-annot-wrap" style="display:inline-block">
+                <span class="wf-annot">FR-03 · считаются и невыданные</span>
+                <span id="midflow-hint" style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">Чтобы завершить раздел, ответьте на все вопросы. Осталось без ответа: 4.</span>
+              </span>
+            </div>
+
+            <div class="ou-quiz ou-quiz--circle ou-quiz--l" role="group" aria-label="Карта вопросов">
+              <div class="ou-quiz__dots">
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 1">1</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 2">2</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 3">3</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 4">4</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 5">5</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 6">6</button>
+                <button type="button" class="ou-quiz__dot is-flagged" aria-label="Вопрос 7">7</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 8">8</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 9">9</button>
+                <button type="button" class="ou-quiz__dot is-current" aria-label="Вопрос 10">10</button>
+                <button type="button" class="ou-quiz__dot" disabled aria-label="Вопрос 11">11</button>
+                <button type="button" class="ou-quiz__dot" disabled aria-label="Вопрос 12">12</button>
+              </div>
+              <div class="ou-quiz__legend">
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-current"></span>текущий</span>
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-flagged"></span>пропущен</span>
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
+              </div>
+              <span style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">отвечено <strong style="color:var(--ou-fg-default);font-weight:600">8</strong> из 12 · пропущено 1</span>
+            </div>
+
+            <hr class="ou-separator ou-separator--horizontal">
+
+            <div style="width:100%;text-align:left;border:1px solid var(--ou-border-soft);border-radius:var(--ou-radius-l);background:var(--ou-bg-surface-2);padding:var(--ou-space-5);display:flex;flex-direction:column;gap:var(--ou-space-2)">
+              <span style="font:var(--ou-text-heading-s);color:var(--ou-fg-default)">Без ответа: 2</span>
+              <div style="display:flex;flex-direction:column;gap:var(--ou-space-1)">
+                <div class="ou-stat-row">
+                  <div class="ou-stat-row__body">
+                    <div class="ou-stat-row__title">Вопрос 7 · Какой пароль соответствует корпоративной политике?</div>
+                  </div>
+                  <button type="button" class="ou-btn ou-btn--ghost ou-btn--s">Перейти</button>
+                </div>
+                <div class="ou-stat-row">
+                  <div class="ou-stat-row__body">
+                    <div class="ou-stat-row__title">Вопрос 10 · Расположите действия при утечке данных по порядку</div>
+                  </div>
+                  <button type="button" class="ou-btn ou-btn--ghost ou-btn--s">Перейти</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <footer style="background:var(--ou-bg-elevated);border-top:1px solid var(--ou-border-soft);padding:var(--ou-space-4) 24px;display:flex;align-items:center;gap:var(--ou-space-3)">
+          <span class="wf-annot-wrap">
+            <span class="wf-annot">FR-04 · disabled</span>
+            <button type="button" class="ou-btn ou-btn--ghost ou-btn--m" disabled aria-describedby="midflow-hint">Завершить раздел</button>
+          </span>
+          <div style="margin-left:auto"></div>
+          <button type="button" class="ou-btn ou-btn--primary ou-btn--l">Назад</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ════════════════ s-complete: отвечено всё — как сегодня ════════════════ -->
+    <div id="wf-complete" class="wf-state wf-state--scene">
+      <div class="wf-scene">
+        <header style="background:var(--ou-bg-elevated);border-bottom:1px solid var(--ou-border-soft);padding:var(--ou-space-4) 24px;display:flex;align-items:flex-start;gap:var(--ou-space-4)">
+          <span style="width:44px;height:44px;flex:none;border-radius:var(--ou-radius-m);background:var(--ou-accent-soft);color:var(--ou-accent-default);display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;letter-spacing:.02em">РТ</span>
+          <div style="min-width:0;display:flex;flex-direction:column;gap:2px;padding-top:2px">
+            <h1 style="margin:0;font:var(--ou-text-display-s);color:var(--ou-fg-default);letter-spacing:-.01em;text-wrap:pretty">Основы информационной безопасности</h1>
+            <span style="font:var(--ou-text-body-s);color:var(--ou-fg-muted)">Обязательный курс · Попытка 1 из 2</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:flex-start;gap:var(--ou-space-6);flex:none"><div class="ou-timer ou-timer--digital ou-timer--s"><span class="ou-timer__lbl">тест</span><span class="ou-timer__num">42:03</span></div><div class="ou-timer ou-timer--digital ou-timer--s is-critical"><span class="ou-timer__lbl">раздел</span><span class="ou-timer__num">1:24</span></div></div>
+        </header>
+
+        <main style="flex:1;min-height:0;overflow:auto;padding:24px">
+          <div style="width:75%;display:flex;flex-direction:column;gap:var(--ou-space-4)">
+            <div style="display:flex;flex-direction:column;gap:var(--ou-space-2)">
+              <h2 style="margin:0;font-weight:600;font-size:24px;line-height:1.25;color:var(--ou-fg-default);letter-spacing:-.015em">Раздел «Базовые угрозы» · обзор</h2>
+              <span style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">Все вопросы отвечены.</span>
+            </div>
+
+            <div class="ou-quiz ou-quiz--circle ou-quiz--l" role="group" aria-label="Карта вопросов">
+              <div class="ou-quiz__dots">
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 1">1</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 2">2</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 3">3</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 4">4</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 5">5</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 6">6</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 7">7</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 8">8</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 9">9</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 10">10</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 11">11</button>
+                <button type="button" class="ou-quiz__dot is-answered" aria-label="Вопрос 12">12</button>
+              </div>
+              <div class="ou-quiz__legend">
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-flagged"></span>пропущен</span>
+                <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
+              </div>
+              <span style="font:var(--ou-text-body-m);color:var(--ou-fg-muted)">отвечено <strong style="color:var(--ou-fg-default);font-weight:600">12</strong> из 12 · пропущено 0</span>
+            </div>
+          </div>
+        </main>
+
+        <footer style="background:var(--ou-bg-elevated);border-top:1px solid var(--ou-border-soft);padding:var(--ou-space-4) 24px;display:flex;align-items:center;gap:var(--ou-space-3)">
+          <div style="margin-left:auto"></div>
+          <button type="button" class="ou-btn ou-btn--primary ou-btn--l">Завершить раздел</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ════════════════ Пояснения, карточки состояний, DS Mapping ════════════════ -->
+    <div id="wf-docs" class="wf-state">
+      <div class="wf-doc">
+      <div class="wf-notes">
+        <h3 class="wf-notes-title">Пояснения — Wireframe</h3>
+        <table>
+          <thead><tr><th>Элемент</th><th>Поле / условие</th><th>Примечание</th></tr></thead>
+          <tbody>
+            <tr><td>Переключатель состояний</td><td><code>showState(btn, id)</code>, тоглы темы, плотности и аннотаций</td><td>Каркас эскиза; в продукте отсутствует</td></tr>
+            <tr><td>Поверхность 1</td><td>«Правила прохождения» → «Навигация»</td><td>Раздел из <code>editor-settings-target.html</code> без изменений; добавлен один переключатель сразу под «Разрешить возврат к неотвеченным вопросам»</td></tr>
+            <tr><td>Свич «Требовать ответ на все вопросы перед завершением»</td><td><code>requireAllAnsweredToFinish</code> (<code>tests.require_all_answered_to_finish</code>)</td><td>По умолчанию выключен: существующие тесты не меняют поведения (FR-01)</td></tr>
+            <tr><td>Зависимость</td><td><code>allowReturnToUnanswered</code> = false</td><td>Свич погашен, баннер «Доступно только при включённом возврате к неотвеченным.» — тот же текст, что у свободной навигации. Выключение возврата сбрасывает значение (FR-02)</td></tr>
+            <tr><td>Поверхность 2</td><td>экран обзора, макет <code>review</code> шаблона, оба хоста</td><td>Макет не меняется: хост ставит <code>disabled</code> на каждый <code>[data-action="finish-review"]</code> и не исполняет клик по нему (FR-04). Признак <code>review.finishBlocked</code> приходит в контекст для шаблонов, которым нужно своё оформление</td></tr>
+            <tr><td>Правило запрета</td><td>настройка ВКЛ и в охвате есть вопрос без отправленного ответа</td><td>Охват — текущий раздел (по темам) или весь тест (сплошной). Считаются и ещё не выданные вопросы охвата; черновик ответом не считается (FR-03)</td></tr>
+            <tr><td>Подсказка</td><td><code>review.hint</code></td><td>Пока запрет действует: «Чтобы завершить раздел, ответьте на все вопросы. Осталось без ответа: N.» (в сплошном режиме — «… завершить тест …»). Текст фиксированный, настройки нет (FR-05). Кнопка ссылается на подсказку через <code>aria-describedby</code></td></tr>
+            <tr><td>Окно подтверждения FR-09 (PRD-19)</td><td>«N вопросов без ответа будут засчитаны как неверные»</td><td>При включённой настройке не появляется никогда: завершить можно, только когда без ответа нет ничего</td></tr>
+            <tr><td>Принудительное завершение</td><td>истекло время теста или раздела; закрытие раздела при выходе (PRD-67)</td><td>Запрет не действует, неотвеченные засчитываются как неверные — как сегодня (FR-06)</td></tr>
+            <tr><td>Адаптивная тема</td><td>лестница уровней</td><td>Пропуска нет, обзора нет — настройка тему не затрагивает</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wf-notes">
+        <h3 class="wf-notes-title">Карточки состояний</h3>
+        <table>
+          <thead><tr><th>Состояние</th><th>Что изображено и сценарий</th><th>Как попадает, действия, куда ведёт</th><th>Граничные случаи и требование</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>s-on</td>
+              <td>Автор включает запрет в «Навигации». Возврат включён, свич доступен; подпись объясняет, когда кнопка станет активной и что время всё равно завершает раздел</td>
+              <td>Редактор теста → «Правила прохождения» → «Навигация». Клик по свичу меняет значение; «Применить» в подвале ящика сохраняет. Значение уходит в снимок публикации, пакет, книгу Excel, перенос <code>.tbtest</code></td>
+              <td>Опубликованный тест получает настройку только с новой публикацией. FR-01</td>
+            </tr>
+            <tr>
+              <td>s-no-return</td>
+              <td>Возврат выключен: прохождение строго линейное, пропустить вопрос нельзя, запрещать нечего. Свич погашен с причиной, как соседние зависимые</td>
+              <td>Автор выключает «Разрешить возврат» — свич гаснет и сбрасывается. Включение возврата возвращает свич в выключенное положение</td>
+              <td>Книга Excel или перенос с ВКЛ при выключенном возврате: значение сбрасывается при сохранении, как у свободной навигации. FR-02</td>
+            </tr>
+            <tr>
+              <td>s-blocked</td>
+              <td>Участник дошёл до конца раздела, пропустив вопросы 4 и 9. Кнопка «Завершить раздел» неактивна, подсказка говорит, сколько осталось. Таймеры идут</td>
+              <td>Последний вопрос раздела → «Пропустить» или «Далее» → обзор. «Перейти» и точки карты ведут к вопросу; после ответа на последний пропущенный обзор показывает s-complete</td>
+              <td>Время раздела вышло — раздел закрывается без подтверждения, неотвеченные неверны. Клавиатура: неактивная кнопка не получает фокус, подсказка читается через <code>aria-describedby</code>. FR-03, FR-04, FR-05</td>
+            </tr>
+            <tr>
+              <td>s-midflow</td>
+              <td>Участник на вопросе 10 открыл обзор кнопкой «К обзору». Вопросы 11 и 12 ещё не выданы: в списке их нет, но в подсказке они учтены (2 в списке + 2 впереди = 4)</td>
+              <td>«Назад» возвращает к вопросу 10. «Завершить раздел» неактивна, хотя сегодня отсюда можно закрыть раздел досрочно</td>
+              <td>При свободной навигации невыданных нет, список и подсказка совпадают. FR-03</td>
+            </tr>
+            <tr>
+              <td>s-complete</td>
+              <td>Все вопросы раздела отвечены — экран как сегодня, кнопка активна, окна подтверждения нет</td>
+              <td>«Завершить раздел» → итоги раздела или следующий раздел / хаб. В последнем разделе без итогов подпись «Завершить тест»</td>
+              <td>«Не показывать обзор, если отвечены все вопросы» ВКЛ — экрана нет вовсе, раздел завершается сразу</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wf-notes">
+        <h3 class="wf-notes-title">Вопросы к согласованию</h3>
+        <table>
+          <thead><tr><th>Место</th><th>Неоднозначность</th><th>Решение в эскизе</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Где стоит подсказка</td>
+              <td>Под заголовком обзора (место <code>review.hint</code>) или рядом с кнопкой в подвале</td>
+              <td>Под заголовком: это поле уже печатает любой шаблон, включая внешний <code>standard-rt</code>, и запрет работает в нём без правки макета. Строка у кнопки потребовала бы нового места в макете каждого шаблона</td>
+            </tr>
+            <tr>
+              <td>Число в подсказке при «К обзору»</td>
+              <td>Карточка «Без ответа» перечисляет только выданные вопросы (2), подсказка считает весь раздел (4)</td>
+              <td>Подсказка считает весь раздел: она объясняет, почему кнопка неактивна, а мешают ей все 4. Невыданные вопросы в список не попадают — их формулировки участник ещё не видел</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wf-mapping">
+        <h2 class="wf-mapping-title">DS Mapping</h2>
+        <p class="wf-mapping-sub">Строка с «custom» в колонке DS-компонент — блокер. Новых примитивов PRD-73 не требует.</p>
+        <table>
+          <thead><tr><th>Элемент wireframe</th><th>DS-компонент</th><th>Используемые токены</th><th>Примечания</th></tr></thead>
+          <tbody>
+            <tr><td>Раздел «Навигация»</td><td><code>FormSection</code> (<code>ou-formsection--stacked</code>)</td><td><code>--ou-space-*</code></td><td>Существующий раздел, без изменений</td></tr>
+            <tr><td>Свич «Требовать ответ…»</td><td><code>Switch</code> в <code>ou-switch-field</code> (label + desc)</td><td><code>--ou-accent-*</code>, <code>--ou-fg-muted</code></td><td>Тот же узор, что у «Закрывать раздел при выходе» (PRD-67)</td></tr>
+            <tr><td>Причина недоступности</td><td><code>Banner</code> (<code>ou-banner--subtle ou-banner--warning ou-banner--sm</code>, без иконки)</td><td><code>--ou-warning-*</code></td><td>Как у «Позволить изменять ответ до завершения»</td></tr>
+            <tr><td>Кнопка «Завершить раздел/тест»</td><td><code>ou-btn</code> с атрибутом <code>disabled</code></td><td><code>--ou-fg-disabled</code>, <code>--ou-bg-disabled</code></td><td>Вариант кнопки макета сохраняется: primary в конце раздела, ghost при «К обзору»</td></tr>
+            <tr><td>Подсказка</td><td>строка <code>tb-scene__qhint</code> макета <code>review</code></td><td><code>--ou-text-body-m</code>, <code>--ou-fg-muted</code></td><td>Существующее поле <code>review.hint</code>, новый текст</td></tr>
+            <tr><td>Карта вопросов, «Без ответа», таймеры</td><td><code>ou-quiz</code>, <code>ou-stat-row</code>, <code>ou-timer</code></td><td>—</td><td>Без изменений; сцена в эскизе — копия согласованной (<code>approved/prd57-question-input.html</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
+    </div>
+
+    <script>
+      function updateWireframeNavOffset() {
+        var nav = document.querySelector('.wf-nav');
+        if (!nav) return;
+        document.body.style.setProperty('--wf-nav-offset', nav.offsetHeight + 'px');
+      }
+      window.addEventListener('load', updateWireframeNavOffset);
+      window.addEventListener('resize', updateWireframeNavOffset);
+      window.showState = function showState(btn, id) {
+        var target = document.getElementById('wf-' + id) || document.getElementById(id);
+        document.querySelectorAll('.wf-state').forEach(function (el) { el.classList.toggle('active', el === target); });
+        document.querySelectorAll('.wf-nav button[onclick*="showState"]').forEach(function (button) { button.classList.toggle('active', button === btn); });
+        updateWireframeNavOffset();
+      };
+      window.toggleTheme = function toggleTheme(btn) {
+        var dark = document.body.classList.toggle('ou--dark');
+        document.body.classList.toggle('ou--light', !dark);
+        btn.textContent = dark ? 'Light' : 'Dark';
+        btn.classList.toggle('active', dark);
+      };
+      window.toggleDensity = function toggleDensity(btn) {
+        var compact = document.body.classList.toggle('ou--compact');
+        document.body.classList.toggle('ou--normal', !compact);
+        btn.textContent = compact ? 'Normal' : 'Compact';
+        btn.classList.toggle('active', compact);
+      };
+      window.toggleAnnots = function toggleAnnots(btn) {
+        var on = document.body.classList.toggle('wf-annots-on');
+        btn.classList.toggle('active', on);
+      };
+    </script>
+  </body>
+</html>
