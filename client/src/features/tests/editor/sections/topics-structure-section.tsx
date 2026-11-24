@@ -96,6 +96,7 @@ import {
   type CompositionEntry,
 } from "./composition-items";
 import { FoldAllButtons, useSectionFold, type SectionFold } from "./section-fold";
+import { useEditorQuestions } from "../questions/use-editor-questions";
 import type {
   EditorSection,
   ScenarioItemDraft,
@@ -294,10 +295,9 @@ export function CompositionSection({ model, updateModel, fieldErrors = EMPTY_FIE
     queryKey: ["/api/topics"],
     queryFn: fetchTopicsWithCount,
   });
-  // PRD-11: real sub-topic tags per topic, for the draw-quota Select (FR-07).
-  const { data: allQuestions = [] } = useQuery<QuestionTagRow[]>({
-    queryKey: ["/api/questions"],
-  });
+  // PRD-11: real sub-topic tags per topic, for the draw-quota Select (FR-07). The test's own
+  // topics count too, even when the reader holds no right on them (role-model.md 6.5.1).
+  const { data: allQuestions } = useEditorQuestions<QuestionTagRow>(model.id);
   const tagsByTopic = useMemo(() => buildTagsByTopic(allQuestions), [allQuestions]);
   // PRD-50 FR-42: «сколько вопросов с этим ключом попадает в каждый вариант» считается по
   // составу вариантов, а состав хранится идентификаторами — значит нужна карта id -> теги.
@@ -675,6 +675,7 @@ export function CompositionSection({ model, updateModel, fieldErrors = EMPTY_FIE
   }) => (
     <TopicRow
       key={section.topicId}
+      testId={model.id}
       index={index}
       number={number}
       section={section}
@@ -1211,6 +1212,8 @@ function TopicRow(props: {
   open: boolean;
   onToggleOpen: () => void;
   /** Called with a partial EditorSection patch when feedback is saved. */
+  /** Сохранённый тест: варианты читают вопросы его тем и без прав на тему (role-model 6.5.1). */
+  testId?: string;
   /** PRD-15 E-11: the author can no longer see this section's topic (grant
    * revoked / made private). The test still works and saves; only new draws
    * from this topic are blocked. */
@@ -1528,6 +1531,7 @@ function TopicRow(props: {
               error={props.variantsError}
               disabled={props.adaptive}
               pointsOf={props.pointsOf}
+              testId={props.testId}
             />
           </div>
 

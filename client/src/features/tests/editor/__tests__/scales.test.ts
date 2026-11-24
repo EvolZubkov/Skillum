@@ -480,6 +480,40 @@ describe("loadContributionQuestions", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => questions })));
   }
 
+  it("adds the questions the saved test supplies for a topic outside the bank", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        status: 200,
+        json: async () =>
+          String(url) === "/api/questions"
+            ? []
+            : {
+                questions: [
+                  { id: "q-law", topicId: "t", type: "single", prompt: "Q", dataJson: { options: ["A"] }, correctJson: { correctIndex: 0 } },
+                ],
+                readOnlyTopicIds: ["t"],
+              },
+      })),
+    );
+    const out = await loadContributionQuestions(["t"], "test-1");
+    expect(out.map((q) => q.id)).toEqual(["q-law"]);
+  });
+
+  it("keeps the bank when the test list fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url) === "/api/questions"
+          ? { ok: true, status: 200, json: async () => [{ id: "q1", topicId: "t", type: "single", dataJson: { options: ["A"] }, correctJson: {} }] }
+          : { ok: false, status: 403, json: async () => ({}) },
+      ),
+    );
+    const out = await loadContributionQuestions(["t"], "test-1");
+    expect(out.map((q) => q.id)).toEqual(["q1"]);
+  });
+
   it("enumerates single-choice options and marks the correct one", async () => {
     stub([
       { id: "q1", topicId: "t", type: "single", prompt: "Q", dataJson: { options: ["A", "B"] }, correctJson: { correctIndex: 1 } },

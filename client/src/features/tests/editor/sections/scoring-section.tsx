@@ -28,7 +28,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEditorQuestions } from "../questions/use-editor-questions";
 import { ChevronDown, ChevronRight, CircleDot, MonitorPlay, Pencil, RotateCcw } from "lucide-react";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger, IconButton, Input, Tag,
@@ -107,7 +107,7 @@ function parseDefaultPoints(raw: string): number | null | undefined {
 }
 
 export function ScoringSection({ model, testId, updateModel, readOnly }: ScoringSectionProps) {
-  const { data: allQuestions = [] } = useQuery<QuestionRow[]>({ queryKey: ["/api/questions"] });
+  const { data: allQuestions } = useEditorQuestions<QuestionRow>(testId ?? model.id);
   // PRD-15 block D: overrides are draft-managed — read from the model, mutate via
   // updateModel; nothing is persisted until the drawer «Сохранить».
   const overrides = model.scoring.questionOverrides;

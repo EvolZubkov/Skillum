@@ -27,6 +27,7 @@ import type * as React from "react";
 import { useState } from "react";
 import { TestEditor, TestEditorView } from "../test-editor";
 import { useTestEditor } from "../use-test-editor";
+import { testContextQuestionsKey } from "../questions/test-context-questions";
 import { ToastProvider } from "@skillum/ui-kit";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -68,6 +69,16 @@ function makeClient() {
   return new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+}
+
+/**
+ * The draft validation also reads the questions of the saved test's topics
+ * (`GET /api/tests/:id/questions`, role-model.md 6.5.1). Tests that queue fetch responses in
+ * order seed that list as fresh, so it does not take a queued response meant for the save.
+ */
+function seedContextQuestions(client: QueryClient, testId: string) {
+  client.setQueryDefaults(testContextQuestionsKey(testId), { staleTime: Infinity });
+  client.setQueryData(testContextQuestionsKey(testId), { questions: [], readOnlyTopicIds: [] });
 }
 
 function withClient(client: QueryClient, ui: React.JSX.Element) {
@@ -369,6 +380,7 @@ describe("useTestEditor — optimistic conflict and required-fields", () => {
     );
 
     const client = makeClient();
+    seedContextQuestions(client, "test-1");
     const { result } = renderHook(() => useTestEditor({ mode: "edit", testId: "test-1" }), {
       wrapper: ({ children }) => withClient(client, <>{children}</>),
     });
@@ -406,6 +418,7 @@ describe("useTestEditor — optimistic conflict and required-fields", () => {
     );
 
     const client = makeClient();
+    seedContextQuestions(client, "test-1");
     const { result } = renderHook(() => useTestEditor({ mode: "edit", testId: "test-1" }), {
       wrapper: ({ children }) => withClient(client, <>{children}</>),
     });

@@ -12,7 +12,7 @@
  * component just edits the draft `formSet`.
  */
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEditorQuestions } from "../questions/use-editor-questions";
 import { Braces, MonitorPlay, Pilcrow, CircleDot, CheckSquare, Unplug, ListOrdered, List, Plus, Trash2, ThermometerSun, SlidersHorizontal, TextCursorInput, type LucideIcon } from "lucide-react";
 import { Button, ModalDialog, Switch, Tabs, Tag, TransferList, type TransferItem } from "@skillum/ui-kit";
 import { pluralize } from "@/lib/i18n";
@@ -38,6 +38,8 @@ export type VariantsEditorProps = {
    * умолчание раздела → умолчание теста». Не передана — мета покажет тип вопроса.
    */
   pointsOf?: (questionId: string) => number;
+  /** Сохранённый тест: вопросы его тем видны и без прав на тему (role-model 6.5.1). */
+  testId?: string;
 };
 
 // ─── Question display helpers ───────────────────────────────────────────────────
@@ -82,10 +84,10 @@ function makeForm(index: number): Form {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function VariantsEditor({
-  topicId, topicName, formSet, onChange, error, disabled = false, pointsOf,
+  topicId, topicName, formSet, onChange, error, disabled = false, pointsOf, testId,
 }: VariantsEditorProps) {
   const [open, setOpen] = useState(false);
-  const { data: allQuestions = [] } = useQuery<QuestionRow[]>({ queryKey: ["/api/questions"] });
+  const { data: allQuestions } = useEditorQuestions<QuestionRow>(testId);
   const topicQuestions = useMemo(
     () => allQuestions.filter((q) => q.topicId === topicId),
     [allQuestions, topicId],

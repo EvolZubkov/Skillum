@@ -3,10 +3,11 @@
  * @description «Вопросы теста»: список вопросов темы со сводкой, поиск по фрагменту,
  * переходы в ящик вопроса и просмотр глазами участника; группа тем в рейле «Состава».
  */
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { render as rtlRender, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TestQuestionsSection, searchableText } from "../test-questions-section";
+import { testContextQuestionsKey } from "../test-context-questions";
 import { CompositionTab } from "../../sections/editor-tabs";
 import { defaultRetakePolicy } from "../../test-editor.mappers";
 import type { TestEditorModel } from "../../test-editor.types";
@@ -251,5 +252,58 @@ describe("«Вопросы теста» in the composition rail", () => {
   it("hides the group while the test has no topics", () => {
     renderTab(model({ sections: [] }));
     expect(screen.queryByRole("group", { name: "Вопросы теста" })).toBeNull();
+  });
+});
+
+describe("<TestQuestionsSection /> — тема в контексте теста (role-model 6.5.1)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** The bank does NOT carry the topic «law»; only the test supplies it. */
+  function renderInContext(readOnly: boolean) {
+    const payload = {
+      questions: QUESTIONS.filter((q) => q.topicId === "law"),
+      readOnlyTopicIds: readOnly ? ["law"] : [],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        status: 200,
+        json: async () => (String(url).endsWith("/questions") ? payload : []),
+      })),
+    );
+    const c = client(QUESTIONS.filter((q) => q.topicId !== "law"));
+    c.setQueryData(testContextQuestionsKey("test-1"), payload);
+    c.setQueryData(["tests", "test-1", "review-comments"], []);
+    return rtlRender(
+      <QueryClientProvider client={c}>
+        <TestQuestionsSection
+          model={model()}
+          topicId="law"
+          testId="test-1"
+          onOpenQuestion={vi.fn()}
+          onCreateQuestion={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("shows the questions of a topic that is not in the reader's bank", () => {
+    renderInContext(false);
+    expect(screen.getByTestId("test-questions-row-q1")).toBeTruthy();
+    expect(screen.queryByTestId("test-questions-empty")).toBeNull();
+  });
+
+  it("keeps the editing actions when the reader may manage the topic", () => {
+    renderInContext(false);
+    expect(screen.getByTestId("test-questions-open-q1")).toBeTruthy();
+    expect(screen.getByTestId("test-questions-add")).toBeTruthy();
+  });
+
+  it("leaves only the preview for a read-only topic", () => {
+    renderInContext(true);
+    expect(screen.getByTestId("test-questions-preview-q1")).toBeTruthy();
+    expect(screen.queryByTestId("test-questions-open-q1")).toBeNull();
+    expect(screen.queryByTestId("test-questions-add")).toBeNull();
   });
 });

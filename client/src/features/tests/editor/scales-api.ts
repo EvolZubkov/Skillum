@@ -293,6 +293,7 @@ export async function previewScales(
 
 import { QUESTION_TYPES, hasOptionList, distributesBudget, type QuestionType } from "@shared/questions/question-type";
 import { allocationSpec, type AllocationSpec } from "@shared/questions/allocation";
+import { fetchTestContextQuestions, mergeQuestionRows } from "./questions/test-context-questions";
 
 /** One selectable answer unit of a measured question, derived from its measurements. */
 export type PreviewUnit = {
@@ -503,12 +504,21 @@ function buildContributionUnits(q: RawQuestion, type: QuestionType): Contributio
 /**
  * Load the test's questions (filtered to its topics) with their enumerated answer
  * units, for the «Вклады вопросов» matrix. Questions are returned in the order
- * GET /api/questions yields them, grouped by the test's topics.
+ * GET /api/questions yields them, grouped by the test's topics; for a saved test the
+ * questions it supplies itself are appended (role-model.md 6.5.1).
+ *
+ * @param topicIds - the test's topics.
+ * @param testId - the saved test, if any.
  */
-export async function loadContributionQuestions(topicIds: string[]): Promise<ContributionQuestion[]> {
-  const raw = await fetchJson("/api/questions");
+export async function loadContributionQuestions(topicIds: string[], testId?: string): Promise<ContributionQuestion[]> {
+  const [raw, context] = await Promise.all([
+    fetchJson("/api/questions"),
+    // A refused or failed test list leaves the bank alone, as before.
+    testId ? fetchTestContextQuestions<RawQuestion>(testId).catch(() => null) : Promise.resolve(null),
+  ]);
   const topicSet = new Set(topicIds);
-  const list = Array.isArray(raw) ? (raw as RawQuestion[]) : [];
+  const bank = Array.isArray(raw) ? (raw as RawQuestion[]) : [];
+  const list = mergeQuestionRows(bank, context?.questions);
   return list
     .filter((q) => topicSet.has(q.topicId))
     .map((q) => {

@@ -15,7 +15,7 @@
  */
 import { useMemo, useState } from "react";
 import type * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEditorQuestions } from "../questions/use-editor-questions";
 import { Banner, FormSection } from "@skillum/ui-kit";
 import { FeedbackEditorModal, type FeedbackEditorValue } from "./feedback-editor-modal";
 import { FeedbackField, FeedbackPreview } from "./feedback-preview";
@@ -70,9 +70,7 @@ export function BreakdownFeedbackCard({
   model,
   updateModel,
 }: BreakdownFeedbackCardProps): React.JSX.Element {
-  const { data: allQuestions = [] } = useQuery<QuestionTagRow[]>({
-    queryKey: ["/api/questions"],
-  });
+  const { data: allQuestions } = useEditorQuestions<QuestionTagRow>(model.id);
   const tagsByTopic = useMemo(() => buildTagsByTopic(allQuestions), [allQuestions]);
   const sections = model.sections.filter(
     (section) => (tagsByTopic.get(section.topicId)?.tags.length ?? 0) > 0,

@@ -71,7 +71,11 @@ import type { SectionInput } from "../review/review-approval-model";
 import type { ReviewAnchorItem } from "../review/review-comment-form";
 import { useReviewComments } from "../review/use-review-comments";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
+import { QuestionPreviewModal } from "@/features/questions/question-preview-modal";
+import { useEditorQuestions } from "./questions/use-editor-questions";
+import { questionOpenTarget, type ContextQuestionRow } from "./questions/test-context-questions";
 import type { Question, Topic } from "@shared/schema";
+import { rightsOfTopic } from "@shared/access";
 import { questionLabel } from "@shared/questions/question-label";
 import { useOptionalAuth } from "@/lib/auth";
 
@@ -308,16 +312,21 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
    */
   const [newQuestionTopicId, setNewQuestionTopicId] = useState<string | null>(null);
   const questionDrawerOpen = Boolean(reviewQuestionId) || Boolean(newQuestionTopicId);
-  const reviewQuestions = useQuery<Question[]>({
-    queryKey: ["/api/questions"],
-    // Нужны в двух местах: открыть карточку вопроса по якорю и предложить вопросы
-    // раздела во втором поле формы комментария. Второе — сразу на вкладке.
+  // Нужны в двух местах: открыть карточку вопроса по якорю и предложить вопросы
+  // раздела во втором поле формы комментария. Второе — сразу на вкладке. Вопросы тем теста
+  // видны и без прав на тему (role-model.md 6.5.1).
+  const reviewQuestions = useEditorQuestions<ContextQuestionRow>(editor.model?.id, {
     enabled: questionDrawerOpen || activeTab === "review",
   });
   const reviewTopics = useQuery<Topic[]>({
     queryKey: ["/api/topics"],
     enabled: questionDrawerOpen,
   });
+  // role-model.md 6.6: a question can be placed only into a topic whose content the reader manages.
+  const manageableReviewTopics = useMemo(
+    () => (reviewTopics.data ?? []).filter((tp) => rightsOfTopic(tp).manage),
+    [reviewTopics.data],
+  );
   // Подсказки подтем для ящика вопроса — как в «Темах и вопросах»: все теги банка.
   const tagSuggestions = useMemo(
     () =>
@@ -329,6 +338,9 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
   const reviewQuestion = reviewQuestionId
     ? (reviewQuestions.data ?? []).find((q) => q.id === reviewQuestionId) ?? null
     : null;
+  // role-model.md 6.5.1: a question of a topic the reader may not manage opens as the learner
+  // sees it, not in the editor whose save the server would refuse.
+  const reviewQuestionTarget = questionOpenTarget(reviewQuestion, reviewQuestions.readOnlyTopicIds);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
 
@@ -1078,11 +1090,18 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
             />
           )}
           {!editor.model && <TabPlaceholder tab={activeTab} />}
-          {reviewQuestionId ? (
+          {reviewQuestionId && reviewQuestion && reviewQuestionTarget === "preview" ? (
+            <QuestionPreviewModal
+              open
+              question={reviewQuestion}
+              topicName={reviewQuestion.topicName}
+              onClose={() => setReviewQuestionId(null)}
+            />
+          ) : reviewQuestionId ? (
             <QuestionEditorDrawer
               open={Boolean(reviewQuestion)}
               question={reviewQuestion}
-              topics={reviewTopics.data ?? []}
+              topics={manageableReviewTopics}
               tagSuggestions={tagSuggestions}
               onClose={() => setReviewQuestionId(null)}
               onSaved={() => setReviewQuestionId(null)}
@@ -1092,7 +1111,7 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
               open
               question={null}
               defaultTopicId={newQuestionTopicId}
-              topics={reviewTopics.data ?? []}
+              topics={manageableReviewTopics}
               tagSuggestions={tagSuggestions}
               onClose={() => setNewQuestionTopicId(null)}
               onSaved={() => setNewQuestionTopicId(null)}
