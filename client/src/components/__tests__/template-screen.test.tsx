@@ -76,6 +76,51 @@ describe("TemplateScreen", () => {
   });
 });
 
+// ─── PRD-73: actions the host refuses render disabled ───────────────────────
+
+describe("TemplateScreen disabledActions (PRD-73)", () => {
+  const layout =
+    '<div class="tb-scene"><span data-path="course.title"></span>' +
+    '<button data-action="finish-review">Завершить</button><button data-action="review-back">Назад</button></div>';
+  const finishOf = (container: HTMLElement) =>
+    shadowOf(container).querySelector('[data-action="finish-review"]') as HTMLButtonElement;
+
+  it("рисует запрещённое действие неактивным, остальные не трогает", () => {
+    const { container } = render(
+      <TemplateScreen layout={layout} context={{ course: { title: "A" } }} disabledActions={["finish-review"]} />,
+    );
+    expect(finishOf(container).disabled).toBe(true);
+    expect((shadowOf(container).querySelector('[data-action="review-back"]') as HTMLButtonElement).disabled).toBe(false);
+    cleanup();
+  });
+
+  it("держит запрет после каждой перерисовки сцены", () => {
+    const { container, rerender } = render(
+      <TemplateScreen layout={layout} context={{ course: { title: "A" } }} disabledActions={["finish-review"]} />,
+    );
+    rerender(<TemplateScreen layout={layout} context={{ course: { title: "B" } }} disabledActions={["finish-review"]} />);
+    rerender(<TemplateScreen layout={layout} context={{ course: { title: "C" } }} disabledActions={["finish-review"]} />);
+    expect(finishOf(container).disabled).toBe(true);
+    cleanup();
+  });
+
+  it("снимает запрет, когда список опустел", () => {
+    const ctx = { course: { title: "A" } };
+    const { container, rerender } = render(
+      <TemplateScreen layout={layout} context={ctx} disabledActions={["finish-review"]} />,
+    );
+    rerender(<TemplateScreen layout={layout} context={ctx} disabledActions={[]} />);
+    expect(finishOf(container).disabled).toBe(false);
+    cleanup();
+  });
+
+  it("без свойства ведёт себя как прежде", () => {
+    const { container } = render(<TemplateScreen layout={layout} context={{ course: { title: "A" } }} />);
+    expect(finishOf(container).disabled).toBe(false);
+    cleanup();
+  });
+});
+
 // ─── PRD-23: themed templates ────────────────────────────────────────────────
 
 describe("TemplateScreen — themes (PRD-23)", () => {
