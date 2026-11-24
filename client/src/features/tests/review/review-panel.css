@@ -26,3 +26,49 @@
 .rvp__resolve { margin-top: var(--ou-space-3); }
 .rvp__form { margin-top: var(--ou-space-2); }
 .rvp__sum { margin-top: var(--ou-space-2); }
+
+/* PRD-52: карточки согласования. Только раскладка - цвета и элементы из дизайн-системы. */
+.rva__row { flex-wrap: wrap; }
+.rva__note { font: var(--ou-text-body-s); color: var(--ou-fg-muted); margin: 0; }
+.rva__person { flex-wrap: wrap; }
+
+/* PRD-52: раздел «Согласование» редактора. Форма не выходит за границы окна: колонки сжимаются, длинный текст
+   вопроса режется многоточием, матрица в узком окне прокручивается внутри раздела. */
+.rvs, .rvs > * { min-width: 0; max-width: 100%; }
+.rvs__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-3); }
+.rvs__search { flex: 1; min-width: 180px; }
+.rvs__nowrap { white-space: nowrap; }
+.rvs__none { font: var(--ou-text-caption); color: var(--ou-fg-muted); }
+.rvs__person { display: inline-flex; align-items: center; gap: var(--ou-space-2); white-space: nowrap; }
+.rvs__title { white-space: nowrap; }
+.rvs__pbar { flex: none; width: 88px; }
+.rvs__acc .ou-acc__trigger { padding: var(--ou-space-3); gap: var(--ou-space-3); }
+.rvs__acc .ou-acc__body { padding: 0 var(--ou-space-3) var(--ou-space-3); overflow-x: auto; }
+.rvs__matrix { table-layout: fixed; width: 100%; min-width: 420px; }
+.rvs__col-q { width: 50%; }
+.rvs__matrix th, .rvs__matrix td { vertical-align: middle; padding-inline: var(--ou-space-2); overflow: hidden; }
+.rvs__matrix td:not(:first-child), .rvs__th-av { text-align: center; }
+.rvs__ellip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rvs__legend-row { margin-top: var(--ou-space-1); }
+.rvs__legend { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--ou-space-1); font: var(--ou-text-caption); color: var(--ou-fg-muted); }
+.rvs__legend > .ou-tag { margin-left: var(--ou-space-2); }
+.rvs__legend > .ou-tag:first-child { margin-left: 0; }
+.rvs__pager { display: flex; align-items: center; justify-content: space-between; gap: var(--ou-space-3); }
+.rvs__pager-btns { display: inline-flex; gap: var(--ou-space-1); }
+
+/* Подсказка точки карты у автора (issue 67): строка рецензента без переноса. Длинное имя обрезается многоточием,
+   дата и тег остаются в строке и не сжимаются. */
+.rvt__row > * { flex: none; }
+.rvt__row > .rvt__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Рейл инспектора окна рецензирования и отладки (утверждённый эскиз окна): уже рейла ящика редактора, потому что
+   сам инспектор вдвое уже ящика; содержимое с отступами инспектора, а не ящика. */
+.rvp-rail { display: flex; flex: 1; min-height: 0; height: 100%; }
+.rvp-rail > .ou-drawer__split { width: 100%; }
+.rvp-rail .ou-drawer__rail { width: 176px; padding: var(--ou-space-3); }
+.rvp-rail .tb-settings-content { min-width: 0; padding: var(--ou-space-3) var(--ou-space-4) var(--ou-space-5); }
+
+/* Карточка ветки внутри панели рейла (`.tb-settings-content`): общее правило «16 px между детьми карточки» делает
+   ленту рыхлее эскиза, где ритм строк тесный: подпись места на 4 px, остальное на 8 px. */
+.tb-settings-content .rvp__thread .ou-card__body > * + * { margin-top: var(--ou-space-2); }
+.tb-settings-content .rvp__thread .ou-card__body > .rvp__ctx { margin-top: var(--ou-space-1); }

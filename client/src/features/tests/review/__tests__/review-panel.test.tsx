@@ -12,7 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReviewPanel } from "../review-panel";
 import type { ReviewThread } from "../review-api";
 
-const { apiMock } = vi.hoisted(() => ({
+const { apiMock, approvalsApiMock } = vi.hoisted(() => ({
   apiMock: {
     fetchReviewThreads: vi.fn(),
     createReviewComment: vi.fn(),
@@ -21,11 +21,17 @@ const { apiMock } = vi.hoisted(() => ({
     updateReviewComment: vi.fn(),
     deleteReviewComment: vi.fn(),
   },
+  approvalsApiMock: { fetchReviewApprovals: vi.fn() },
 }));
 
 vi.mock("../review-api", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ...apiMock,
+}));
+
+vi.mock("../review-approval-api", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...approvalsApiMock,
 }));
 
 /** Ветка от рецензента с якорем на вопрос. */
@@ -55,6 +61,8 @@ function renderPanel(props: Partial<React.ComponentProps<typeof ReviewPanel>> = 
 beforeEach(() => {
   vi.clearAllMocks();
   apiMock.fetchReviewThreads.mockResolvedValue([thread()]);
+  // По умолчанию рецензентов нет: в окне прогона остаются только комментарии.
+  approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "author", approvals: [], reviewers: [] });
   apiMock.createReviewComment.mockResolvedValue({ id: "r1" });
   apiMock.resolveReviewComment.mockResolvedValue({ id: "c1", status: "accepted" });
   apiMock.reopenReviewComment.mockResolvedValue({ id: "c1", status: "open" });
@@ -208,6 +216,97 @@ describe("создание комментария", () => {
     await waitFor(() => {
       expect(apiMock.createReviewComment).toHaveBeenCalledWith("t1", { body: "Поправлю", parentId: "c1" });
     });
+  });
+});
+
+describe("карточка ветки", () => {
+  it("содержимое лежит в теле карточки: у ветки есть внутренний отступ, ничего не липнет к рамке", async () => {
+    renderPanel();
+    const card = await screen.findByTestId("thread-c1");
+    const body = card.querySelector(".ou-card__body");
+    expect(body).not.toBeNull();
+    // Шапка, текст и кнопки - внутри тела, а не прямые дети карточки.
+    expect(body!.textContent).toContain("Формулировка допускает два прочтения");
+    expect(Array.from(card.children).every((child) => child === body)).toBe(true);
+  });
+});
+
+describe("окно прогона: рейл «Согласование / Комментарии»", () => {
+  const anchor = { kind: "question" as const, questionId: "q7", topicId: "tp1" };
+
+  it("у рецензента два пункта, открыто «Согласование»", async () => {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "reviewer", approvals: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor });
+    expect(await screen.findByTestId("review-rail-approval")).toBeInTheDocument();
+    expect(screen.getByTestId("review-rail-comments")).toBeInTheDocument();
+    expect(screen.getByTestId("review-approval-block")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-comment")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("review-rail-comments"));
+    expect(await screen.findByTestId("add-comment")).toBeInTheDocument();
+  });
+
+  it("у автора с принявшим рецензентом пункт «Согласование» есть", async () => {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({
+      viewer: "author", approvals: [], reviewers: [{ userId: "r1", name: "Ирина Петрова", accepted: true }],
+    });
+    renderPanel({ mode: "player", screenAnchor: anchor });
+    expect(await screen.findByTestId("review-rail-approval")).toBeInTheDocument();
+  });
+
+  it("пока никто не принял приглашение, пункта «Согласование» нет, остаются комментарии", async () => {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({
+      viewer: "author", approvals: [], reviewers: [{ userId: "r1", name: "Ирина Петрова", accepted: false }],
+    });
+    renderPanel({ mode: "player", screenAnchor: anchor });
+    expect(await screen.findByTestId("add-comment")).toBeInTheDocument();
+    expect(screen.queryByTestId("review-rail-approval")).not.toBeInTheDocument();
+    expect(screen.getByTestId("review-rail-comments")).toBeInTheDocument();
+    expect(screen.queryByTestId("review-approval-block")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("review-approval-legend")).not.toBeInTheDocument();
+  });
+});
+
+describe("окно прогона: действия ветки под «⋯»", () => {
+  const anchor = { kind: "question" as const, questionId: "q7", topicId: "tp1" };
+
+  async function renderCompact(props: Partial<React.ComponentProps<typeof ReviewPanel>> = {}) {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "author", approvals: [], reviewers: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor, ...props });
+    return screen.findByTestId("more-c1");
+  }
+
+  it("в строке только «Ответить» и «⋯», остальные действия в меню", async () => {
+    const more = await renderCompact({ canResolve: true, onNavigate: vi.fn() });
+    expect(screen.getByRole("button", { name: "Ответить" })).toBeInTheDocument();
+    expect(screen.queryByTestId("goto-c1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("resolve-c1")).not.toBeInTheDocument();
+    fireEvent.click(more);
+    expect(await screen.findByTestId("goto-c1")).toBeInTheDocument();
+    expect(screen.getByTestId("resolve-c1")).toBeInTheDocument();
+  });
+
+  it("пункт «Перейти к вопросу» зовёт хозяина панели", async () => {
+    const onNavigate = vi.fn();
+    fireEvent.click(await renderCompact({ onNavigate }));
+    fireEvent.click(await screen.findByTestId("goto-c1"));
+    expect(onNavigate).toHaveBeenCalledWith(
+      { target: "question-editor", questionId: "q1" },
+      expect.objectContaining({ id: "c1" }),
+    );
+  });
+
+  it("пункт «Закрыть комментарий» открывает форму исхода", async () => {
+    fireEvent.click(await renderCompact({ canResolve: true }));
+    fireEvent.click(await screen.findByTestId("resolve-c1"));
+    expect(await screen.findByTestId("confirm-resolve")).toBeInTheDocument();
+  });
+
+  it("ветка без места и без права закрытия: меню не нужно", async () => {
+    apiMock.fetchReviewThreads.mockResolvedValue([thread({ anchorKind: "question", questionId: null })]);
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "author", approvals: [], reviewers: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor });
+    expect(await screen.findByRole("button", { name: "Ответить" })).toBeInTheDocument();
+    expect(screen.queryByTestId("more-c1")).not.toBeInTheDocument();
   });
 });
 

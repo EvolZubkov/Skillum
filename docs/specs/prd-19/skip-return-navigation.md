@@ -19,7 +19,8 @@
 [PRD-3](../prd-3/external-templates.md), [PRD-4](../prd-4/course-flow-sections.md),
 [PRD-6](../prd-6/retake-cooldown-gate.md), [PRD-8](../prd-8/section-router-flow.md),
 [PRD-12](../prd-12/web-runtime-parity.md), [PRD-14](../prd-14/questions-import-export.md),
-[PRD-18](../prd-18/debug-test-player.md), [Платформа SCORM-шаблонов](../spec-template-platform.md)
+[PRD-18](../prd-18/debug-test-player.md), [PRD-73](../prd-73/finish-requires-all-answered.md),
+[Платформа SCORM-шаблонов](../spec-template-platform.md)
 **Зависимости:** flow-движок (PRD-4/8), общий рендер шаблона (PRD-12), единый движок
 скоринга, retake gate (PRD-6), реестр шаблонов (PRD-3)
 
@@ -157,7 +158,9 @@
   возврата к неотвеченным.
 - **FR-09.** При нажатии «Завершить» с неотвеченными — модал-подтверждение («перед завершением» —
   отдельный модал, не экран): «N вопросов без ответа будут засчитаны как неверные. Завершить?»
-  (Завершить / Отмена).
+  (Завершить / Отмена). При настройке [PRD-73](../prd-73/finish-requires-all-answered.md)
+  «Требовать ответ на все вопросы перед завершением» окно не появляется: кнопка завершения
+  неактивна, пока есть неотвеченные.
 
 ### 3.4 Прогресс-пиллы (DS)
 

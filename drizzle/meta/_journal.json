@@ -449,6 +449,48 @@
       "when": 1793627367777,
       "tag": "0063_attempt_timer_started_at",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1794225841142,
+      "tag": "0064_scorm_answer_fractional_points",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1794516010989,
+      "tag": "0065_report_block_outcome",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1794848898770,
+      "tag": "0066_test_folder_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1795457066986,
+      "tag": "0067_review_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1795463804645,
+      "tag": "0068_question_content_changed_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1795532919025,
+      "tag": "0069_prd73_require_all_answered_to_finish",
+      "breakpoints": true
     }
   ]
 }

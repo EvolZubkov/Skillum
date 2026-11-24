@@ -358,6 +358,11 @@ router.delete("/:id", requirePermission("adminTemplates.manage"), async (req, re
  * uploaded template (field `file`). The package id must match. On a passing
  * validation the files are replaced and the manifest/version refreshed; on a
  * failing validation the template is flagged `invalid`.
+ *
+ * A package of ANOTHER template (`ID_MISMATCH`) is not a broken version of this
+ * one but a wrong file picked by the administrator: it is rejected with 422 and
+ * the registry row is left untouched — status, activity and the last validation
+ * report stay as they were.
  */
 router.put("/:id/update", requirePermission("adminTemplates.manage"), memoryUpload.single("file"), async (req, res) => {
   try {
@@ -386,6 +391,18 @@ router.put("/:id/update", requirePermission("adminTemplates.manage"), memoryUplo
       zipSizeBytes: req.file.size,
       maxSizeBytes: MAX_TEMPLATE_ZIP_BYTES,
     });
+
+    const mismatch = report.blocking.find((issue) => issue.code === "ID_MISMATCH");
+    if (mismatch) {
+      const foreignId = typeof report.manifest?.id === "string" ? report.manifest.id : null;
+      return res.status(422).json({
+        error: foreignId
+          ? `Выбран архив другого шаблона («${foreignId}» вместо «${row.id}»). Шаблон не изменён.`
+          : `Выбран архив другого шаблона. Шаблон не изменён.`,
+        report,
+        template: row,
+      });
+    }
 
     if (!report.ok || !report.manifest) {
       const [invalidated] = await db

@@ -124,6 +124,12 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
   min-height: 0;
   overflow: hidden;
   font-family: var(--ou-font-family-base, var(--font-sans));
+  /* GLYPHS WITHOUT GRID-FITTING. The font is the author's choice, and a web font without
+     hinting instructions (RostelecomBasis among them) goes through the FreeType autohinter on
+     Linux when fontconfig asks for full hinting: small-size advances snap to whole pixels and
+     letters inside a word collide or drift apart. geometricPrecision turns hinting off for this
+     text; Windows and macOS do not change. */
+  text-rendering: geometricPrecision;
 }
 .tb-scene__header {
   flex: none;
@@ -282,6 +288,31 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
 .ou-quiz__legend-dot.is-current { background: transparent; box-shadow: inset 0 0 0 2px var(--ou-accent-default); }
 .ou-quiz__legend-dot.is-flagged { background: var(--ou-warning-default); box-shadow: none; }
 
+/* Paged question map (`attachQuestionMap`, hooks `data-qnav-*`). The DS dot / button set
+   their own `display`, which beats the UA `[hidden]` rule, so hidden must be restated. */
+[data-qnav] [hidden] { display: none !important; }
+.tb-qnav__range { flex: none; min-width: 88px; font: var(--ou-text-body-m); color: var(--ou-fg-muted); font-variant-numeric: tabular-nums; }
+.tb-qnav__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The paged row keeps the legend in the panel, not beside the dots. The page of dots
+   keeps ONE fixed width, so the arrows do not jump on the short last page. */
+.tb-scene__map[data-paged="true"] > .ou-quiz__legend { display: none; }
+.tb-scene__map[data-paged="true"] .ou-quiz__dots[data-qnav-dots] { flex: none; min-width: calc(10 * 26px + 9 * 6px); }
+/* A narrow page (5 dots, `data-qnav-narrow`) reserves the width of 5 dots, not 10: otherwise the arrows, the
+   caption and «Все вопросы» no longer fit the row on a scene up to 700px wide and the button wraps. */
+.tb-scene__map[data-paged="true"][data-qnav-narrow="true"] .ou-quiz__dots[data-qnav-dots] { min-width: calc(5 * 26px + 4 * 6px); }
+/* The panel hangs under its button and floats over the question — it never pushes it. */
+.tb-qnav__pop { position: relative; flex: none; }
+.tb-qnav__panel {
+  --_w: 480px;
+  position: absolute; top: 100%; left: 0;
+  margin-top: var(--ou-space-2);
+}
+.tb-qnav__grid { gap: var(--ou-space-3); }
+.tb-qnav__legend { justify-content: flex-start; flex-wrap: wrap; gap: var(--ou-space-3) var(--ou-space-4); }
+@container tbhead (max-width: 1000px) {
+  .tb-qnav__panel { left: auto; right: 0; }
+}
+
 /* ── Document scenes (start / intro / results / content) ────────── */
 /* A comfortable reading column and the shared type scale these screens use. */
 .tb-scene__col--doc { gap: var(--ou-space-5); }
@@ -324,7 +355,11 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
    `:empty` cannot be used — the layout leaves whitespace text nodes behind. */
 .tb-cover__eyebrow:not(:has(*)) { display: none; }
 .tb-cover__title { margin: 0; font-weight: 700; font-size: 44px; line-height: 1.08; letter-spacing: -0.02em; color: var(--ou-fg-default); text-wrap: pretty; }
-.tb-cover__desc { margin: 0; font: var(--ou-text-body-l); color: var(--ou-fg-soft); max-width: 60ch; text-wrap: pretty; }
+.tb-cover__desc { margin: 0; font: var(--ou-text-body-l); color: var(--ou-fg-soft); text-wrap: pretty; }
+/* No measure cap: since PRD-59 the description is the author's full text, and the old
+   60ch cap squeezed it into a narrow column at the left edge of a cover without an
+   illustration. It now spans the field like the title; with the media panel its grid
+   column bounds it. Certification never had the cap. */
 /* PRD-59: описание автора может нести абзацы, списки и ссылки. Интервалы заданы явно
    и по модульной сетке: умолчания браузера дают абзацу отступ в 1em, а он с сеткой
    обложки не совпадает. Крайние отступы сняты, чтобы блок не раздвигал раскладку. */
@@ -988,9 +1023,11 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
    caption size too. */
 .tb-measure .ou-slider__val { font: var(--ou-text-body-m); }
 .tb-measure .ou-slider__val strong { font: var(--ou-text-display-s); }
-/* Толкование уровня — авторский текст, его переводы строк держатся (см. `.tb-recs-group__text`). */
-.tb-measure .ou-formsection__sub { font: var(--ou-text-body-m); white-space: pre-wrap; }
-.tb-measure .ou-banner__desc { white-space: pre-wrap; }
+/* Толкование уровня — авторский текст. Переводы строк делают теги (`richTextToHtml` меняет
+   переводы строк простого текста на `<br>`), поэтому `pre-wrap` здесь не нужен — и вреден с
+   тех пор, как сюда едут заголовки и абзацы: перевод строки МЕЖДУ тегами рисовался бы пустой
+   строкой (см. `.tb-recs-group__text`). */
+.tb-measure .ou-formsection__sub { font: var(--ou-text-body-m); }
 
 /* The ring arc defaults to the accent colour; the measure's tone lives in `toneClass`,
    so the ring has to pick it up too — otherwise a critical level draws in the brand
@@ -1161,6 +1198,72 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
 .tb-recs-group__text ol { margin: 0 0 var(--ou-space-2); }
 .tb-recs-group__text ul, .tb-recs-group__text ol { padding-left: 20px; }
 
+/* ── Author text: paragraph styles ─────────────────────────────────────────
+   The formatted editor offers three heading levels and two paragraph sizes
+   (wireframe docs/wireframes/approved/rte-paragraph-styles.html): «Заголовок 1/2/3»
+   are `h2`/`h3`/`h4` (`h1` is the test title), «Крупный текст» / «Мелкий текст» are
+   `p.tb-text-l` / `p.tb-text-s`. Every place that prints author text gets the same
+   scale; the second level takes the template's accent, so it follows the test's
+   own palette. Contract: «Авторский текст» in the template platform spec. */
+.tb-intro h2,
+.tb-cover__desc h2,
+.tb-recs-group__text h2,
+.tb-topic-card__interpretation h2,
+.tb-breakdown__note h2,
+.tb-topic-group__description h2,
+.tb-measure .ou-banner__desc h2,
+.tb-measure .ou-formsection__sub h2 { font: var(--ou-text-heading-l); color: var(--ou-fg-default); margin: var(--ou-space-6) 0 var(--ou-space-3); }
+.tb-intro h3,
+.tb-cover__desc h3,
+.tb-recs-group__text h3,
+.tb-topic-card__interpretation h3,
+.tb-breakdown__note h3,
+.tb-topic-group__description h3,
+.tb-measure .ou-banner__desc h3,
+.tb-measure .ou-formsection__sub h3 { font: var(--ou-text-heading-m); color: var(--ou-accent-default); margin: var(--ou-space-5) 0 var(--ou-space-2); }
+.tb-intro h4,
+.tb-cover__desc h4,
+.tb-recs-group__text h4,
+.tb-topic-card__interpretation h4,
+.tb-breakdown__note h4,
+.tb-topic-group__description h4,
+.tb-measure .ou-banner__desc h4,
+.tb-measure .ou-formsection__sub h4 { font: var(--ou-text-heading-s); color: var(--ou-fg-default); margin: var(--ou-space-4) 0 var(--ou-space-2); }
+.tb-intro > :first-child,
+.tb-cover__desc > :first-child,
+.tb-recs-group__text > :first-child,
+.tb-topic-card__interpretation > :first-child,
+.tb-breakdown__note > :first-child,
+.tb-topic-group__description > :first-child,
+.tb-measure .ou-banner__desc > :first-child,
+.tb-measure .ou-formsection__sub > :first-child { margin-top: 0; }
+.tb-intro .tb-text-l,
+.tb-cover__desc .tb-text-l,
+.tb-recs-group__text .tb-text-l,
+.tb-topic-card__interpretation .tb-text-l,
+.tb-breakdown__note .tb-text-l,
+.tb-topic-group__description .tb-text-l,
+.tb-measure .ou-banner__desc .tb-text-l,
+.tb-measure .ou-formsection__sub .tb-text-l { font: var(--ou-text-body-l); }
+.tb-intro .tb-text-s,
+.tb-cover__desc .tb-text-s,
+.tb-recs-group__text .tb-text-s,
+.tb-topic-card__interpretation .tb-text-s,
+.tb-breakdown__note .tb-text-s,
+.tb-topic-group__description .tb-text-s,
+.tb-measure .ou-banner__desc .tb-text-s,
+.tb-measure .ou-formsection__sub .tb-text-s { font: var(--ou-text-body-s); color: var(--ou-fg-muted); }
+/* The level interpretation used to receive plain text only and has no paragraph rhythm of
+   its own; with paragraphs and lists in it, it gets the same one as `.tb-intro`. */
+.tb-measure .ou-formsection__sub p,
+.tb-measure .ou-formsection__sub ul,
+.tb-measure .ou-formsection__sub ol,
+.tb-measure .ou-banner__desc p,
+.tb-measure .ou-banner__desc ul,
+.tb-measure .ou-banner__desc ol { margin: 0 0 var(--ou-space-2); }
+.tb-measure .ou-formsection__sub > :last-child,
+.tb-measure .ou-banner__desc > :last-child { margin-bottom: 0; }
+
 /* ── Content / gallery pages ────────────────────────────────────── */
 /* The body CENTRES its block — reading measure, balanced, no vertical stretching
    with empty side fields (the earlier feedback). */
@@ -1312,6 +1415,24 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
 .retake-wall__lead { margin: 0 0 8px; color: var(--ou-fg-muted); }
 .retake-wall__date { margin: 12px 0 0; font-size: 16px; color: var(--ou-fg-default); }
 .retake-wall__note { margin: 12px 0 0; color: var(--ou-error-default); }
+
+/* Waiting indicator of the retake gate (gate.js showWaiting) — replaces the
+   «Загрузка теста...» line while the eligibility check runs, before any layout of the
+   template is loaded. Approved wireframe: docs/wireframes/approved/prd6-gate-waiting.html.
+   The element carries `.ou.ou--light.ou--normal` itself (the DS tokens resolve only under
+   `.ou`, and <html> gets it from the template later); `.container > #app > *` stretches it
+   over the whole mount, so the content is centred in the window. */
+.tb-gate-wait {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--ou-space-3); padding: var(--ou-space-8) var(--ou-space-4); text-align: center;
+}
+.tb-gate-wait__spinner {
+  width: 32px; height: 32px; color: var(--ou-accent-default);
+  animation: tb-gate-spin 0.9s linear infinite; transform-origin: 50% 50%;
+}
+.tb-gate-wait__text { margin: 0; max-width: 400px; color: var(--ou-fg-default); }
+.tb-gate-wait__hint { margin: 0; max-width: 400px; color: var(--ou-fg-muted); }
+@keyframes tb-gate-spin { to { transform: rotate(360deg); } }
 
 /* ── Generic card + content-page skeleton (shared builders) ─────────
    The generic `content` layout is a `page-content` shell the runtime fills with a
@@ -1559,6 +1680,12 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
      INSIDE `.tb-scene__map` in the layout, next to the dots. */
   .tb-scene__map .ou-quiz__dots,
   .tb-scene__map .ou-quiz__legend { display: none; }
+  /* The paged-map controls go with the dots: on a phone the map is the counters only. */
+  .tb-scene__map [data-qnav-prev],
+  .tb-scene__map [data-qnav-next],
+  .tb-scene__map [data-qnav-range],
+  .tb-scene__map [data-qnav-current],
+  .tb-qnav__pop { display: none; }
   .tb-scene__mapcounts { order: 3; }
   .tb-scene__mapcount { font: var(--ou-text-body-s); }
 
@@ -1704,6 +1831,8 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
      primary navigation on a phone (the header map is hidden at S3), so it gets
      the full 44px target. */
   .tb-scene__map .ou-quiz__dot { --qsize: 36px; }
+  .tb-scene__map[data-paged="true"] .ou-quiz__dots[data-qnav-dots] { min-width: calc(10 * 36px + 9 * 6px); }
+  .tb-scene__map[data-paged="true"][data-qnav-narrow="true"] .ou-quiz__dots[data-qnav-dots] { min-width: calc(5 * 36px + 4 * 6px); }
   .tb-review-map .ou-quiz__dot { --qsize: 44px; }
 
   /* ── Ranking: drag from the grip ────────────────────────────────

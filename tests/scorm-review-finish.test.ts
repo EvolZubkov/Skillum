@@ -60,10 +60,11 @@ function makeSubmit() {
 /**
  * The body of the review screen's action wiring, where «Завершить» is bound — bounded by the
  * branch's own closing brace rather than by a character count, so a comment cannot move the
- * window off the code it is meant to measure.
+ * window off the code it is meant to measure. Anchored on the BRANCH (`a === 'finish-review'`),
+ * not on the bare action name: PRD-73 names the action earlier too, when it disables it.
  */
 function reviewFinishHandler(): string {
-  const at = mainRenderSrc.indexOf("'finish-review'");
+  const at = mainRenderSrc.indexOf("a === 'finish-review'");
   if (at < 0) throw new Error("обработчик 'finish-review' не найден в mainRender.js");
   const end = mainRenderSrc.indexOf("\n        }", at);
   if (end < 0) throw new Error("конец ветки 'finish-review' не найден");

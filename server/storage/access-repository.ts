@@ -3,18 +3,22 @@
  * @description Data access for the authorization layer (PRD-13 RBAC + PRD-15
  * ownership): user roles (`user_roles`), test ownership + access grants
  * (`tests.owner_id` + `test_access_grants`) and topic ownership/visibility +
- * access grants (`topics.owner_id`/`visibility` + `topic_access_grants`). This
+ * access grants (`topics.owner_id`/`visibility` + `topic_access_grants`) and
+ * test folder ownership + grants (`test_folders.owner_id` +
+ * `test_folder_access_grants`), with the test/folder lookups the inherited
+ * rights resolver reads. This
  * repository owns the "who may do what" concern and therefore writes the
  * ownership columns of the `tests`/`topics` tables, while the content
  * repositories own their CRUD. Set-replacement mutations (`setUserRoles`) run in
  * a transaction. Exposed through the `IStorage` facade, never imported by routes.
  */
 import { randomUUID } from "crypto";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, sql, inArray, isNull } from "drizzle-orm";
 import { db } from "../db";
 import {
-  tests, topics, userRoles, testAccessGrants, topicAccessGrants,
+  tests, topics, userRoles, testAccessGrants, topicAccessGrants, testFolders, testFolderAccessGrants,
   type TestAccessGrant, type InsertTestAccessGrant, type TestGrantSlot, type TopicAccessGrant,
+  type TestFolderAccessGrant, type InsertTestFolderAccessGrant,
 } from "@shared/schema";
 import type { StoredRole } from "@shared/access";
 
@@ -103,6 +107,21 @@ export class AccessRepository {
   }
 
   /**
+   * PRD-52: records that the holder of a `review` grant opened the review window of this test. Written
+   * ONCE - the «согласовали N из M» denominator counts by it. A grant of another level is not touched.
+   */
+  async markReviewGrantAccepted(testId: string, userId: string): Promise<void> {
+    await db.update(testAccessGrants)
+      .set({ acceptedAt: new Date() })
+      .where(and(
+        eq(testAccessGrants.testId, testId),
+        eq(testAccessGrants.userId, userId),
+        eq(testAccessGrants.accessLevel, "review"),
+        isNull(testAccessGrants.acceptedAt),
+      ));
+  }
+
+  /**
    * Writes a grant into its slot: `edit`/`assign` replace each other, `review`
    * never touches the working grant. The conflict target names the partial
    * unique index of that slot (migration `0060`).
@@ -137,6 +156,64 @@ export class AccessRepository {
           : ne(testAccessGrants.accessLevel, "review"),
       ));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // ─── Test folder ownership + access grants (folder access inheritance) ─────
+
+  async setTestFolderOwner(folderId: string, ownerId: string | null): Promise<void> {
+    await db.update(testFolders).set({ ownerId }).where(eq(testFolders.id, folderId));
+  }
+
+  /** Every test folder grant: the tree is small, so lists resolve rights in one pass. */
+  async getTestFolderGrants(): Promise<TestFolderAccessGrant[]> {
+    return db.select().from(testFolderAccessGrants);
+  }
+
+  async getTestFolderGrantsForFolder(folderId: string): Promise<TestFolderAccessGrant[]> {
+    return db.select().from(testFolderAccessGrants).where(eq(testFolderAccessGrants.folderId, folderId));
+  }
+
+  /** Writes the single grant of a user on a folder; a second write changes its level. */
+  async upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant> {
+    const [row] = await db.insert(testFolderAccessGrants).values({
+      id: randomUUID(),
+      folderId: grant.folderId,
+      userId: grant.userId,
+      accessLevel: grant.accessLevel,
+      grantedBy: grant.grantedBy ?? null,
+      createdAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [testFolderAccessGrants.folderId, testFolderAccessGrants.userId],
+      set: { accessLevel: grant.accessLevel, grantedBy: grant.grantedBy ?? null },
+    }).returning();
+    return row;
+  }
+
+  /** Removes the grant of a user on a folder. */
+  async removeTestFolderGrant(folderId: string, userId: string): Promise<boolean> {
+    const result = await db.delete(testFolderAccessGrants)
+      .where(and(eq(testFolderAccessGrants.folderId, folderId), eq(testFolderAccessGrants.userId, userId)))
+      .returning({ id: testFolderAccessGrants.id });
+    return result.length > 0;
+  }
+
+  /** Folder of a test: `null` for the root, `undefined` when the test does not exist. */
+  async getTestFolderIdOfTest(testId: string): Promise<string | null | undefined> {
+    const [row] = await db.select({ folderId: tests.folderId }).from(tests).where(eq(tests.id, testId));
+    return row ? row.folderId : undefined;
+  }
+
+  async getFolderIdsOfTests(testIds: readonly string[]): Promise<Map<string, string | null>> {
+    if (testIds.length === 0) return new Map();
+    const rows = await db.select({ id: tests.id, folderId: tests.folderId }).from(tests)
+      .where(inArray(tests.id, [...testIds]));
+    return new Map(rows.map((r) => [r.id, r.folderId]));
+  }
+
+  async getTestIdsInFolders(folderIds: readonly string[]): Promise<string[]> {
+    if (folderIds.length === 0) return [];
+    const rows = await db.select({ id: tests.id }).from(tests).where(inArray(tests.folderId, [...folderIds]));
+    return rows.map((r) => r.id);
   }
 
   // ─── Topic ownership/visibility + access grants (PRD-15 block C) ───────────

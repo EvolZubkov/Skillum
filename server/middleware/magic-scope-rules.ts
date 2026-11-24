@@ -82,6 +82,12 @@ export const MAGIC_SCOPE_RULES: MagicScopeRule[] = [
   { method: "GET", pattern: "/api/tests/:testId/review/comments", bind: "test" },
   { method: "POST", pattern: "/api/tests/:testId/review/comments", bind: "test" },
   { method: "PATCH", pattern: "/api/tests/:testId/review/comments/:commentId", bind: "test" },
+  // Отметки «Согласовано» (дополнение 2026-11-23, issue 66): окно рецензента читает их при открытии, поэтому без
+  // этих трёх строк внешний рецензент по ссылке получал 403 и его уводило на форму входа. Привязка к тесту ссылки;
+  // кто чью отметку видит и снимает, решает сервер: рецензент получает только свои строки и снимает только свою.
+  { method: "GET", pattern: "/api/tests/:testId/review/approvals", bind: "test" },
+  { method: "PUT", pattern: "/api/tests/:testId/review/approvals", bind: "test" },
+  { method: "DELETE", pattern: "/api/tests/:testId/review/approvals/:approvalId", bind: "test" },
   // Question media by its canonical address. The legacy `/uploads/media/*` sat outside
   // `/api` and so outside this guard; `/api/media/<id>` does not, and without this line a
   // learner who came by an invitation link got a 403 instead of the question's picture.

@@ -29,9 +29,15 @@ const users = () => [
   { id: "u3", name: "Пётр Смирнов", email: "petr@t.ru", roles: ["author"] },
 ];
 
-type Access = { testId: string; ownerId: string | null; grants: { userId: string; accessLevel: "edit" | "assign" }[] };
+type Access = {
+  testId: string;
+  ownerId: string | null;
+  grants: { userId: string; accessLevel: "edit" | "assign" }[];
+  inherited?: { userId: string; accessLevel: "edit" | "assign"; folderId: string; folderName: string }[];
+};
 
 let access: Access;
+let reviewers: { userId: string; name: string | null; email: string | null; external: boolean }[];
 let ownerPatchOk: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 let calls: { url: string; method: string; body: unknown }[];
@@ -39,6 +45,7 @@ let calls: { url: string; method: string; body: unknown }[];
 beforeEach(() => {
   toastMock.mockClear();
   access = { testId: "t1", ownerId: "u1", grants: [{ userId: "u2", accessLevel: "edit" }] };
+  reviewers = [];
   ownerPatchOk = true;
   calls = [];
 
@@ -51,6 +58,7 @@ beforeEach(() => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     if (method !== "GET") calls.push({ url: u, method, body });
     if (u === "/api/tests/t1/access/users") return ok(users());
+    if (u === "/api/tests/t1/review/reviewers" && method === "GET") return ok(reviewers);
     if (u === "/api/tests/t1/access" && method === "GET") return ok(access);
     if (u === "/api/tests/t1/owner") return ownerPatchOk ? ok({}) : fail({ error: "Владельца сменить нельзя" });
     if (u === "/api/tests/t1/access" && method === "POST") return ok({});
@@ -62,7 +70,12 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function renderPanel(props?: { test?: { id: string; title: string } | null; onClose?: () => void }) {
+function renderPanel(props?: {
+  test?: { id: string; title: string } | null;
+  onClose?: () => void;
+  manageableFolderIds?: ReadonlySet<string>;
+  onOpenFolder?: (folder: { id: string; name: string }) => void;
+}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, queryFn: getQueryFn({ on401: "throw" }) } },
   });
@@ -70,7 +83,12 @@ function renderPanel(props?: { test?: { id: string; title: string } | null; onCl
   const test = props && "test" in props ? props.test ?? null : { id: "t1", title: "Тест по финансам" };
   const utils = render(
     <QueryClientProvider client={client}>
-      <TestAccessPanel test={test} onClose={onClose} />
+      <TestAccessPanel
+        test={test}
+        onClose={onClose}
+        manageableFolderIds={props?.manageableFolderIds}
+        onOpenFolder={props?.onOpenFolder}
+      />
     </QueryClientProvider>,
   );
   return { ...utils, onClose };
@@ -135,6 +153,37 @@ describe("<TestAccessPanel />", () => {
     expect(screen.getByText("Мария Сидорова")).toBeInTheDocument();
   });
 
+  // Role-model 6.0: a learner is never offered, neither as a grantee nor as an owner.
+  describe("only administrative roles are offered", () => {
+    beforeEach(() => {
+      const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+        String(url) === "/api/tests/t1/access/users"
+          ? { ok: true, status: 200, json: async () => [...users(), { id: "u4", name: "Ученик Учеников", email: "l@t.ru", roles: ["learner"] }] }
+          : base(url, init));
+    });
+
+    it("leaves the learner out of the add-user list", async () => {
+      await renderLoaded();
+      fireEvent.focus(screen.getByRole("combobox"));
+      const listbox = screen.getByRole("listbox");
+      expect(within(listbox).getByText("Пётр Смирнов")).toBeInTheDocument();
+      expect(within(listbox).queryByText("Ученик Учеников")).not.toBeInTheDocument();
+    });
+
+    it("searches the owner field and leaves the learner out", async () => {
+      await renderLoaded();
+      fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
+      const field = screen.getByRole("combobox", { name: "Владелец теста" });
+      fireEvent.focus(field);
+      expect(within(screen.getByRole("listbox")).queryByText("Ученик Учеников")).not.toBeInTheDocument();
+      fireEvent.change(field, { target: { value: "maria" } });
+      const found = within(screen.getByRole("listbox")).getAllByRole("option");
+      expect(found).toHaveLength(1);
+      expect(found[0]).toHaveTextContent("Мария Сидорова");
+    });
+  });
+
   it("revokes a grant, collapsing the table to its empty state", async () => {
     await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Отозвать доступ" }));
@@ -154,8 +203,8 @@ describe("<TestAccessPanel />", () => {
   it("saves an owner change → PATCH /owner, success toast and onClose", async () => {
     const { onClose } = await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
-    fireEvent.click(screen.getByLabelText("Владелец теста").querySelector("button")!);
-    fireEvent.click(screen.getByRole("option", { name: "Пётр Смирнов" }));
+    fireEvent.focus(screen.getByRole("combobox", { name: "Владелец теста" }));
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Пётр Смирнов"));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(calls.some((c) => c.url === "/api/tests/t1/owner" && c.method === "PATCH")).toBe(true));
     const owner = calls.find((c) => c.url === "/api/tests/t1/owner")!;
@@ -188,12 +237,86 @@ describe("<TestAccessPanel />", () => {
     );
   });
 
+  describe("«Рецензирование» (PRD-52, a slot of its own)", () => {
+    it("says so when nobody is invited", async () => {
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Рецензенты не приглашены")).toBeInTheDocument());
+      expect(screen.getByText("Рецензирование")).toBeInTheDocument();
+    });
+
+    it("lists reviewers with how they were invited, next to the working grants", async () => {
+      reviewers = [
+        { userId: "u3", name: "Пётр Смирнов", email: "petr@t.ru", external: false },
+        { userId: "ext", name: "Внешний Эксперт", email: "ext@o.ru", external: true },
+      ];
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Внешний Эксперт")).toBeInTheDocument());
+      expect(within(screen.getByText("Пётр Смирнов").closest("tr")!).getByText("по аккаунту")).toBeInTheDocument();
+      expect(within(screen.getByText("Внешний Эксперт").closest("tr")!).getByText("по ссылке")).toBeInTheDocument();
+      // The working grant is still there and is not mixed with the reviewers.
+      expect(screen.getByText("Мария Сидорова")).toBeInTheDocument();
+    });
+
+    it("a revocation waits for «Сохранить» and touches only the review slot", async () => {
+      reviewers = [{ userId: "u3", name: "Пётр Смирнов", email: "petr@t.ru", external: false }];
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Пётр Смирнов")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Отозвать рецензирование" }));
+      expect(screen.queryByText("Пётр Смирнов")).not.toBeInTheDocument();
+      expect(calls).toHaveLength(0); // nothing sent before the explicit save
+      fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.url === "/api/tests/t1/review/reviewers/u3" && c.method === "DELETE")).toBe(true),
+      );
+      // The person's working access is not revoked by it.
+      expect(calls.some((c) => c.url.startsWith("/api/tests/t1/access/"))).toBe(false);
+    });
+  });
+
+  describe("«Унаследовано» (folder access inheritance)", () => {
+    const inherited = [
+      { userId: "u3", accessLevel: "edit" as const, folderId: "fA", folderName: "Охрана труда" },
+      { userId: "u1", accessLevel: "assign" as const, folderId: "fB", folderName: "Чужая папка" },
+    ];
+
+    it("is absent for an older answer without the field", async () => {
+      await renderLoaded();
+      expect(screen.queryByText("Унаследовано")).not.toBeInTheDocument();
+    });
+
+    it("is absent when nothing is inherited", async () => {
+      access = { ...access, inherited: [] };
+      await renderLoaded();
+      expect(screen.queryByText("Унаследовано")).not.toBeInTheDocument();
+    });
+
+    it("lists who reaches the test through its folders, with level and folder", async () => {
+      access = { ...access, inherited };
+      await renderLoaded();
+      await waitFor(() => expect(screen.getByText("Унаследовано")).toBeInTheDocument());
+      const row = screen.getByText("Охрана труда").closest("tr")!;
+      expect(within(row).getByText("Пётр Смирнов")).toBeInTheDocument();
+      expect(within(row).getByText("Редактирование")).toBeInTheDocument();
+    });
+
+    it("opens a manageable source folder and shows any other as text", async () => {
+      access = { ...access, inherited };
+      const onOpenFolder = vi.fn();
+      await renderLoaded({ manageableFolderIds: new Set(["fA"]), onOpenFolder });
+      await waitFor(() => expect(screen.getByText("Унаследовано")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Охрана труда" }));
+      expect(onOpenFolder).toHaveBeenCalledWith({ id: "fA", name: "Охрана труда" });
+      expect(screen.queryByRole("button", { name: "Чужая папка" })).not.toBeInTheDocument();
+      expect(screen.getByText("Чужая папка")).toBeInTheDocument();
+    });
+  });
+
   it("surfaces a failed owner change via a destructive toast (no close)", async () => {
     ownerPatchOk = false;
     const { onClose } = await renderLoaded();
     fireEvent.click(screen.getByRole("button", { name: "Сменить владельца" }));
-    fireEvent.click(screen.getByLabelText("Владелец теста").querySelector("button")!);
-    fireEvent.click(screen.getByRole("option", { name: "Пётр Смирнов" }));
+    fireEvent.focus(screen.getByRole("combobox", { name: "Владелец теста" }));
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Пётр Смирнов"));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith(

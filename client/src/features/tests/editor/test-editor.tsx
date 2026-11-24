@@ -64,10 +64,18 @@ import { DesignSection } from "./sections/design-section";
 import { ScenarioTaskSection } from "./sections/scenario-task-section";
 import { describeFeasibilityState } from "@/features/content-protection/issue-text";
 import { ReviewPanel } from "../review/review-panel";
+import { ReviewTab } from "../review/review-tab";
+import { ReviewApprovalSummary } from "../review/review-approval-summary";
+import { useReviewApprovals } from "../review/use-review-approvals";
+import type { SectionInput } from "../review/review-approval-model";
 import type { ReviewAnchorItem } from "../review/review-comment-form";
 import { useReviewComments } from "../review/use-review-comments";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
+import { QuestionPreviewModal } from "@/features/questions/question-preview-modal";
+import { useEditorQuestions } from "./questions/use-editor-questions";
+import { questionOpenTarget, type ContextQuestionRow } from "./questions/test-context-questions";
 import type { Question, Topic } from "@shared/schema";
+import { rightsOfTopic } from "@shared/access";
 import { questionLabel } from "@shared/questions/question-label";
 import { useOptionalAuth } from "@/lib/auth";
 
@@ -152,7 +160,7 @@ const TAB_LABELS: Record<EditorTabKey, string> = {
   scoring: "Оценка результата",
   feedback: "Обратная связь и итоги",
   design: "Оформление",
-  review: "Комментарии",
+  review: "Рецензирование",
 };
 
 /**
@@ -304,16 +312,21 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
    */
   const [newQuestionTopicId, setNewQuestionTopicId] = useState<string | null>(null);
   const questionDrawerOpen = Boolean(reviewQuestionId) || Boolean(newQuestionTopicId);
-  const reviewQuestions = useQuery<Question[]>({
-    queryKey: ["/api/questions"],
-    // Нужны в двух местах: открыть карточку вопроса по якорю и предложить вопросы
-    // раздела во втором поле формы комментария. Второе — сразу на вкладке.
+  // Нужны в двух местах: открыть карточку вопроса по якорю и предложить вопросы
+  // раздела во втором поле формы комментария. Второе — сразу на вкладке. Вопросы тем теста
+  // видны и без прав на тему (role-model.md 6.5.1).
+  const reviewQuestions = useEditorQuestions<ContextQuestionRow>(editor.model?.id, {
     enabled: questionDrawerOpen || activeTab === "review",
   });
   const reviewTopics = useQuery<Topic[]>({
     queryKey: ["/api/topics"],
     enabled: questionDrawerOpen,
   });
+  // role-model.md 6.6: a question can be placed only into a topic whose content the reader manages.
+  const manageableReviewTopics = useMemo(
+    () => (reviewTopics.data ?? []).filter((tp) => rightsOfTopic(tp).manage),
+    [reviewTopics.data],
+  );
   // Подсказки подтем для ящика вопроса — как в «Темах и вопросах»: все теги банка.
   const tagSuggestions = useMemo(
     () =>
@@ -325,6 +338,9 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
   const reviewQuestion = reviewQuestionId
     ? (reviewQuestions.data ?? []).find((q) => q.id === reviewQuestionId) ?? null
     : null;
+  // role-model.md 6.5.1: a question of a topic the reader may not manage opens as the learner
+  // sees it, not in the editor whose save the server would refuse.
+  const reviewQuestionTarget = questionOpenTarget(reviewQuestion, reviewQuestions.readOnlyTopicIds);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
 
@@ -714,6 +730,31 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
     return [...questions, ...pages];
   }, [editor.model?.sections, reviewQuestions.data, contentPages.pages]);
 
+  // PRD-52: отметки теста нужны, пока открыта вкладка «Рецензирование»; от них зависит, есть ли в ней пункт «Согласование».
+  const reviewApprovals = useReviewApprovals(editor.model?.id ?? "", { enabled: activeTab === "review" });
+
+  /**
+   * Разделы и их вопросы для раздела «Согласование» (PRD-52). Вопросы - из банка тем теста, нумерация внутри
+   * раздела, как в эскизе: «Вопрос 2 «Кластер…»».
+   */
+  const reviewApprovalSections = useMemo<SectionInput[]>(() => {
+    const byTopic = new Map<string, Question[]>();
+    for (const q of reviewQuestions.data ?? []) {
+      if (!q.topicId) continue;
+      const list = byTopic.get(q.topicId);
+      if (list) list.push(q);
+      else byTopic.set(q.topicId, [q]);
+    }
+    return (editor.model?.sections ?? []).map((section) => ({
+      topicId: section.topicId,
+      title: `Раздел «${section.topicName}»`,
+      questions: (byTopic.get(section.topicId) ?? []).map((q, index) => ({
+        id: q.id,
+        label: `Вопрос ${index + 1} «${questionLabel(q).slice(0, 60)}»`,
+      })),
+    }));
+  }, [editor.model?.sections, reviewQuestions.data]);
+
   // Счётчик открытых веток на вкладке. Запрос тот же, что у панели рецензирования, —
   // React Query отдаёт его из кэша, второго обращения к серверу не будет.
   const { openCount: reviewOpenCount } = useReviewComments(editor.model?.id ?? "", {
@@ -846,7 +887,7 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
             // Tabs that render an `ou-drawer__split` (rail + content) need the
             // flush body so the split fills the full height — otherwise a short
             // pane (e.g. the Scales empty state) leaves a gap below.
-            (activeTab === "main" || activeTab === "review" ? "" : " ou-drawer__body--flush")
+            (activeTab === "main" ? "" : " ou-drawer__body--flush")
           }
           tabIndex={0}
           data-testid="test-editor-body"
@@ -1013,36 +1054,54 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
               updateModel={editor.updateModel}
             />
           )}
-          {editor.model?.id && activeTab === "review" && (
-            <div className="tb-settings-content" data-testid="settings-pane-review">
-              <ReviewPanel
-                testId={editor.model.id}
-                mode="editor"
-                canResolve
-                currentUserId={auth?.user?.id}
-                // Место комментария автор выбирает из РАЗДЕЛОВ этого теста: панель сама
-                // не ходит за составом, его знает ящик.
-                anchorOptions={{
-                  topics: editor.model.sections.map((s) => ({ id: s.topicId, name: s.topicName })),
-                  items: reviewAnchorItems,
-                }}
-                onNavigate={(target) => {
-                  // Вопрос открывается ЯЩИКОМ ПОВЕРХ этого: ящик теста остаётся
-                  // смонтированным, поэтому после правки автор возвращается в то же
-                  // место списка комментариев, а не собирает контекст заново.
-                  if (target.target === "question-editor") setReviewQuestionId(target.questionId);
-                  else if (target.target === "test-editor") setActiveTab(target.tab);
-                }}
-                focusThreadId={props.focusReviewThreadId}
-              />
-            </div>
+          {editor.model?.id && activeTab === "review" && !reviewApprovals.isLoading && (
+            <ReviewTab
+              openComments={reviewOpenCount}
+              // Ссылка `?review=<id>` ведёт к ветке: вкладка открывается сразу на комментариях.
+              initialKey={props.focusReviewThreadId ? "comments" : undefined}
+              // Пока никто из рецензентов не пришёл, согласования нет: пункта в рейле нет, остаются комментарии.
+              approval={
+                reviewApprovals.hasReviewers
+                  ? <ReviewApprovalSummary testId={editor.model.id} sections={reviewApprovalSections} />
+                  : undefined
+              }
+              comments={
+                <ReviewPanel
+                  testId={editor.model.id}
+                  mode="editor"
+                  canResolve
+                  currentUserId={auth?.user?.id}
+                  // Место комментария автор выбирает из РАЗДЕЛОВ этого теста: панель сама
+                  // не ходит за составом, его знает ящик.
+                  anchorOptions={{
+                    topics: editor.model.sections.map((s) => ({ id: s.topicId, name: s.topicName })),
+                    items: reviewAnchorItems,
+                  }}
+                  onNavigate={(target) => {
+                    // Вопрос открывается ЯЩИКОМ ПОВЕРХ этого: ящик теста остаётся
+                    // смонтированным, поэтому после правки автор возвращается в то же
+                    // место списка комментариев, а не собирает контекст заново.
+                    if (target.target === "question-editor") setReviewQuestionId(target.questionId);
+                    else if (target.target === "test-editor") setActiveTab(target.tab);
+                  }}
+                  focusThreadId={props.focusReviewThreadId}
+                />
+              }
+            />
           )}
           {!editor.model && <TabPlaceholder tab={activeTab} />}
-          {reviewQuestionId ? (
+          {reviewQuestionId && reviewQuestion && reviewQuestionTarget === "preview" ? (
+            <QuestionPreviewModal
+              open
+              question={reviewQuestion}
+              topicName={reviewQuestion.topicName}
+              onClose={() => setReviewQuestionId(null)}
+            />
+          ) : reviewQuestionId ? (
             <QuestionEditorDrawer
               open={Boolean(reviewQuestion)}
               question={reviewQuestion}
-              topics={reviewTopics.data ?? []}
+              topics={manageableReviewTopics}
               tagSuggestions={tagSuggestions}
               onClose={() => setReviewQuestionId(null)}
               onSaved={() => setReviewQuestionId(null)}
@@ -1052,7 +1111,7 @@ export function TestEditorView(props: TestEditorViewProps): React.JSX.Element | 
               open
               question={null}
               defaultTopicId={newQuestionTopicId}
-              topics={reviewTopics.data ?? []}
+              topics={manageableReviewTopics}
               tagSuggestions={tagSuggestions}
               onClose={() => setNewQuestionTopicId(null)}
               onSaved={() => setNewQuestionTopicId(null)}
@@ -1223,7 +1282,7 @@ function TabPlaceholder({ tab }: { tab: EditorTabKey }) {
     scoring: "Цена ответа, вердикт теста и тем, шкалы и показатели.",
     feedback: "Что участник узнаёт о результате: итоги, тексты и отчёт.",
     design: "Шаблон и объявленный им облик: цвета, шрифты, фоны и логотип.",
-    review: "Комментарии коллег к этому тесту.",
+    review: "Комментарии и согласование коллег к этому тесту.",
   };
   return (
     <EmptyState

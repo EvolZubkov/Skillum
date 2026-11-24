@@ -18,7 +18,7 @@
  */
 import { Fragment, useMemo } from "react";
 import type * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEditorQuestions } from "../questions/use-editor-questions";
 import { Accordion, AccordionItem, Banner, Button, FormSection } from "@skillum/ui-kit";
 import { ArrowRight, CornerDownRight } from "lucide-react";
 import { t } from "@/lib/i18n";
@@ -95,7 +95,7 @@ export function QuestionFeedbackRegistry({
   model,
   onOpenQuestion,
 }: QuestionFeedbackRegistryProps): React.JSX.Element {
-  const { data: questions = [] } = useQuery<QuestionRow[]>({ queryKey: ["/api/questions"] });
+  const { data: questions } = useEditorQuestions<QuestionRow>(model.id);
   const byTopic = useMemo(() => {
     const map = new Map<string, QuestionRow[]>();
     for (const q of questions) {

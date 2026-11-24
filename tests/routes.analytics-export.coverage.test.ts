@@ -47,6 +47,8 @@ const { storageMock } = vi.hoisted(() => ({
     getScormAnswersByAttempt: vi.fn(),
     // PRD-56 FR-04: the registry book reads answers of every source and org spellings.
     selectAnswersForTest: vi.fn(), selectOrgSpellings: vi.fn(),
+    // Выданный состав импорта — итог по темам добирает по нему баллы неотвеченных заданий.
+    selectDeliveredQuestionIds: vi.fn().mockResolvedValue(new Map()),
     // PRD-5/PRD-2: the export now names the test's scales and indicators, so it reads
     // the measurement rows too. Empty by default — these fixtures are control tests.
     getScales: vi.fn().mockResolvedValue([]),
@@ -58,6 +60,8 @@ const { storageMock } = vi.hoisted(() => ({
   },
 }));
 
+// The storage mock does not model the test folder tree: folders give no right here.
+vi.mock("../server/services/test-folder-access", () => import("./helpers/no-folder-rights"));
 vi.mock("../server/storage", () => ({ storage: storageMock }));
 
 import exportRouter from "../server/routes/analytics/export";
@@ -172,6 +176,7 @@ beforeEach(() => {
   storageMock.getTopicCourses.mockResolvedValue([]);
   storageMock.getScormAnswersByAttempt.mockResolvedValue([]);
   storageMock.selectAnswersForTest.mockResolvedValue([]);
+  storageMock.selectDeliveredQuestionIds.mockResolvedValue(new Map());
   storageMock.selectOrgSpellings.mockResolvedValue({ organization: [], unit: [], position: [] });
   // PRD-5/PRD-2 measurement sources — re-armed here because `resetAllMocks` above
   // drops the implementations declared at hoist time.

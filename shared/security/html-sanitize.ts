@@ -122,6 +122,38 @@ function countMatches(input: string, pattern: RegExp): number {
   return input.match(pattern)?.length ?? 0;
 }
 
+/** The `href` attribute of a link tag: quoted (either quote) or bare. */
+const LINK_HREF_ATTR = /(\shref\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+
+/**
+ * Repairs the address of an `http(s)` link to its evident intent. Only slips that have
+ * exactly one reading are touched: surrounding whitespace, a doubled scheme
+ * (`https://https://x`), a scheme with one slash (`https:/x`) and an upper-case scheme.
+ * Anything else — a relative path, `mailto:`, a bare domain — is left as the author wrote
+ * it, because guessing there would turn a deliberate address into a different one.
+ *
+ * @param address The attribute value as stored.
+ * @returns The repaired address, or the input itself when it is not an `http(s)` address.
+ */
+function repairHttpAddress(address: string): string {
+  const trimmed = address.trim();
+  if (!/^https?:\//i.test(trimmed)) return address;
+  return trimmed
+    .replace(/^(?:https?:\/\/)+(?=https?:\/\/)/i, "")
+    .replace(/^(https?):\/(?!\/)/i, "$1://")
+    .replace(/^https?(?=:\/\/)/i, (scheme) => scheme.toLowerCase());
+}
+
+/** Applies {@link repairHttpAddress} to the `href` inside one tag's attribute chunk. */
+function repairLinkHref(attrs: string): string {
+  return attrs.replace(LINK_HREF_ATTR, (whole, head: string, dq?: string, sq?: string, bare?: string) => {
+    const value = dq ?? sq ?? bare ?? "";
+    const fixed = repairHttpAddress(value);
+    if (fixed === value) return whole;
+    return dq !== undefined ? `${head}"${fixed}"` : sq !== undefined ? `${head}'${fixed}'` : `${head}${fixed}`;
+  });
+}
+
 /**
  * Walks the opening tags and settles their external `href`: a non-link loses the
  * attribute, a link keeps it and gains `target="_blank" rel="noopener noreferrer"`.
@@ -146,6 +178,7 @@ function normalizeExternalLinks(input: string): { value: string; removed: number
       removed += countMatches(attrs, HTTP_HREF_QUOTED) + countMatches(attrs, HTTP_HREF_UNQUOTED);
       return `<${name}${stripped}>`;
     }
+    attrs = repairLinkHref(attrs);
     if (!HAS_EXTERNAL_HREF.test(attrs)) return whole;
     // A void tag's trailing slash stays trailing: the attributes go in before it.
     const tail = /\s*\/$/.exec(attrs)?.[0] ?? "";
@@ -155,6 +188,23 @@ function normalizeExternalLinks(input: string): { value: string; removed: number
     return `<${name}${body}${tail}>`;
   });
   return { value, removed };
+}
+
+/**
+ * Gives every external link in stored markup `target="_blank" rel="noopener noreferrer"`
+ * and repairs evident slips in its address (see {@link repairHttpAddress}).
+ *
+ * Pages saved before the sanitiser started adding the attributes keep the bare `<a href>`
+ * in the database, and a rebuild alone never re-runs the sanitiser over them. The package
+ * exporter calls this so an old page opens its links in a new window instead of replacing
+ * the LMS frame. Attributes the author wrote are kept; a second pass is a no-op.
+ *
+ * @param html Stored markup.
+ * @returns The markup with link attributes settled; the input itself when it has no external link.
+ */
+export function ensureExternalLinkTargets(html: string): string {
+  if (!/<a[\s>]/i.test(html)) return html;
+  return normalizeExternalLinks(html).value;
 }
 
 /** Extracts the concrete event-handler attribute name (e.g. "onclick") from a match. */

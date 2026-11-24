@@ -7,6 +7,10 @@
  * hash; it is never stored in `user_roles`. Effective roles and permissions are
  * computed per call (not cached in the session) so a configuration change takes
  * effect on the next request.
+ *
+ * It also decides who may own or be granted access to a content object
+ * ({@link userMayHoldContentAccess}) and which people the «Общий доступ» panels
+ * receive ({@link accessPanelPeople}).
  */
 
 import { randomBytes } from "crypto";
@@ -17,6 +21,7 @@ import {
   effectiveRoles,
   getPermissions,
   hasPermission,
+  mayHoldContentAccess,
   ROLES,
   type Capability,
   type Role,
@@ -82,6 +87,57 @@ export async function mayReceiveAssignmentLink(
 ): Promise<boolean> {
   const roles = await getEffectiveRoles(user);
   return roles.length === 1 && roles[0] === ROLES.LEARNER;
+}
+
+/**
+ * Answer body of a refused grant or ownership change whose recipient holds no
+ * administrative role. `error` is the text the panels show as is; `code` is the
+ * stable identifier for programmatic checks.
+ */
+export const NOT_CONTENT_ACCESS_HOLDER = {
+  code: "grantee_not_staff",
+  error:
+    "Доступ и владение выдаются только пользователям с административной ролью. " +
+    "Сначала назначьте пользователю роль.",
+} as const;
+
+/**
+ * Whether the user may own a test, a test folder or a topic, or receive a
+ * working grant on one (role-model.md section 6.0): an administrative role is
+ * required and an external participant never qualifies. Uses the effective
+ * roles, so a configuration superadmin with no stored role qualifies too.
+ */
+export async function userMayHoldContentAccess(
+  user: Pick<User, "id" | "emailHash" | "isExternal">,
+): Promise<boolean> {
+  return mayHoldContentAccess(await getEffectiveRoles(user), user.isExternal);
+}
+
+/** A person as the «Общий доступ» panels receive them. */
+export interface AccessPanelPerson {
+  id: string;
+  name: string | null;
+  email: string | null;
+  roles: Role[];
+}
+
+/**
+ * The people an access panel names and offers: everyone who may hold content
+ * access, plus the people the panel already shows (owner, grantees, inherited
+ * grants) so a legacy grant to a learner keeps its name and can still be revoked.
+ * Nobody else leaves the server, so an author no longer receives the whole
+ * learner registry.
+ *
+ * @param referenced - Ids of the people the panel already shows.
+ * @returns Id, name, email and effective roles of each person.
+ */
+export async function accessPanelPeople(referenced: ReadonlySet<string>): Promise<AccessPanelPerson[]> {
+  const users = await storage.getUsers();
+  const roles = await Promise.all(users.map((user) => getEffectiveRoles(user)));
+  return users
+    .map((user, i) => ({ user, roles: roles[i] }))
+    .filter(({ user, roles: r }) => referenced.has(user.id) || mayHoldContentAccess(r, user.isExternal))
+    .map(({ user, roles: r }) => ({ id: user.id, name: user.name, email: user.email, roles: r }));
 }
 
 /**

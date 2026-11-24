@@ -1000,6 +1000,38 @@ describe("POST /import — FR-11 (PRD-14 Ф1)", () => {
     expect(payload).toMatchObject({ topicId: "t1", type: "single", prompt: "What is JS?" });
   });
 
+  it.each(["1#3", "1;3", "1,3"])("несколько правильных ответов с разделителем %s → оба индекса", async (cell) => {
+    const buf = await makeImportXlsx([
+      singleRow({
+        "ID": "q1",
+        "Тип вопроса": "multiple_response",
+        "Тексты вариантов ответа": "A#B#C",
+        "Номера правильных ответов": cell,
+      }),
+    ]);
+    await asAuthor(request(app).post("/api/questions/import").attach("file", buf, "q.xlsx"));
+
+    const payload = storageMock.updateQuestion.mock.calls[0][1];
+    expect(payload.correctJson).toEqual({ correctIndices: [0, 2] });
+  });
+
+  it.each([
+    ["multiple_response", "1/3"],
+    ["multiple_response", "1,a"],
+    ["multiple_response", "2)"],
+    ["multiple_choice", "1#2"],
+    ["multiple_choice", "1)"],
+  ])("%s: посторонние символы в номерах %s → ошибка строки, без записи", async (type, cell) => {
+    const buf = await makeImportXlsx([
+      singleRow({ "ID": "q1", "Тип вопроса": type, "Тексты вариантов ответа": "A#B#C", "Номера правильных ответов": cell }),
+    ]);
+    const res = await asAuthor(request(app).post("/api/questions/import").attach("file", buf, "q.xlsx"));
+
+    expect(res.body.errors).toHaveLength(1);
+    expect(res.body.errors[0]).toContain(cell);
+    expect(storageMock.updateQuestion).not.toHaveBeenCalled();
+  });
+
   it("присутствие колонки с пустым значением → сброс к умолчанию", async () => {
     const buf = await makeImportXlsx([singleRow({ "ID": "q1", "Теги": "" })]);
     await asAuthor(request(app).post("/api/questions/import").attach("file", buf, "q.xlsx"));

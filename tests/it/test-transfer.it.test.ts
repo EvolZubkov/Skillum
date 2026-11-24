@@ -41,6 +41,8 @@ import { buildTransferZip } from "../../server/services/test-transfer/export";
 import { importTestPackage } from "../../server/services/test-transfer/import";
 // eslint-disable-next-line import/first
 import { buildSnapshotContent } from "../../server/services/test-snapshot";
+// eslint-disable-next-line import/first
+import { computePsychoHash } from "@shared/questions/psycho-hash";
 
 const TEST_ID = "11111111-1111-4111-8111-111111111111";
 const TOPIC_ID = "22222222-2222-4222-8222-222222222222";
@@ -117,9 +119,15 @@ async function seedSourceTest(db: Harness["db"]): Promise<void> {
   await db.insert(testSections).values({
     id: randomUUID(), testId: TEST_ID, topicId: TOPIC_ID, drawCount: 1,
   } as never);
-  await db.insert(questions).values({
-    id: QUESTION_ID, topicId: TOPIC_ID, type: "single_choice", prompt: "Вопрос",
+  // Every product path writes the PRD-66 content stamp; so does this seed. Without it the
+  // source row is one no installation can hold, and the import (which stamps an unstamped
+  // package) would show a «difference» that is only the fixture's shortcut.
+  const question = {
+    type: "single_choice", prompt: "Вопрос",
     dataJson: { options: ["а", "б"] }, correctJson: { correct: [0] },
+  };
+  await db.insert(questions).values({
+    id: QUESTION_ID, topicId: TOPIC_ID, ...question, psychoHash: computePsychoHash(question),
   } as never);
   await db.insert(scales).values({
     id: SCALE_ID, testId: TEST_ID, key: "vdo", label: "Вдохновляющий", type: "number",

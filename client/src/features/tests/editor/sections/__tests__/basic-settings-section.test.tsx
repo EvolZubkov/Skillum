@@ -725,6 +725,60 @@ describe("<VerdictPane /> — вердикт теста и тем", () => {
     expect(toggle).toBeDisabled();
   });
 
+  // ─── PRD-73: требовать ответ на все вопросы перед завершением ─────────────
+
+  describe("«Требовать ответ на все вопросы перед завершением» (PRD-73)", () => {
+    const DESC =
+      "Кнопка «Завершить раздел» или «Завершить тест» станет активной, когда ответ дан на каждый вопрос. Когда истекает время, раздел или тест завершается как обычно.";
+
+    it("включается автором", () => {
+      const updateModel = vi.fn();
+      const model = baseModel();
+      render(<NavigationPane model={model} updateModel={updateModel} />);
+      const toggle = screen.getByTestId("settings-require-all-answered-switch");
+      expect(toggle).not.toBeChecked();
+      fireEvent.click(toggle);
+      expect(runUpdater(updateModel, model).runtime.requireAllAnsweredToFinish).toBe(true);
+    });
+
+    it("показывает подпись и описание дословно", () => {
+      render(<NavigationPane model={baseModel()} updateModel={vi.fn()} />);
+      expect(screen.getByText("Требовать ответ на все вопросы перед завершением")).toBeInTheDocument();
+      expect(screen.getByText(DESC)).toBeInTheDocument();
+    });
+
+    it("стоит сразу под «Разрешить возврат к неотвеченным вопросам»", () => {
+      render(<NavigationPane model={baseModel()} updateModel={vi.fn()} />);
+      const fields = Array.from(document.querySelectorAll(".ou-formfield"));
+      const at = (id: string) => fields.findIndex((f) => f.querySelector(`[data-testid="${id}"]`));
+      expect(at("settings-require-all-answered-switch")).toBe(at("settings-allow-return-checkbox") + 1);
+    });
+
+    it("без возврата гаснет, не показывается включённым и называет причину", () => {
+      const model = baseModel({
+        runtime: { ...baseModel().runtime, allowReturnToUnanswered: false, requireAllAnsweredToFinish: true },
+      });
+      render(<NavigationPane model={model} updateModel={vi.fn()} />);
+      const toggle = screen.getByTestId("settings-require-all-answered-switch");
+      expect(toggle).toBeDisabled();
+      expect(toggle).not.toBeChecked();
+      expect(screen.queryByText(DESC)).toBeNull();
+      expect(
+        screen.getAllByText("Доступно только при включённом возврате к неотвеченным.").length,
+      ).toBeGreaterThan(0);
+    });
+
+    it("выключение возврата сбрасывает и запрет", () => {
+      const updateModel = vi.fn();
+      const model = baseModel({ runtime: { ...baseModel().runtime, requireAllAnsweredToFinish: true } });
+      render(<NavigationPane model={model} updateModel={updateModel} />);
+      fireEvent.click(screen.getByTestId("settings-allow-return-checkbox"));
+      const updated = runUpdater(updateModel, model);
+      expect(updated.runtime.allowReturnToUnanswered).toBe(false);
+      expect(updated.runtime.requireAllAnsweredToFinish).toBe(false);
+    });
+  });
+
   // ─── PRD-19 FR-11a - FR-11c: свободная навигация внутри раздела ───────────
 
   it("свободная навигация выключается и включается автором", () => {

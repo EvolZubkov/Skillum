@@ -71,6 +71,7 @@ import type {
 import { DEFAULT_BREAKDOWN_DISPLAY } from "./test-editor.types";
 import { makeQuestionOverride, type QuestionScoringOverride } from "./scoring-api";
 import type { DraftBlock } from "./use-report-document";
+import { normalizeReportBlockOutcome } from "@shared/report/report-outcome";
 import { itemOrderForSave } from "./sections/composition-items";
 import { scenarioItemKey } from "@shared/test-items";
 
@@ -117,6 +118,7 @@ export type ApiTestResponse = {
   showAttemptsCount?: boolean | null;
   skipReviewWhenComplete?: boolean | null;
   closeSectionOnLeave?: boolean | null;
+  requireAllAnsweredToFinish?: boolean | null;
   lmsAttemptResult?: "best" | "last" | null;
   copyProtection?: boolean | null;
   protectionWatermark?: boolean | null;
@@ -1202,6 +1204,8 @@ function readReportDocumentFromApi(api: ApiTestResponse): {
         enabled: r.enabled !== false,
         values: isPlainObject(r.valuesJson) ? (r.valuesJson as Record<string, unknown>) : {},
         settings: isPlainObject(r.settingsJson) ? (r.settingsJson as Record<string, unknown>) : {},
+        // NULL — автор содержимым по исходу не распоряжался; объект — его решение.
+        outcome: isPlainObject(r.outcomeJson) ? normalizeReportBlockOutcome(r.outcomeJson) : null,
       }))
       .filter((b) => b.block.length > 0);
   }
@@ -1309,6 +1313,8 @@ export function emptyEditorModel(args: { folderId: string | null }): TestEditorM
       skipReviewWhenComplete: false,
       // PRD-67: новый тест — выход из раздела лишь замораживает время.
       closeSectionOnLeave: false,
+      // PRD-73: новый тест — завершение раздела и теста без запрета.
+      requireAllAnsweredToFinish: false,
       lmsAttemptResult: "last",
       // PRD-50 FR-13: новый тест — подытоги скрыты, как у любого теста без настройки.
       breakdownDisplay: DEFAULT_BREAKDOWN_DISPLAY,
@@ -1450,6 +1456,9 @@ export function apiToEditorModel(api: unknown): TestEditorModel {
       // PRD-67: a response without the column is a test that never closed sections.
       closeSectionOnLeave:
         typeof src.closeSectionOnLeave === "boolean" ? src.closeSectionOnLeave : false,
+      // PRD-73: a response without the column is a test that finished as before.
+      requireAllAnsweredToFinish:
+        typeof src.requireAllAnsweredToFinish === "boolean" ? src.requireAllAnsweredToFinish : false,
       // Поле пришло с сервера как есть. Его нет только у ответа, собранного до колонки:
       // такой тест вёл себя как «лучшая», и читать его иначе значило бы менять поведение
       // задним числом.
@@ -1553,6 +1562,10 @@ export function editorModelToPayload(model: TestEditorModel): TestSettingsPayloa
     showAttemptsCount: model.runtime.showAttemptsCount,
     skipReviewWhenComplete: model.runtime.skipReviewWhenComplete,
     closeSectionOnLeave: model.runtime.closeSectionOnLeave,
+    // PRD-73: without returning nothing can be skipped, so there is nothing to forbid —
+    // a value the UI could not reset (an imported draft) leaves as «off».
+    requireAllAnsweredToFinish:
+      model.runtime.allowReturnToUnanswered && model.runtime.requireAllAnsweredToFinish === true,
     lmsAttemptResult: model.runtime.lmsAttemptResult,
     // PRD-50 FR-13: a draft persisted before this PRD carries no slice yet — resolves
     // to the same «Не показывать» the missing column has always meant.
@@ -1609,6 +1622,9 @@ export function editorModelToPayload(model: TestEditorModel): TestSettingsPayloa
             enabled: b.enabled,
             values: b.values,
             settings: b.settings,
+            // Не распоряжался — поля нет, и сервер оставит NULL: умолчания шаблона продолжат
+            // действовать. Пустой объект уходит как есть — это «выключено».
+            ...(b.outcome ? { outcome: b.outcome } : {}),
           })),
         }
       : {}),

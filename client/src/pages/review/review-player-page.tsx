@@ -3,7 +3,7 @@
  * @description PRD-52 — окно рецензента (`/review/tests/:testId`).
  *
  * То же окно, что отладчик автора, с урезанным до трёх вкладок инспектором:
- * «Комментарии», «Результаты», «Протокол». «Выдача», «Шкалы», «Показатели»,
+ * «Рецензирование», «Результаты», «Протокол». «Выдача», «Шкалы», «Показатели»,
  * «Состояние» и «LMS» рецензенту не показываются — это машинерия рантайма, и
  * человека, пришедшего вычитать формулировки, она только уводит в сторону.
  *
@@ -21,12 +21,14 @@ import { buildSnapshot, type InspectorSnapshot } from "@/features/tests/debug-pl
 import { ScorePanel, ProtocolPanel, PanelEmpty } from "@/features/tests/run-inspector/panels";
 import { ReviewPanel } from "@/features/tests/review/review-panel";
 import { useScreenAnchor } from "@/features/tests/review/use-screen-anchor";
+import { useScreenTitle } from "@/features/tests/review/use-screen-title";
+import { useReviewApprovalMarks } from "@/features/tests/review/use-approval-marks";
 import "@/features/tests/debug-player/debug-player.css";
 
 type ReviewTabId = "comments" | "score" | "protocol";
 
 const TABS: { id: ReviewTabId; label: string }[] = [
-  { id: "comments", label: "Комментарии" },
+  { id: "comments", label: "Рецензирование" },
   { id: "score", label: "Результаты" },
   { id: "protocol", label: "Протокол" },
 ];
@@ -40,11 +42,15 @@ export default function ReviewPlayerPage() {
   const { state, runKey, reset } = useDebugSession(testId, "review");
   const [tab, setTab] = useState<ReviewTabId>("comments");
   const [snap, setSnap] = useState<InspectorSnapshot | null>(null);
-  const [reference, setReference] = useState(false);
+  // Reviewer sees the reference (correct answers) highlighted by default.
+  const [reference, setReference] = useState(true);
   const [fullDraw, setFullDraw] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Место комментария — текущий экран прогона; тот же резолвер, что рисует эталон.
   const screenAnchor = useScreenAnchor(frameRef, snap);
+  const screenTitle = useScreenTitle(frameRef, snap, screenAnchor);
+  // PRD-52: бейджи «Согласовано» на карте вопросов в кадре пакета - только собственные отметки рецензента.
+  useReviewApprovalMarks(frameRef, testId, snap);
 
   // Снимок инспектора снимается по тику с ЖИВОГО рантайма пакета: подписаться не на
   // что — пакет ничего не публикует наружу, кроме своих глобалей. Тем же тиком
@@ -185,9 +191,9 @@ export default function ReviewPlayerPage() {
             variant="underline"
             size="s"
           />
-          <div className="dbg__ins-body">
+          <div className={"dbg__ins-body" + (tab === "comments" ? " dbg__ins-body--flush" : "")}>
             {tab === "comments" ? (
-              <ReviewPanel testId={testId} mode="player" screenAnchor={screenAnchor} />
+              <ReviewPanel testId={testId} mode="player" screenAnchor={screenAnchor} screenTitle={screenTitle} />
             ) : !snap ? (
               <PanelEmpty text="Запустите пакет — здесь появятся данные прогона." />
             ) : fullDraw ? (

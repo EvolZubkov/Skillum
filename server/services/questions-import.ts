@@ -347,22 +347,29 @@ export async function importQuestionRows(
             correctJson = { correctIndex: idx };
           }
         } else if (type === "single") {
-          const idx = parseInt(correctStr, 10) - 1;
+          // Strict: parseInt alone would read "1#2" or "1)" as 1 and hide the author's mistake.
+          const idx = /^\d+$/.test(correctStr) ? parseInt(correctStr, 10) - 1 : NaN;
           if (isNaN(idx) || idx < 0 || idx >= options.length) {
             result.errors.push(`Строка ${rowNum}: некорректный номер правильного ответа "${correctStr}"`);
             continue;
           }
           correctJson = { correctIndex: idx };
         } else {
-          const indices = correctStr
-            .split(/[,.\s]+/)
-            .map((s) => parseInt(s.trim(), 10) - 1)
-            .filter((n) => !isNaN(n));
-
-          if (indices.length === 0) {
+          const tokens = correctStr.split(/[,.;#\s]+/).filter(Boolean);
+          if (tokens.length === 0) {
             result.errors.push(`Строка ${rowNum}: не указаны правильные ответы`);
             continue;
           }
+          // Strict: a token with stray characters ("1/3", "2)", "a") is an error, not a number to guess.
+          const badToken = tokens.find((t) => !/^\d+$/.test(t));
+          if (badToken !== undefined) {
+            result.errors.push(
+              `Строка ${rowNum}: в номерах правильных ответов посторонние символы "${correctStr}" ` +
+                `(допустимы цифры и разделители , ; # . пробел)`,
+            );
+            continue;
+          }
+          const indices = tokens.map((t) => parseInt(t, 10) - 1);
           if (indices.some((n) => n < 0 || n >= options.length)) {
             result.errors.push(`Строка ${rowNum}: номера правильных ответов выходят за пределы`);
             continue;

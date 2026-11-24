@@ -19,6 +19,7 @@ import { db } from "../db";
 import { questions, type Question, type InsertQuestion } from "@shared/schema";
 import { computePsychoHash } from "@shared/questions/psycho-hash";
 import { touchTopics } from "./shared";
+import { questionReviewHash } from "../services/review-content-hash";
 
 /**
  * The PRD-66 FR-09a content stamp of a question, computed HERE and never taken from
@@ -205,13 +206,27 @@ export class QuestionsRepository {
           prompt: questions.prompt,
           dataJson: questions.dataJson,
           correctJson: questions.correctJson,
+          feedback: questions.feedback,
         })
         .from(questions)
         .where(eq(questions.id, id));
       if (!before) return undefined;
 
+      // PRD-52 (issue 61): the moment the REVIEWED content moves. Same partial-patch rule as the stamp above:
+      // the hash is taken over the row as it will be, and the date is written only when it differs from the
+      // hash of the row as it was - an edit of difficulty or tags leaves it alone.
+      const reviewedBefore = questionReviewHash(before);
+      const reviewedAfter = questionReviewHash({
+        prompt: updates.prompt ?? before.prompt,
+        dataJson: updates.dataJson ?? before.dataJson,
+        correctJson: updates.correctJson ?? before.correctJson,
+        feedback: updates.feedback !== undefined ? updates.feedback : before.feedback,
+      });
+
       const patch = {
         ...updates,
+        // `undefined` is skipped by drizzle, so a value smuggled in `updates` is dropped as well.
+        contentChangedAt: reviewedAfter !== reviewedBefore ? new Date() : undefined,
         psychoHash: stampOf({
           type: updates.type ?? before.type,
           prompt: updates.prompt ?? before.prompt,

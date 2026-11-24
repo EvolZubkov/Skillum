@@ -53,6 +53,7 @@ import type {
   TestEditorModel,
   ValidationResult,
 } from "./test-editor.types";
+import { useEditorQuestions } from "./questions/use-editor-questions";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -545,15 +546,18 @@ export function useTestEditor(
    * банке» (контракт «Индикация проблем»: проблема обязана быть в общем контуре, иначе
    * секция считает её в одиночку и снаружи её никто не видит).
    *
-   * Запрос тот же, что у вкладки «Состав», — React Query отдаёт его из кэша.
+   * Запрос тот же, что у вкладки «Состав», — React Query отдаёт его из кэша. Темы теста
+   * считаются и без прав на тему (role-model.md 6.5.1).
    */
-  const questionsQuery = useQuery<{ id: string; topicId?: string | null; tags?: string[] }[]>({
-    queryKey: ["/api/questions"],
-    enabled: Boolean(draft),
-  });
+  const questionsQuery = useEditorQuestions<{ id: string; topicId?: string | null; tags?: string[] }>(
+    draft?.id,
+    { enabled: Boolean(draft) },
+  );
   const validationContext = useMemo<ValidationContext>(() => {
+    // Until both sources answer the counts would judge a partial list and report shortfalls
+    // that are not there.
+    if (!questionsQuery.loaded) return {};
     const rows = questionsQuery.data;
-    if (!rows) return {};
     const available: Record<string, Record<string, number>> = {};
     for (const q of rows) {
       if (!q.topicId) continue;
@@ -564,7 +568,7 @@ export function useTestEditor(
       }
     }
     return { availableByTopicAndTag: available };
-  }, [questionsQuery.data]);
+  }, [questionsQuery.loaded, questionsQuery.data]);
 
   const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {

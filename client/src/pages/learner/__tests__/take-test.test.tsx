@@ -50,7 +50,9 @@ vi.mock("@/components/template-screen", () => ({
   TemplateScreen: (props: any) => (
     <div data-testid="template-screen">
       <pre data-testid="ts-context">{JSON.stringify(props.context)}</pre>
-      {["start-test", "restart", "resume", "view-results", "download-report", "back", "finish-review", "section-continue"].map(
+      {/* PRD-73: the actions the host asked the screen to render inert. */}
+      <pre data-testid="ts-disabled">{JSON.stringify(props.disabledActions ?? [])}</pre>
+      {["start-test", "restart", "resume", "view-results", "download-report", "back", "finish-review", "section-continue", "goto:0"].map(
         (a) => (
           <button key={a} data-testid={`ts-${a}`} onClick={() => props.onAction && props.onAction(a)}>
             {a}
@@ -617,6 +619,104 @@ describe("<TakeTestPage /> resume", () => {
     await screen.findByTestId("question-screen");
     expect(screen.getByTestId("qs-prompt").textContent).toBe("Восстановленный вопрос");
     expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Тест восстановлен" }));
+  });
+});
+
+// ─── PRD-73: завершение только после ответа на все вопросы ──────────────────────
+
+describe("<TakeTestPage /> PRD-73: завершение только после ответа на все вопросы", () => {
+  const CONFIRM_TEXT = /Они будут засчитаны как неверные/;
+  const requireAll = (over: Record<string, unknown> = {}) =>
+    jsonRes(
+      standardAttempt({
+        allowReturnToUnanswered: true,
+        requireAllAnsweredToFinish: true,
+        answerCommitScope: "test",
+        ...over,
+      }),
+    );
+
+  /** Q1 skipped, Q2 answered — the run ends on the обзор with one question unanswered. */
+  async function skipFirstAnswerSecond() {
+    fireEvent.click(screen.getByTestId("ts-start-test"));
+    await screen.findByTestId("question-screen");
+    fireEvent.click(await screen.findByText("Пропустить"));
+    await waitFor(() => expect(screen.getByTestId("qs-counter").textContent).toContain("Вопрос 2 из 2"));
+    fireEvent.click(screen.getByTestId("qs-answer-0"));
+    fireEvent.click(await screen.findByText("Отправить ответ"));
+    fireEvent.click(await screen.findByText("Далее"));
+    await screen.findByTestId("ts-finish-review");
+  }
+
+  it("обзор с пропуском: кнопка неактивна, подсказка называет число", async () => {
+    await renderToStart({ startAttempt: requireAll() });
+    await skipFirstAnswerSecond();
+    expect(ctx().review.finishBlocked).toBe(true);
+    expect(ctx().review.hint).toContain("Осталось без ответа: 1");
+    expect(JSON.parse(screen.getByTestId("ts-disabled").textContent || "[]")).toContain("finish-review");
+  });
+
+  it("клик по неактивной кнопке ничего не завершает и окна не открывает", async () => {
+    await renderToStart({ startAttempt: requireAll() });
+    await skipFirstAnswerSecond();
+    fireEvent.click(screen.getByTestId("ts-finish-review"));
+    expect(screen.queryByText(CONFIRM_TEXT)).toBeNull();
+    expect(navigateSpy).not.toHaveBeenCalledWith("/learner/result/attempt-1");
+    expect(screen.getByTestId("ts-finish-review")).toBeInTheDocument();
+  });
+
+  it("ответ на пропущенный снимает запрет — завершение без окна подтверждения", async () => {
+    await renderToStart({ startAttempt: requireAll() });
+    await skipFirstAnswerSecond();
+    fireEvent.click(screen.getByTestId("ts-goto:0"));
+    await waitFor(() => expect(screen.getByTestId("qs-counter").textContent).toContain("Вопрос 1 из 2"));
+    fireEvent.click(screen.getByTestId("qs-answer-0"));
+    fireEvent.click(await screen.findByText("Отправить ответ"));
+    fireEvent.click(await screen.findByText("Далее"));
+    // Поток ведёт дальше по порядку — на уже отвеченный Q2 (только чтение).
+    await waitFor(() => expect(screen.getByTestId("qs-counter").textContent).toContain("Вопрос 2 из 2"));
+    fireEvent.click(await screen.findByText("Далее"));
+    // Отвечено всё, правка ответа запрещена: обзор больше не нужен, попытка завершается.
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/learner/result/attempt-1"));
+    expect(screen.queryByText(CONFIRM_TEXT)).toBeNull();
+  });
+
+  it("без настройки пропуск ведёт к окну подтверждения, как прежде", async () => {
+    await renderToStart({ startAttempt: requireAll({ requireAllAnsweredToFinish: undefined }) });
+    await skipFirstAnswerSecond();
+    expect(ctx().review.finishBlocked).toBe(false);
+    expect(JSON.parse(screen.getByTestId("ts-disabled").textContent || "[]")).toEqual([]);
+    fireEvent.click(screen.getByTestId("ts-finish-review"));
+    expect(await screen.findByText(CONFIRM_TEXT)).toBeInTheDocument();
+  });
+
+  it("скрытый автором обзор показывается, пока есть пропуски (§3.5)", async () => {
+    await renderToStart({
+      startAttempt: requireAll({ contentPages: [{ id: "cp-review", kind: "review", hidden: true }] }),
+    });
+    await skipFirstAnswerSecond();
+    expect(ctx().review.finishBlocked).toBe(true);
+  });
+
+  it("скрытый автором обзор не показывается, когда отвечено всё", async () => {
+    await renderToStart({
+      startAttempt: requireAll({
+        // Правка ответа обычно держит обзор на экране — скрытие автора обязано победить.
+        allowAnswerChange: true,
+        contentPages: [{ id: "cp-review", kind: "review", hidden: true }],
+      }),
+    });
+    fireEvent.click(screen.getByTestId("ts-start-test"));
+    await screen.findByTestId("question-screen");
+    fireEvent.click(screen.getByTestId("qs-answer-0"));
+    fireEvent.click(await screen.findByText("Отправить ответ"));
+    fireEvent.click(await screen.findByText("Далее"));
+    await waitFor(() => expect(screen.getByTestId("qs-counter").textContent).toContain("Вопрос 2 из 2"));
+    fireEvent.click(screen.getByTestId("qs-answer-0"));
+    fireEvent.click(await screen.findByText("Отправить ответ"));
+    fireEvent.click(await screen.findByText("Далее"));
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/learner/result/attempt-1"));
+    expect(screen.queryByTestId("ts-finish-review")).toBeNull();
   });
 });
 

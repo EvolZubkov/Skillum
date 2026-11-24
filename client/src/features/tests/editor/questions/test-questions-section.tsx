@@ -11,6 +11,10 @@
  * Панель только читает. Балл, цену ответа, вклады, варианты и квоты правят их вкладки
  * ящика, и второй способ править то же самое развёл бы их. Содержание вопроса правится в
  * ящике вопроса, который монтирует хозяин вкладки (`onOpenQuestion` / `onCreateQuestion`).
+ *
+ * Вопросы приходят из {@link useEditorQuestions}: банк плюс вопросы тем, которые тест даёт
+ * читать сам (role-model.md 6.5.1). У темы, содержимое которой читателю править нельзя, панель
+ * не предлагает перехода в ящик вопроса и кнопки «Добавить вопрос» — остаётся просмотр.
  */
 import { useMemo, useState } from "react";
 import type * as React from "react";
@@ -33,6 +37,7 @@ import type { TestEditorModel } from "../test-editor.types";
 import { QUESTION_TYPE_ICON, QUESTION_TYPE_LABEL } from "../sections/question-type-icon";
 import { buildQuestionSummary } from "./question-summary";
 import { questionAnalytics } from "./question-analytics";
+import { useEditorQuestions } from "./use-editor-questions";
 
 type QuestionRow = Question & { topicName?: string };
 
@@ -66,12 +71,17 @@ export function TestQuestionsSection({
   model,
   topicId,
   testId,
-  onOpenQuestion,
-  onCreateQuestion,
+  onOpenQuestion: openQuestionProp,
+  onCreateQuestion: createQuestionProp,
 }: TestQuestionsSectionProps): React.JSX.Element | null {
-  const { data: allQuestions = [], isLoading } = useQuery<QuestionRow[]>({
-    queryKey: ["/api/questions"],
-  });
+  const { data: allQuestions, isLoading, readOnlyTopicIds } = useEditorQuestions<QuestionRow>(
+    testId ?? model.id,
+  );
+  // role-model.md 6.5.1: a topic read only in the context of this test offers no way into the
+  // question editor — the server would refuse the save. The preview stays.
+  const readOnly = readOnlyTopicIds.has(topicId);
+  const onOpenQuestion = readOnly ? undefined : openQuestionProp;
+  const onCreateQuestion = readOnly ? undefined : createQuestionProp;
   const { threads } = useReviewComments(testId ?? "", { enabled: Boolean(testId) });
   // Данные прохождений — только с правом на аналитику и только у сохранённого теста. Ключ
   // запроса тот же, что у страницы аналитики без фильтров: числа не расходятся, а переход

@@ -58,6 +58,7 @@ const ROUND_TRIP_SOURCE = {
   showAttemptsCount: false,
   skipReviewWhenComplete: true,
   closeSectionOnLeave: true,
+  requireAllAnsweredToFinish: true,
   copyProtection: false,
   protectionWatermark: true,
   protectionHideOnBlur: false,
@@ -203,6 +204,12 @@ describe("реестр листа «Настройки»", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("Цвет фона");
     expect(draft.test.maxAttempts).toBe(3);
+  });
+
+  it("книга без строки PRD-73 настройку запрета завершения не трогает", () => {
+    const { draft, errors } = parseSettingsSheet([row("Максимум попыток", 3)]);
+    expect(errors).toEqual([]);
+    expect("requireAllAnsweredToFinish" in draft.test).toBe(false);
   });
 
   it("ошибка перечисления называет допустимые значения", () => {
@@ -383,6 +390,8 @@ describe("реестр листа «Настройки»", () => {
       skipReviewWhenComplete: true,
       // PRD-67: добавлен параметр листа; прежние книги без него настройку не трогают.
       closeSectionOnLeave: true,
+      // PRD-73: параметр листа добавлен; прежние книги без него настройку не трогают.
+      requireAllAnsweredToFinish: true,
       copyProtection: false,
       protectionWatermark: true,
       protectionHideOnBlur: false,

@@ -68,6 +68,18 @@ describe("magicScopeGuard", () => {
     expect(res.body.code).toBe("MAGIC_SCOPE");
   });
 
+  it("lets a review link reach the approvals of its own test and no other (issue 66)", async () => {
+    const app = makeApp({ assignmentId: "a1", testId: "t1" });
+    expect((await request(app).get("/api/tests/t1/review/approvals")).status).toBe(200);
+    expect((await request(app).put("/api/tests/t1/review/approvals")).status).toBe(200);
+    expect((await request(app).delete("/api/tests/t1/review/approvals/a1")).status).toBe(200);
+    const other = await request(app).get("/api/tests/t2/review/approvals");
+    expect(other.status).toBe(403);
+    expect(other.body.code).toBe("MAGIC_SCOPE");
+    expect((await request(app).put("/api/tests/t2/review/approvals")).status).toBe(403);
+    expect((await request(app).delete("/api/tests/t2/review/approvals/a1")).status).toBe(403);
+  });
+
   it("allows an attempt of this test owned by this user", async () => {
     storageMock.getAttempt.mockResolvedValue({ id: "at1", userId: "u1", testId: "t1" });
     const res = await request(makeApp({ assignmentId: "a1", testId: "t1" })).get("/api/attempts/at1/result");

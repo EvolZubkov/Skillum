@@ -223,6 +223,18 @@ function tbDebugFullDraw(win) {
   } catch (e) { return false; }
 }
 
+// PRD-52 review: «Все вопросы темы» is proof-reading of the WHOLE bank, so the reviewer must be able to open any
+// question of it, not only the ones the run has reached. The two flags below are exactly what the package reads as
+// free navigation (dots of the map, «Назад», «Пропустить», the full «К обзору»). Same hash flag as the full draw,
+// so it is INERT in production; an adaptive run is led by its own logic and is left alone. `testData` and `win`
+// are injectable for the unit test.
+function tbDebugApplyFreeNavigation(testData, win) {
+  if (!testData || testData.mode === 'adaptive' || !tbDebugFullDraw(win)) return false;
+  testData.allowReturnToUnanswered = true;
+  testData.allowFreeSectionNavigation = true;
+  return true;
+}
+
 function generateVariant() {
   state.variant = { sections: [] };
   state.flatQuestions = [];
@@ -233,6 +245,8 @@ function generateVariant() {
   var tbForcedForms = tbDebugForcedForms();
   // PRD-52 review: whole-bank delivery (false in production — inert).
   var tbFullDraw = tbDebugFullDraw();
+  // PRD-52 review: the whole bank comes with free navigation (inert in production).
+  tbDebugApplyFreeNavigation(TEST_DATA);
 
   // PRD-30 раздел 14: selection happens per topic here, the delivery ORDER of the
   // whole test is decided ONCE by assembleDelivery below — never by a second pass

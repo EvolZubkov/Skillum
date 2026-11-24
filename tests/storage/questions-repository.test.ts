@@ -390,3 +390,42 @@ describe("QuestionsRepository — delete", () => {
     expect(remaining[0].prompt).toBe("q3");
   });
 });
+
+describe("QuestionsRepository - contentChangedAt (PRD-52, issue 61)", () => {
+  it("is NULL on create and after an edit that leaves the reviewed content alone", async () => {
+    const topicId = await makeTopic("T-changed-none");
+    const q = await storage.createQuestion(singleQ(topicId));
+    expect(q.contentChangedAt).toBeNull();
+    const edited = await storage.updateQuestion(q.id, { difficulty: 80, tags: ["x"] });
+    expect(edited?.contentChangedAt).toBeNull();
+  });
+
+  it("is stamped when the prompt, the options, the key or the feedback change", async () => {
+    const topicId = await makeTopic("T-changed-set");
+    const q = await storage.createQuestion(singleQ(topicId));
+    const before = Date.now();
+    const edited = await storage.updateQuestion(q.id, { prompt: "single? (new)" });
+    expect(edited?.contentChangedAt).toBeInstanceOf(Date);
+    expect(edited!.contentChangedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+    const q2 = await storage.createQuestion(singleQ(topicId, { prompt: "second?" }));
+    expect((await storage.updateQuestion(q2.id, { correctJson: { correctIndex: 1 } }))?.contentChangedAt).toBeInstanceOf(Date);
+    const q3 = await storage.createQuestion(singleQ(topicId, { prompt: "third?" }));
+    expect((await storage.updateQuestion(q3.id, { feedback: "because" }))?.contentChangedAt).toBeInstanceOf(Date);
+  });
+
+  it("does not move on a save that writes the same content again", async () => {
+    const topicId = await makeTopic("T-changed-same");
+    const q = await storage.createQuestion(singleQ(topicId));
+    const same = await storage.updateQuestion(q.id, { prompt: q.prompt, dataJson: q.dataJson, correctJson: q.correctJson });
+    expect(same?.contentChangedAt).toBeNull();
+  });
+
+  it("ignores a date supplied by the caller", async () => {
+    const topicId = await makeTopic("T-changed-caller");
+    const q = await storage.createQuestion(singleQ(topicId));
+    const forged = new Date("2001-01-01T00:00:00Z");
+    const edited = await storage.updateQuestion(q.id, { difficulty: 10, contentChangedAt: forged } as never);
+    expect(edited?.contentChangedAt).toBeNull();
+  });
+});

@@ -56,9 +56,13 @@ const {
     setTestOwner: vi.fn().mockResolvedValue(undefined),
     // PRD-13 object-scope helpers.
     getTestAccessGrants: vi.fn().mockResolvedValue([]),
+    // Folder access inheritance: the access answer reads the folder tree and its grants.
+    getTestFolders: vi.fn().mockResolvedValue([]),
+    getTestFolderGrants: vi.fn().mockResolvedValue([]),
     getUserTestGrants: vi.fn().mockResolvedValue([]),
     getTestIdsByOwner: vi.fn().mockResolvedValue([]),
     getTestGrantForUser: vi.fn().mockResolvedValue(undefined),
+    getTestReviewGrant: vi.fn().mockResolvedValue(undefined),
     isTestAssignedToUser: vi.fn().mockResolvedValue(false),
     upsertTestAccessGrant: vi.fn(),
     removeTestAccessGrant: vi.fn(),
@@ -98,6 +102,8 @@ const {
   dbState: { templates: [] as Array<Record<string, unknown>> },
 }));
 
+// The storage mock does not model the test folder tree: folders give no right here.
+vi.mock("../server/services/test-folder-access", () => import("./helpers/no-folder-rights"));
 vi.mock("../server/storage", () => ({ storage: storageMock }));
 // Configurable Drizzle chain: `db.select().from(t).where(cond)` resolves to
 // dbState.templates (the design route reads the active template row this way).
@@ -188,6 +194,7 @@ function resetDefaults() {
   storageMock.getQuestionMeasurements.mockResolvedValue([]);
   storageMock.getLatestSnapshot.mockResolvedValue(undefined);
   storageMock.getTestGrantForUser.mockResolvedValue(undefined);
+  storageMock.getTestReviewGrant.mockResolvedValue(undefined);
   storageMock.isTestAssignedToUser.mockResolvedValue(false);
   storageMock.getActiveTopicGrantsForGrantees.mockResolvedValue([]);
   storageMock.getTestAccessGrants.mockResolvedValue([]);
@@ -228,6 +235,31 @@ describe("GET /api/tests — scope filter and error branch", () => {
     storageMock.getUserRoles.mockResolvedValue(["administrator"]);
     const asAdm = await asAdmin(request(app).get("/api/tests"));
     expect(asAdm.body[0].canAssign).toBe(true);
+  });
+
+  it("a reviewer finds the test in the list; the row says they may review, not edit (PRD-52)", async () => {
+    storageMock.getTests.mockResolvedValue([{ ...dbTest, id: "test1", ownerId: "someone-else" }]);
+    // developer + author + manager, no owned tests, no working grant: only an invitation.
+    storageMock.getUserRoles.mockResolvedValue(["developer", "author", "manager"]);
+    storageMock.getUserTestGrants.mockResolvedValue([{ testId: "test1", userId: "author1", accessLevel: "review" }]);
+    storageMock.getTestReviewGrant.mockResolvedValue({ testId: "test1", userId: "author1", accessLevel: "review" });
+
+    const res = await asAuthor(request(app).get("/api/tests"));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ id: "test1", canEdit: false, canReview: true, canAssign: false });
+  });
+
+  it("an `assign` grant gives canAssign but neither canEdit nor canReview", async () => {
+    storageMock.getTests.mockResolvedValue([{ ...dbTest, id: "test1", ownerId: "someone-else" }]);
+    storageMock.getUserRoles.mockResolvedValue(["manager"]);
+    storageMock.getUserTestGrants.mockResolvedValue([
+      { testId: "test1", userId: "author1", accessLevel: "assign" },
+    ]);
+    storageMock.getTestGrantForUser.mockResolvedValue({ testId: "test1", userId: "author1", accessLevel: "assign" });
+
+    const res = await asAuthor(request(app).get("/api/tests"));
+    expect(res.body[0]).toMatchObject({ canEdit: false, canAssign: true, canReview: false });
   });
 
   it("500 when storage.getTests throws", async () => {
@@ -424,6 +456,24 @@ describe("POST /api/tests — error and permission branches", () => {
     }));
     expect(res.status).toBe(422);
     expect(res.body.error).toBe("flow_policy_invalid");
+  });
+
+  it("403 when an author creates a test inside a folder they may not edit", async () => {
+    storageMock.getUserRoles.mockResolvedValue(["author"]);
+    storageMock.getTopic.mockResolvedValue({ id: "t1", name: "JS", ownerId: null, visibility: "shared" });
+    const res = await asAuthor(request(app).post("/api/tests").send({
+      title: "T", mode: "standard", sections: [{ topicId: "t1", drawCount: 3 }], folderId: "f1",
+    }));
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "forbidden", field: "folderId" });
+    expect(serviceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("lets an administrator create a test in any folder", async () => {
+    await asAdmin(request(app).post("/api/tests").send({
+      title: "T", mode: "standard", sections: [{ topicId: "t1", drawCount: 3 }], folderId: "f1",
+    }));
+    expect(serviceMock.create).toHaveBeenCalled();
   });
 
   it("500 when the create service throws a generic error", async () => {
@@ -951,6 +1001,29 @@ describe("GET /api/tests/:id/access", () => {
     expect(res.body.grants).toEqual([{ userId: "u2", accessLevel: "assign" }]);
   });
 
+  it("answers no inherited rows for a test in the root", async () => {
+    storageMock.getTest.mockResolvedValue({ ...dbTest, ownerId: "author1", folderId: null });
+    const res = await asAdmin(request(app).get("/api/tests/test1/access"));
+    expect(res.body.inherited).toEqual([]);
+  });
+
+  it("lists who reaches the test through its folders, without the test owner", async () => {
+    const folderAccess = await import("../server/services/test-folder-access");
+    vi.mocked(folderAccess.loadTestFolderNodes).mockResolvedValueOnce(new Map([
+      ["fB", { id: "fB", parentId: "fA", ownerId: "author1" }],
+      ["fA", { id: "fA", parentId: null, ownerId: "boss" }],
+    ]));
+    storageMock.getTestFolders.mockResolvedValueOnce([{ id: "fA", name: "Охрана труда" }, { id: "fB", name: "Инструктажи" }]);
+    storageMock.getTestFolderGrants.mockResolvedValueOnce([{ folderId: "fB", userId: "u2", accessLevel: "assign" }]);
+    storageMock.getTest.mockResolvedValue({ ...dbTest, ownerId: "author1", folderId: "fB" });
+    const res = await asAdmin(request(app).get("/api/tests/test1/access"));
+    expect(res.status).toBe(200);
+    expect(res.body.inherited).toEqual([
+      { userId: "u2", accessLevel: "assign", folderId: "fB", folderName: "Инструктажи" },
+      { userId: "boss", accessLevel: "edit", folderId: "fA", folderName: "Охрана труда" },
+    ]);
+  });
+
   it("500 when loading grants throws", async () => {
     storageMock.getTest.mockResolvedValue(dbTest);
     storageMock.getTestAccessGrants.mockRejectedValue(new Error("boom"));
@@ -984,6 +1057,17 @@ describe("GET /api/tests/:id/access/users", () => {
       { id: "u2", name: "Мария", email: "maria@t.ru", roles: ["author"] },
       { id: "u3", name: null, email: null, roles: ["author"] },
     ]);
+  });
+
+  // Role-model 6.0: a learner is not offered, unless the panel already names them.
+  it("leaves out a learner who holds nothing on the test, keeps one who does", async () => {
+    storageMock.getUserRoles.mockImplementation(async (id: string) => (id === "u3" ? ["learner"] : ["administrator"]));
+    const plain = await asAdmin(request(app).get("/api/tests/test1/access/users"));
+    expect(plain.status).toBe(200);
+    expect(plain.body.map((u: { id: string }) => u.id)).toEqual(["u2"]);
+    storageMock.getTestAccessGrants.mockResolvedValue([{ testId: "test1", userId: "u3", accessLevel: "assign" }]);
+    const named = await asAdmin(request(app).get("/api/tests/test1/access/users"));
+    expect(named.body.map((u: { id: string }) => u.id)).toEqual(["u2", "u3"]);
   });
 
   it("403 when a non-owner author asks", async () => {
@@ -1049,6 +1133,14 @@ describe("POST /api/tests/:id/access", () => {
     const res = await asAdmin(request(app).post("/api/tests/test1/access").send({ userId: "ghost", accessLevel: "edit" }));
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("User not found");
+  });
+
+  it("422 when the grantee holds no administrative role", async () => {
+    storageMock.getUserRoles.mockImplementation(async (id: string) => (id === "admin1" ? ["administrator"] : ["learner"]));
+    const res = await asAdmin(request(app).post("/api/tests/test1/access").send({ userId: "u2", accessLevel: "assign" }));
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.upsertTestAccessGrant).not.toHaveBeenCalled();
   });
 
   it("201 grants access to an existing user", async () => {
@@ -1149,6 +1241,14 @@ describe("PATCH /api/tests/:id/owner", () => {
     expect(res.status).toBe(200);
     expect(res.body.ownerId).toBeNull();
     expect(storageMock.setTestOwner).toHaveBeenCalledWith("test1", null);
+  });
+
+  it("422 when the new owner holds no administrative role", async () => {
+    storageMock.getUserRoles.mockImplementation(async (id: string) => (id === "admin1" ? ["administrator"] : ["learner"]));
+    const res = await asAdmin(request(app).patch("/api/tests/test1/owner").send({ ownerId: "u2" }));
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("grantee_not_staff");
+    expect(storageMock.setTestOwner).not.toHaveBeenCalled();
   });
 
   it("200 assigns a new existing owner", async () => {

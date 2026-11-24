@@ -7,6 +7,8 @@
  * delegates `data-action` clicks to `onAction`.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { TemplateScreen, extractFontFaces } from "../template-screen";
@@ -70,6 +72,51 @@ describe("TemplateScreen", () => {
     const shadow = shadowOf(container);
     (shadow.querySelector('[data-action="restart"]') as HTMLElement).click();
     expect(onAction).toHaveBeenCalledWith("restart");
+    cleanup();
+  });
+});
+
+// ─── PRD-73: actions the host refuses render disabled ───────────────────────
+
+describe("TemplateScreen disabledActions (PRD-73)", () => {
+  const layout =
+    '<div class="tb-scene"><span data-path="course.title"></span>' +
+    '<button data-action="finish-review">Завершить</button><button data-action="review-back">Назад</button></div>';
+  const finishOf = (container: HTMLElement) =>
+    shadowOf(container).querySelector('[data-action="finish-review"]') as HTMLButtonElement;
+
+  it("рисует запрещённое действие неактивным, остальные не трогает", () => {
+    const { container } = render(
+      <TemplateScreen layout={layout} context={{ course: { title: "A" } }} disabledActions={["finish-review"]} />,
+    );
+    expect(finishOf(container).disabled).toBe(true);
+    expect((shadowOf(container).querySelector('[data-action="review-back"]') as HTMLButtonElement).disabled).toBe(false);
+    cleanup();
+  });
+
+  it("держит запрет после каждой перерисовки сцены", () => {
+    const { container, rerender } = render(
+      <TemplateScreen layout={layout} context={{ course: { title: "A" } }} disabledActions={["finish-review"]} />,
+    );
+    rerender(<TemplateScreen layout={layout} context={{ course: { title: "B" } }} disabledActions={["finish-review"]} />);
+    rerender(<TemplateScreen layout={layout} context={{ course: { title: "C" } }} disabledActions={["finish-review"]} />);
+    expect(finishOf(container).disabled).toBe(true);
+    cleanup();
+  });
+
+  it("снимает запрет, когда список опустел", () => {
+    const ctx = { course: { title: "A" } };
+    const { container, rerender } = render(
+      <TemplateScreen layout={layout} context={ctx} disabledActions={["finish-review"]} />,
+    );
+    rerender(<TemplateScreen layout={layout} context={ctx} disabledActions={[]} />);
+    expect(finishOf(container).disabled).toBe(false);
+    cleanup();
+  });
+
+  it("без свойства ведёт себя как прежде", () => {
+    const { container } = render(<TemplateScreen layout={layout} context={{ course: { title: "A" } }} />);
+    expect(finishOf(container).disabled).toBe(false);
     cleanup();
   });
 });
@@ -144,6 +191,49 @@ describe("TemplateScreen — themes (PRD-23)", () => {
     const { container } = render(<TemplateScreen layout="<div>x</div>" context={{}} themed />);
     const host = container.querySelector("[data-template-screen]") as HTMLElement;
     expect(host.classList.contains("ou--light")).toBe(true);
+    cleanup();
+  });
+});
+
+describe("TemplateScreen — paged question map", () => {
+  const layout = fs.readFileSync(
+    path.join(process.cwd(), "server", "scorm", "templates", "default", "layouts", "question.html"),
+    "utf8",
+  );
+  const states = Array.from({ length: 17 }, (_, i) => ({
+    index: i,
+    number: i + 1,
+    statusClass: i === 16 ? "is-current" : i === 6 ? "is-flagged" : "",
+    clickable: true,
+    ariaLabel: `Вопрос ${i + 1}`,
+  }));
+  const context = {
+    course: { title: "Демо" },
+    design: { logoUrl: "" },
+    state: {
+      questionCounterLabel: "Вопрос 17 из 17",
+      questionsProgress: { scopeLabel: "Вопросы теста", total: 17, answeredCount: 0, skippedCount: 1, states },
+    },
+  };
+
+  it("pages a long map after mount and opens the panel; a panel pick reaches onAction", () => {
+    const onAction = vi.fn();
+    const { container } = render(
+      <TemplateScreen layout={layout} context={context} slots={{ "question-text": "?" }} onAction={onAction} />,
+    );
+    const shadow = shadowOf(container);
+    const map = shadow.querySelector("[data-qnav]") as HTMLElement;
+    expect(map.getAttribute("data-paged")).toBe("true");
+    expect(shadow.querySelector("[data-qnav-range]")?.textContent).toBe("11–17 из 17");
+    const rowDots = Array.from(shadow.querySelectorAll<HTMLElement>("[data-qnav-dots] .ou-quiz__dot"));
+    expect(rowDots.filter((d) => !d.hidden)).toHaveLength(7);
+
+    (shadow.querySelector("[data-qnav-open]") as HTMLElement).click();
+    expect((shadow.querySelector("[data-qnav-panel]") as HTMLElement).hidden).toBe(false);
+
+    (shadow.querySelector('[data-qnav-panel] .ou-quiz__dot[data-action="goto:2"]') as HTMLElement).click();
+    expect(onAction).toHaveBeenCalledWith("goto:2");
+    expect((shadow.querySelector("[data-qnav-panel]") as HTMLElement).hidden).toBe(true);
     cleanup();
   });
 });

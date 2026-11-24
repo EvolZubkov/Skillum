@@ -56,8 +56,8 @@
       .wf-stage-canvas { flex: 1; min-height: 0; position: relative; display: flex; padding: var(--ou-space-5); }
       /* Экран «нет доступа» занимает весь холст: сообщение по центру, а не прижато к верху. */
       .wf-stage-canvas--center { align-items: center; justify-content: center; }
-      .wf-frame { flex: 1; display: flex; flex-direction: column; background: #fff; border: var(--wf-border-w) solid var(--ou-border-default); border-radius: var(--ou-radius-m); box-shadow: var(--ou-shadow-s); overflow: hidden; }
-      .wf-frame-screen { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-6); color: #1f2733; }
+      .wf-frame { flex: 1; display: flex; flex-direction: column; background: var(--ou-bg-elevated); border: var(--wf-border-w) solid var(--ou-border-default); border-radius: var(--ou-radius-m); box-shadow: var(--ou-shadow-s); overflow: hidden; }
+      .wf-frame-screen { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-6); color: var(--ou-fg-default); }
       .wf-frame-screen h4 { margin: 0 0 var(--ou-space-2); font: var(--ou-text-heading-s); }
       .wf-frame-screen p { margin: 0 0 var(--ou-space-4); font: var(--ou-text-body-m); }
       .wf-frame-screen [hidden] { display: none; }
@@ -159,7 +159,7 @@
 
     <nav class="wf-nav" aria-label="Wireframe state switcher">
       <span class="wf-nav-title">Окно эксперта:</span>
-      <button type="button" class="active" onclick="showState(this, 'run')">прогон · Комментарии</button>
+      <button type="button" class="active" onclick="showState(this, 'run')">прогон · Рецензирование</button>
       <button type="button" onclick="showState(this, 'newnote')">новый комментарий</button>
       <button type="button" onclick="showState(this, 'score')">Результаты</button>
       <button type="button" onclick="showState(this, 'protocol')">Протокол</button>
@@ -277,7 +277,7 @@
                 <div class="wf-ins-head">
                   <div class="ou-tabs ou-tabs--underline ou-tabs--s">
                     <div class="ou-tabs__list" role="tablist" aria-label="Инспектор">
-                      <button type="button" class="ou-tabs__tab is-active" data-tab="review" role="tab" aria-selected="true" onclick="selectTab('review')"><span class="ou-tabs__label">Комментарии</span></button>
+                      <button type="button" class="ou-tabs__tab is-active" data-tab="review" role="tab" aria-selected="true" onclick="selectTab('review')"><span class="ou-tabs__label">Рецензирование</span></button>
                       <button type="button" class="ou-tabs__tab" data-tab="score" role="tab" aria-selected="false" onclick="selectTab('score')"><span class="ou-tabs__label">Результаты</span></button>
                       <button type="button" class="ou-tabs__tab" data-tab="protocol" role="tab" aria-selected="false" onclick="selectTab('protocol')"><span class="ou-tabs__label">Протокол</span></button>
                     </div>
@@ -499,7 +499,7 @@
               инспектором. Открывается по персональной ссылке (внешний эксперт) или обычной сессией при гранте
               <code>review</code> (пользователь платформы).</li>
             <li>Прогон одноразовый: попытка не создаётся, телеметрия выключена, в аналитике теста следа нет.</li>
-            <li>Вкладок ровно три: «Комментарии», «Результаты», «Протокол». «LMS», «Состояние», «Выдача»,
+            <li>Вкладок ровно три: «Рецензирование», «Результаты», «Протокол». «LMS», «Состояние», «Выдача»,
               «Шкалы» и «Показатели» эксперту не показываются — это машинерия рантайма.</li>
           </ul>
 
@@ -507,7 +507,7 @@
           <ul>
             <li><strong>Эталон</strong> — подсветка правильных ответов на реальном рендере варианта. По умолчанию
               выключен, на баллы не влияет.</li>
-            <li><strong>Все вопросы темы</strong> — полная выдача вместо настроенной выборки. По умолчанию выключен;
+            <li><strong>Все вопросы темы</strong> — полная выдача вместо настроенной выборки; навигация по вопросам при этом свободная (любая точка карты, «Назад», «Пропустить», полный «К обзору»), кроме адаптивного теста. По умолчанию выключен;
               включение перестраивает прогон. Доступен только до старта: выдача фиксируется на первом вопросе.</li>
             <li>В этом режиме «Оценка» в статусбаре и вкладка «Результаты» показывают «не считается в режиме полной
               выдачи»: выдан весь банк, поэтому порог и вердикт недостоверны. «Протокол» продолжает работать.</li>
@@ -628,5 +628,19 @@
         if (want && navBtn(want)) showState(navBtn(want), want);
       })();
     </script>
-  </body>
+      <script>
+      window.toggleTheme = function toggleTheme(btn) {
+        var dark = document.body.classList.toggle('ou--dark');
+        document.body.classList.toggle('ou--light', !dark);
+        btn.textContent = dark ? 'Light' : 'Dark';
+        btn.classList.toggle('active', dark);
+      };
+      window.toggleDensity = function toggleDensity(btn) {
+        var compact = document.body.classList.toggle('ou--compact');
+        document.body.classList.toggle('ou--normal', !compact);
+        btn.textContent = compact ? 'Normal' : 'Compact';
+        btn.classList.toggle('active', compact);
+      };
+    </script>
+</body>
 </html>

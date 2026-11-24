@@ -6528,6 +6528,15 @@ span.ou-quiz__dot:hover { transform: none; }
 .ou-rte__area ul ul ul { list-style-type: square; }
 .ou-rte__area ol { list-style: decimal outside; }
 .ou-rte__area a { color: var(--ou-accent-default); text-decoration: underline; }
+/* Paragraph styles (`blockStyles`): the area shows the result at once, one step below the
+   reader's scale and without a template's colour - the editor does not know which template
+   the text lands in. */
+.ou-rte__area h2 { font: var(--ou-text-heading-m); margin: var(--ou-space-4) 0 var(--ou-space-2); }
+.ou-rte__area h3 { font: var(--ou-text-heading-s); margin: var(--ou-space-3) 0 var(--ou-space-2); }
+.ou-rte__area h4 { font: var(--ou-text-body-m); font-weight: 600; margin: var(--ou-space-3) 0 var(--ou-space-1); }
+.ou-rte__area > :first-child { margin-top: 0; }
+/* The style list keeps one width while the caret moves between paragraphs. */
+.ou-rte__tools .ou-select { min-width: calc(var(--ou-space-11) * 2); }
 .ou-rte__input { display: block; width: 100%; resize: vertical; padding: var(--ou-space-2) var(--ou-space-3); font: var(--ou-text-body-s); color: var(--ou-fg-default); background: transparent; border: 0; outline: none; }
 .ou-rte__input--code { font: var(--ou-text-code-s); }
 .ou-rte__msg { font: var(--ou-text-body-xs); color: var(--ou-fg-muted); }
@@ -8250,6 +8259,11 @@ button.ou-stepper__step:disabled { cursor: not-allowed; opacity: 0.6; }
 .ou-tree__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ou-tree__meta { font: var(--ou-text-body-xs); color: var(--ou-fg-muted); flex-shrink: 0; }
 .ou-tree__node.is-selected > .ou-tree__row .ou-tree__meta { color: var(--ou-accent-on-soft); opacity: 0.7; }
+/* Disabled node: shown, not selectable — same treatment as .ou-select__opt.is-disabled. */
+.ou-tree__node.is-disabled > .ou-tree__row { color: var(--ou-fg-disabled); cursor: not-allowed; }
+.ou-tree__node.is-disabled > .ou-tree__row:hover { background: transparent; }
+.ou-tree__node.is-disabled > .ou-tree__row .ou-tree__ico { color: var(--ou-fg-disabled); }
+
 
 /* Children */
 .ou-tree__children { display: none; padding-left: var(--ou-space-6); position: relative; }

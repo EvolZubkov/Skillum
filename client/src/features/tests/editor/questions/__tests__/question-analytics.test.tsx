@@ -9,6 +9,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { questionAnalytics } from "../question-analytics";
 import { TestQuestionsSection } from "../test-questions-section";
+import { testContextQuestionsKey } from "../test-context-questions";
 import { defaultRetakePolicy } from "../../test-editor.mappers";
 import type { TestEditorModel } from "../../test-editor.types";
 import type { ItemQualityRow } from "@/features/analytics/test/item-quality";
@@ -132,6 +133,7 @@ function model(): TestEditorModel {
 function renderSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["/api/questions"], QUESTIONS);
+  client.setQueryData(testContextQuestionsKey("test-1"), { questions: [], readOnlyTopicIds: [] });
   client.setQueryData(["tests", "test-1", "review-comments"], []);
   client.setQueryData(["/api/analytics/psychometrics/test-1"], {
     items: [

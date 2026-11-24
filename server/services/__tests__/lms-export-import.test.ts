@@ -3,7 +3,7 @@
  * @description PRD-54 разделы 4 и 8: план импорта, источники `external_id`, связывание и запись.
  */
 import { describe, it, expect } from "vitest";
-import { buildImportPlan, runImport } from "../lms-export-import";
+import { anonymizeOf, buildImportPlan, runImport } from "../lms-export-import";
 import { asScenario } from "@shared/sim/upgrade";
 
 /** Разобранная книга из одной строки — форма ровно та, что отдаёт `parseLmsExport`. */
@@ -84,13 +84,23 @@ describe("buildImportPlan", () => {
     const noDate = { ...book, rows: [{ ...book.rows[0], moduleActivatedAt: "" }] };
     const plan = buildImportPlan(noDate as never, ON);
     expect(plan.rows).toHaveLength(0);
-    expect(plan.warnings.some((w) => w.includes("без даты активации модуля"))).toBe(true);
+    expect(plan.warnings.some((w) => w.includes("нет даты активации модуля"))).toBe(true);
   });
 
-  it("в предупреждении о пропуске ФИО не раскрывается, когда обезличивание включено", () => {
+  it("пропущенные строки сводятся в ОДНО предупреждение с числом, а не по строке на участника", () => {
+    const noDate = { ...book.rows[0], moduleActivatedAt: "" };
+    const plan = buildImportPlan({ ...book, rows: [noDate, { ...noDate }, { ...noDate }, book.rows[0]] } as never, OFF);
+    expect(plan.rows).toHaveLength(1);
+    const warned = plan.warnings.filter((w) => w.includes("даты активации модуля"));
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toContain(": 3.");
+    expect(warned[0]).not.toContain("Иванов");
+  });
+
+  it("в предупреждении о пропуске ФИО не раскрывается ни при каком режиме обезличивания", () => {
     const noDate = { ...book, rows: [{ ...book.rows[0], moduleActivatedAt: "" }] };
     expect(buildImportPlan(noDate as never, ON).warnings.join()).not.toContain("Иванов");
-    expect(buildImportPlan(noDate as never, OFF).warnings.join()).toContain("Иванов");
+    expect(buildImportPlan(noDate as never, OFF).warnings.join()).not.toContain("Иванов");
   });
 
   it("неопознанные колонки попадают в протокол", () => {
@@ -225,6 +235,27 @@ describe("buildImportPlan — процент прохождения", () => {
     const row = buildImportPlan(graded(null) as never, ON).rows[0];
     expect(row.resultPercent).toBeNull();
     expect(row.maxPoints).toBeNull();
+  });
+
+  it("«Баллы» дробью `N / M (P)`: процент — из скобок, баллы — набранные", () => {
+    const book2 = { ...book, rows: [{ ...book.rows[0], points: 49, scorePercent: 98, results: { q1: "correct" } }] };
+    const row = buildImportPlan(book2 as never, ON).rows[0];
+    expect(row.resultPercent).toBe(98);
+    expect(row.maxPoints).toBe(100);
+    expect(row.totalPoints).toBe(49);
+  });
+
+  it("дробные баллы в целочисленную колонку идут округлёнными", () => {
+    expect(buildImportPlan(graded(72.5) as never, ON).rows[0].totalPoints).toBe(73);
+  });
+
+  it("нечитаемые «Баллы» не доходят до базы `NaN`: пусто и одно предупреждение на файл", () => {
+    const bad = { ...book.rows[0], points: Number.NaN, pointsUnreadable: true, results: { q1: "correct" } };
+    const plan = buildImportPlan({ ...book, rows: [bad, { ...bad }] } as never, ON);
+    expect(plan.rows.map((r) => [r.totalPoints, r.resultPercent])).toEqual([[null, null], [null, null]]);
+    const warned = plan.warnings.filter((w) => w.includes("«Баллы»"));
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toContain(": 2.");
   });
 
   it("измерительное прохождение со старым «0 баллов» оцененным не становится (PRD-54 §14 п.1)", () => {
@@ -975,5 +1006,19 @@ describe("номер и длительность попытки (PRD-54, реш�
     const s = storageStub();
     await runImport(withMeta(2, 60) as never, ON, ctx, s as never);
     expect((s as unknown as { attempts: Array<Record<string, unknown>> }).attempts[0]).toMatchObject({ attemptNumber: 2 });
+  });
+});
+
+describe("anonymizeOf — флажок формы против параметра инстанса (BR-54-46)", () => {
+  it("явное значение формы главнее параметра", () => {
+    expect(anonymizeOf("false", true)).toBe(false);
+    expect(anonymizeOf("true", false)).toBe(true);
+    expect(anonymizeOf(" TRUE ", false)).toBe(true);
+  });
+
+  it("нет поля или оно непонятное — действует параметр инстанса", () => {
+    expect(anonymizeOf(undefined, true)).toBe(true);
+    expect(anonymizeOf(undefined, false)).toBe(false);
+    expect(anonymizeOf("да", false)).toBe(false);
   });
 });

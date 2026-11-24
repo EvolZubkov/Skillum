@@ -29,7 +29,7 @@ export interface ReviewAnchor {
  * Вкладка ящика теста, на которую ведёт якорь.
  *
  * Ключи — дерево вкладок редактора после перестройки 2026-09-03 (шесть вкладок по
- * вопросу автора плюс «Комментарии»). Список держится ЗДЕСЬ, а не импортируется из
+ * вопросу автора плюс «Рецензирование»). Список держится ЗДЕСЬ, а не импортируется из
  * клиента, потому что резолвер общий для клиента и сервера; при следующей смене
  * дерева правится одно это место.
  */
@@ -82,4 +82,21 @@ export function resolveAnchorTarget(anchor: ReviewAnchor): AnchorTarget | null {
 export function isAnchorNavigable(anchor: ReviewAnchor, state: { orphaned: boolean }): boolean {
   if (state.orphaned) return false;
   return resolveAnchorTarget(anchor) !== null;
+}
+
+/**
+ * Ключ якоря для уникальности отметки «Согласовано»: идентификатор объекта или пустая строка у экрана и теста
+ * целиком. Общий для сервера (запись) и клиента (поиск своей отметки по якорю).
+ */
+export function anchorKeyOf(anchor: ReviewAnchor): string {
+  switch (anchor.kind) {
+    case "question":
+      return anchor.questionId ?? "";
+    case "content-page":
+      return anchor.contentPageId ?? "";
+    case "topic":
+      return anchor.topicId ?? "";
+    default:
+      return "";
+  }
 }

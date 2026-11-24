@@ -236,7 +236,7 @@
     <thead><tr><th>Элемент</th><th>Поведение</th><th>Правило (PRD-13)</th></tr></thead>
     <tbody>
       <tr><td>Панель «Доступ к тесту»</td><td>Открывается из списка тестов; доступна только администратору и суперадмину</td><td>tests.access.grant — только AD/SU (FR-18)</td></tr>
-      <tr><td>Владелец</td><td>«Сменить владельца» → выбор; изменение копится в панели</td><td>Применяется по «Сохранить»; tests.owner.change — только AD/SU (FR-15)</td></tr>
+      <tr><td>Владелец</td><td>«Сменить владельца» → поле с поиском (<code>Combobox</code>) только по людям с административной ролью (role-model 6.0); изменение копится в панели</td><td>Применяется по «Сохранить»; tests.owner.change — только AD/SU (FR-15)</td></tr>
       <tr><td>Уровень «Редактирование»</td><td>Автор может редактировать/публиковать/экспортировать тест</td><td>Грант edit (раздел 6.2)</td></tr>
       <tr><td>Уровень «Назначение»</td><td>Менеджер может назначать тест</td><td>Грант assign (раздел 6.2)</td></tr>
       <tr><td>«Добавить» / смена уровня в селекте</td><td>Изменение копится в панели (не применяется сразу)</td><td>Применяется по «Сохранить» (POST /access · upsert, unique(testId, userId), FR-19)</td></tr>
@@ -262,5 +262,19 @@
   </table>
 </section>
 
+    <script>
+      window.toggleTheme = function toggleTheme(btn) {
+        var dark = document.body.classList.toggle('ou--dark');
+        document.body.classList.toggle('ou--light', !dark);
+        btn.textContent = dark ? 'Light' : 'Dark';
+        btn.classList.toggle('active', dark);
+      };
+      window.toggleDensity = function toggleDensity(btn) {
+        var compact = document.body.classList.toggle('ou--compact');
+        document.body.classList.toggle('ou--normal', !compact);
+        btn.textContent = compact ? 'Normal' : 'Compact';
+        btn.classList.toggle('active', compact);
+      };
+    </script>
 </body>
 </html>

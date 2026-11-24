@@ -23,6 +23,9 @@ export {
 } from "../text";
 export { renderResultField, CORE_RENDERER_IDS } from "./renderers";
 export { renderScreenInto } from "./render-screen";
+// Paged question map (long tests): the SAME arithmetic and DOM behaviour in the web host
+// and in the package.
+export { attachQuestionMap, attachQuestionMaps } from "./question-map-dom";
 // PRD-34: защита текста задания. Периметр решает ОДИН построитель, применение — ядро,
 // поэтому пакет получает ровно то же поведение, что и веб-хост (FR-30, FR-31).
 export { buildProtectionSpec, formatWatermarkText, QUESTION_REGIONS } from "./protection/spec";
@@ -185,6 +188,10 @@ export { buildReviewContext } from "./review-context";
 // PRD-19: the ONE rule for «is the обзор worth showing at the end of the scope»,
 // shared with the web host so the two players cannot answer it differently.
 export { shouldShowReview } from "../flow/review-gate";
+// PRD-73: whether the обзор's «Завершить …» may be used, whether the author's hiding of
+// the обзор applies right now, and the ONE way both hosts render refused actions inert.
+export { isFinishBlocked, reviewHiddenByAuthor } from "../flow/finish-gate";
+export { disableActions } from "./action-disable";
 // PRD-12 FR-6: the SINGLE content-page assembler (skeleton + values), so a content
 // page is built identically on both hosts.
 export {

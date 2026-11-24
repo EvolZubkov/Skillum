@@ -312,6 +312,58 @@ describe("<TestsListPage /> — owner column + action gating by role (PRD-13)", 
     expect(screen.getByTestId("test-assign-t-2")).toBeInTheDocument();
   });
 
+  it("a test seen through «Назначение» only (canEdit=false) offers no edit, debug or menu", async () => {
+    // developer + author + manager: the roles open the actions, the test does not.
+    authMock.can = () => true;
+    authMock.roles = [ROLES.DEVELOPER, ROLES.AUTHOR, ROLES.MANAGER];
+    mockMany({
+      "/api/tests": [buildApiTestRow({ canEdit: false, canReview: false, canAssign: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    expect(screen.queryByTestId("test-edit-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-debug-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-more-t-1")).toBeNull();
+    expect(screen.getByTestId("test-assign-t-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("test-review-t-1")).toBeNull();
+  });
+
+  it("a reviewer finds the test and enters the review window from the row (PRD-52)", async () => {
+    authMock.can = () => true;
+    authMock.roles = [ROLES.DEVELOPER, ROLES.AUTHOR, ROLES.MANAGER];
+    mockMany({
+      "/api/tests": [buildApiTestRow({ canEdit: false, canReview: true, canAssign: false })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    const review = screen.getByTestId("test-review-t-1");
+    expect(review.closest("a")).toHaveAttribute("href", "/review/tests/t-1");
+    expect(screen.getByText("Вы рецензент")).toBeInTheDocument();
+    // Nothing of the author's own actions, and no analytics of a test they only review.
+    expect(screen.queryByTestId("test-edit-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-debug-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-assign-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-analytics-t-1")).toBeNull();
+    expect(screen.queryByTestId("test-more-t-1")).toBeNull();
+  });
+
+  it("the owner of a test (canEdit=true, canReview=true) gets the author's actions, not «Рецензировать»", async () => {
+    authMock.can = () => true;
+    authMock.roles = [ROLES.AUTHOR];
+    mockMany({
+      "/api/tests": [buildApiTestRow({ canEdit: true, canReview: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    expect(screen.getByTestId("test-edit-t-1")).toBeInTheDocument();
+    expect(screen.getByTestId("test-debug-t-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("test-review-t-1")).toBeNull();
+    expect(screen.queryByText("Вы рецензент")).toBeNull();
+  });
+
   it("«Общий доступ» shows for the test owner (author, BRC-27)", async () => {
     authMock.can = canForRoles([ROLES.AUTHOR]);
     authMock.roles = [ROLES.AUTHOR];
@@ -393,6 +445,177 @@ describe("<TestsListPage /> — move-to-folder (S13.1-G32)", () => {
     expect(screen.getByTestId("move-folder-pick-submit")).not.toBeDisabled();
 
     promptSpy.mockRestore();
+  });
+});
+
+// ─── Folder access inheritance (wireframe approved/test-folder-access.html) ────
+
+/** A JSON answer for the fetch mock. */
+function json(body: unknown, status = 200) {
+  return { ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) } as Response;
+}
+
+/**
+ * Fetch mock that tells requests apart by method: the list, the move preview and
+ * the move itself, recording every non-GET call.
+ */
+function mockFolderAccess(opts: {
+  folders: Record<string, unknown>[];
+  tests?: Record<string, unknown>[];
+  preview?: (body: { destFolderId: string | null }) => Response;
+  move?: (body: { folderId: string | null; confirmGain?: boolean }) => Response;
+}) {
+  const calls: { url: string; method: string; body: any }[] = [];
+  fetchMock.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
+    const u = typeof input === "string" ? input : input.url;
+    const method = (init?.method || "GET").toUpperCase();
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    if (method !== "GET") calls.push({ url: u, method, body });
+    if (u === "/api/tests") return json(opts.tests ?? [buildApiTestRow()]);
+    if (u === "/api/test-folders") return json(opts.folders);
+    if (u === "/api/test-folders/move-preview") return opts.preview ? opts.preview(body) : json({ gained: [] });
+    if (u.startsWith("/api/test-folders/move/")) return opts.move ? opts.move(body) : json({ success: true });
+    return json({}, 404);
+  });
+  return calls;
+}
+
+describe("<TestsListPage /> — folder menu rights", () => {
+  it("lists every item of a transit folder's menu, all disabled", async () => {
+    mockFolderAccess({
+      folders: [buildApiFolder({ visibility: "transit", canEdit: false, canManageAccess: false })],
+      tests: [buildApiTestRow({ folderId: "f-1" })],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("folder-row-f-1"));
+    fireEvent.click(screen.getByTestId("folder-more-f-1"));
+    expect(screen.getByTestId("folder-menu-rename-f-1")).toBeDisabled();
+    expect(screen.getByTestId("folder-menu-access-f-1")).toBeDisabled();
+    expect(screen.getByTestId("folder-menu-delete-f-1")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("folder-menu-access-f-1"));
+    expect(screen.queryByText("Папка «Информационная безопасность»")).not.toBeInTheDocument();
+  });
+
+  it("disables only «Общий доступ» for an editor who does not own the folder", async () => {
+    mockFolderAccess({ folders: [buildApiFolder({ visibility: "direct", canEdit: true, canManageAccess: false })] });
+    renderPage();
+    await waitFor(() => screen.getByTestId("folder-row-f-1"));
+    fireEvent.click(screen.getByTestId("folder-more-f-1"));
+    expect(screen.getByTestId("folder-menu-rename-f-1")).not.toBeDisabled();
+    expect(screen.getByTestId("folder-menu-delete-f-1")).not.toBeDisabled();
+    expect(screen.getByTestId("folder-menu-access-f-1")).toBeDisabled();
+  });
+
+  it("opens the folder's «Общий доступ» panel for its owner", async () => {
+    mockFolderAccess({ folders: [buildApiFolder({ visibility: "direct", canEdit: true, canManageAccess: true })] });
+    renderPage();
+    await waitFor(() => screen.getByTestId("folder-row-f-1"));
+    fireEvent.click(screen.getByTestId("folder-more-f-1"));
+    fireEvent.click(screen.getByTestId("folder-menu-access-f-1"));
+    await waitFor(() => expect(screen.getByText("Папка «Информационная безопасность»")).toBeInTheDocument());
+  });
+});
+
+describe("<TestsListPage /> — move widens access", () => {
+  const gained = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ userId: `u${i}`, name: `Человек ${i + 1}`, accessLevel: "assign" }));
+
+  /** Opens «Переместить в папку» of t-1 and picks «Охрана труда». */
+  async function pickDestination() {
+    renderPage();
+    await waitFor(() => screen.getByText("Основы информационной безопасности"));
+    fireEvent.click(screen.getByTestId("test-more-t-1"));
+    fireEvent.click(screen.getByTestId("menu-move-t-1"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByText("Корень (без папки)"));
+    fireEvent.click(within(document.querySelector(".tb-foldercombo__pop") as HTMLElement).getByText("Охрана труда"));
+  }
+
+  const folders = [buildApiFolder({ id: "f-2", name: "Охрана труда", canEdit: true, canManageAccess: true })];
+
+  it("names the people the destination adds and confirms the move", async () => {
+    const calls = mockFolderAccess({
+      folders,
+      preview: () => json({
+        gained: [
+          { userId: "a", name: "Павел Сорокин", accessLevel: "edit" },
+          { userId: "b", name: "Елена Кравцова", accessLevel: "assign" },
+          { userId: "c", name: "Анна Лебедева", accessLevel: "assign" },
+        ],
+      }),
+    });
+    await pickDestination();
+    await waitFor(() => expect(screen.getByTestId("move-gain-banner")).toBeInTheDocument());
+    expect(screen.getByText("В новой папке доступ к тесту получат ещё 3 человека")).toBeInTheDocument();
+    expect(screen.getByText("Павел Сорокин (редактирование), Елена Кравцова (назначение), Анна Лебедева (назначение)"))
+      .toBeInTheDocument();
+    expect(calls).toContainEqual(expect.objectContaining({
+      url: "/api/test-folders/move-preview",
+      body: { kind: "test", id: "t-1", destFolderId: "f-2" },
+    }));
+    fireEvent.click(screen.getByTestId("move-folder-pick-submit"));
+    await waitFor(() => expect(calls).toContainEqual(expect.objectContaining({
+      url: "/api/test-folders/move/t-1",
+      body: { folderId: "f-2", confirmGain: true },
+    })));
+    await waitFor(() => expect(screen.queryByTestId("move-folder-pick-submit")).not.toBeInTheDocument());
+  });
+
+  it("names ten people and counts the rest; one person reads «получит ещё 1 человек»", async () => {
+    mockFolderAccess({ folders, preview: () => json({ gained: gained(12) }) });
+    await pickDestination();
+    await waitFor(() => expect(screen.getByTestId("move-gain-banner")).toBeInTheDocument());
+    expect(screen.getByText(/Человек 10 \(назначение\), и ещё 2$/)).toBeInTheDocument();
+    expect(screen.queryByText(/Человек 11/)).not.toBeInTheDocument();
+  });
+
+  it("reads the singular for one person", async () => {
+    mockFolderAccess({ folders, preview: () => json({ gained: gained(1) }) });
+    await pickDestination();
+    await waitFor(() =>
+      expect(screen.getByText("В новой папке доступ к тесту получит ещё 1 человек")).toBeInTheDocument());
+  });
+
+  it("moves without confirmation and without a banner when nobody is added", async () => {
+    const calls = mockFolderAccess({ folders });
+    await pickDestination();
+    fireEvent.click(screen.getByTestId("move-folder-pick-submit"));
+    await waitFor(() => expect(calls).toContainEqual(expect.objectContaining({
+      url: "/api/test-folders/move/t-1",
+      body: { folderId: "f-2" },
+    })));
+    expect(screen.queryByTestId("move-gain-banner")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open on 409 and confirms on the next click", async () => {
+    const calls = mockFolderAccess({
+      folders,
+      preview: () => json({ error: "boom" }, 500),
+      move: (body) => body.confirmGain
+        ? json({ success: true })
+        : json({ error: "access_gain", gained: [{ userId: "a", name: "Павел Сорокин", accessLevel: "edit" }] }, 409),
+    });
+    await pickDestination();
+    fireEvent.click(screen.getByTestId("move-folder-pick-submit"));
+    await waitFor(() => expect(screen.getByTestId("move-gain-banner")).toBeInTheDocument());
+    expect(screen.getByTestId("move-folder-pick-submit")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("move-folder-pick-submit"));
+    await waitFor(() => expect(calls).toContainEqual(expect.objectContaining({
+      url: "/api/test-folders/move/t-1",
+      body: { folderId: "f-2", confirmGain: true },
+    })));
+  });
+
+  it("shows a folder the reader may not edit, but not selectable", async () => {
+    mockFolderAccess({
+      folders: [...folders, buildApiFolder({ id: "f-3", name: "Чужая", canEdit: false, visibility: "transit" })],
+    });
+    renderPage();
+    await waitFor(() => screen.getByText("Основы информационной безопасности"));
+    fireEvent.click(screen.getByTestId("test-more-t-1"));
+    fireEvent.click(screen.getByTestId("menu-move-t-1"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByText("Корень (без папки)"));
+    const pop = document.querySelector(".tb-foldercombo__pop") as HTMLElement;
+    expect(within(pop).getByText("Чужая").closest("[role='treeitem']")?.getAttribute("aria-disabled")).toBe("true");
   });
 });
 
@@ -574,13 +797,13 @@ describe("<TestsListPage /> — счётчик комментариев", () => 
 // ─── PRD-52 FR-27: ссылка на конкретную ветку ────────────────────────────────
 
 describe("<TestsListPage /> — ссылка ?review=<id>", () => {
-  it("открывает ящик теста сразу на вкладке «Комментарии»", async () => {
+  it("открывает ящик теста сразу на вкладке «Рецензирование»", async () => {
     window.history.replaceState(null, "", "/author/tests?test=t-1&review=c1");
     mockMany({ "/api/tests": [buildApiTestRow()], "/api/test-folders": [] });
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /Комментарии/ })).toHaveAttribute("aria-selected", "true"),
+      expect(screen.getByRole("tab", { name: /Рецензирование/ })).toHaveAttribute("aria-selected", "true"),
     );
     // Параметры сняты с адреса: обновление страницы не должно снова открывать ящик.
     expect(window.location.search).toBe("");

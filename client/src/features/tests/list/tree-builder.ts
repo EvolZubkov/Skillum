@@ -13,6 +13,7 @@
  */
 import type {
   FolderEntry,
+  FolderScope,
   SearchRow,
   SortKey,
   TestListEntry,
@@ -61,12 +62,25 @@ export function excludeArchived(tests: TestListEntry[]): TestListEntry[] {
  *      folders and tests in DFS order. Folders that are not in
  *      `expandedFolderIds` emit a folder row but skip their children.
  *   3. Root-level tests (no `folderId`) after all folders, sorted by `sort`.
+ *
+ * With `folderScope` set (the «Мои» / «Доступные» condition of the filter) a folder
+ * is emitted when its owner falls into the scope — even if no test inside matches
+ * the other conditions — or when it lies on the path to such a folder or to one of
+ * `tests` (which the caller has already filtered). Without it every folder is emitted.
+ *
+ * @param args.tests - Tests to place, already filtered by the caller.
+ * @param args.folders - Every folder the reader can see.
+ * @param args.expandedFolderIds - Folders whose children are emitted.
+ * @param args.sort - Ordering of tests inside each level.
+ * @param args.folderScope - Ownership scope applied to folders; omitted = all folders.
+ * @returns The flat row stream, starting with the `root` row.
  */
 export function buildTreeRows(args: {
   tests: TestListEntry[];
   folders: FolderEntry[];
   expandedFolderIds: ReadonlySet<string>;
   sort: SortKey;
+  folderScope?: FolderScope;
 }): TreeRow[] {
   const sorted = sortTests(args.tests, args.sort);
 
@@ -87,11 +101,16 @@ export function buildTreeRows(args: {
   }
   for (const list of foldersByParent.values()) list.sort(compareFoldersByName);
 
+  const visible = args.folderScope
+    ? scopedFolderIds(args.folderScope, foldersByParent, testsByFolder)
+    : null;
+
   const rows: TreeRow[] = [{ kind: "root", testsCount: sorted.length }];
 
   const walk = (parentId: string | null, depth: number) => {
     const folders = foldersByParent.get(parentId) ?? [];
     for (const folder of folders) {
+      if (visible && !visible.has(folder.id)) continue;
       const folderTests = testsByFolder.get(folder.id) ?? [];
       const expanded = args.expandedFolderIds.has(folder.id);
       rows.push({
@@ -126,6 +145,40 @@ export function buildTreeRows(args: {
   }
 
   return rows;
+}
+
+/**
+ * Ids of the folders that stay in the tree under an ownership scope: folders whose
+ * owner falls into the scope, plus every ancestor of such a folder or of a folder
+ * holding one of the (already filtered) tests.
+ *
+ * @param scope - The ownership scope of the filter.
+ * @param foldersByParent - Folders indexed by parent id.
+ * @param testsByFolder - Filtered tests indexed by folder id.
+ * @returns The set of folder ids to emit.
+ */
+function scopedFolderIds(
+  scope: FolderScope,
+  foldersByParent: Map<string | null, FolderEntry[]>,
+  testsByFolder: Map<string | null, TestListEntry[]>,
+): Set<string> {
+  const inScope = (folder: FolderEntry): boolean => {
+    const mine = folder.ownerId === scope.userId;
+    return scope.kind === "mine" ? mine : !mine;
+  };
+  const result = new Set<string>();
+  // Post-order: a folder is visible when it is in scope itself, holds a test, or
+  // has a visible sub-folder — so a foreign parent stays as the path.
+  const visit = (folder: FolderEntry): boolean => {
+    let keep = inScope(folder) || (testsByFolder.get(folder.id)?.length ?? 0) > 0;
+    for (const child of foldersByParent.get(folder.id) ?? []) {
+      if (visit(child)) keep = true;
+    }
+    if (keep) result.add(folder.id);
+    return keep;
+  };
+  for (const root of foldersByParent.get(null) ?? []) visit(root);
+  return result;
 }
 
 function countTestsRecursive(

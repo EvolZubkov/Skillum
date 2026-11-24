@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-    Wireframe: PRD-52 — панель комментариев у автора (вкладка «Комментарии» в ящике теста,
+    Wireframe: PRD-52 — панель комментариев у автора (вкладка «Рецензирование» в ящике теста,
     стек ящиков при переходе по якорю, закрытие с исходом).
     Спека: docs/specs/prd-52/test-review.md. План: docs/plans/2026-09-03-test-review.md.
     Канон ящика — approved/prd17-test-variants.html. Состояния — кнопки навбара
@@ -144,7 +144,7 @@
               <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Оформление</span></button>
               <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Структура</span></button>
               <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Оценка</span></button>
-              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Комментарии</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
             </div>
           </div>
 
@@ -259,7 +259,7 @@
             <div class="ou-tabs__list" role="tablist">
               <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Состав</span></button>
               <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Структура</span></button>
-              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Комментарии</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
             </div>
           </div>
           <div class="wf-drawer-body">
@@ -315,7 +315,7 @@
               <div class="ou-tabs ou-tabs--underline ou-tabs--m wf-drawer__tabs">
                 <div class="ou-tabs__list" role="tablist">
                   <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Состав</span></button>
-                  <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Комментарии</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+                  <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
                 </div>
               </div>
               <div class="wf-drawer-body">
@@ -384,7 +384,7 @@
           <div class="ou-tabs ou-tabs--underline ou-tabs--m wf-drawer__tabs">
             <div class="ou-tabs__list" role="tablist">
               <button type="button" role="tab" aria-selected="false" class="ou-tabs__tab"><span class="ou-tabs__label">Состав</span></button>
-              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Комментарии</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
             </div>
           </div>
           <div class="wf-drawer-body">
@@ -427,7 +427,7 @@
           </header>
           <div class="ou-tabs ou-tabs--underline ou-tabs--m wf-drawer__tabs">
             <div class="ou-tabs__list" role="tablist">
-              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Комментарии</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
+              <button type="button" role="tab" aria-selected="true" class="ou-tabs__tab is-active"><span class="ou-tabs__label">Рецензирование</span><span class="ou-tag ou-tag--warning ou-tag--s">3</span></button>
             </div>
           </div>
           <div class="wf-drawer-body">
@@ -459,7 +459,7 @@
       <div class="wf-state" id="wf-rebuild">
         <div class="wf-drawer">
           <header class="ou-drawer__head">
-            <div class="ou-drawer__head-text"><h2 class="ou-drawer__title">Отладка теста · вкладка «Комментарии»</h2></div>
+            <div class="ou-drawer__head-text"><h2 class="ou-drawer__title">Отладка теста · вкладка «Рецензирование»</h2></div>
           </header>
           <div class="wf-drawer-body">
             <div class="ou-banner ou-banner--subtle ou-banner--sm">
@@ -521,7 +521,7 @@
 
           <h3 class="wf-notes-title">Одна панель, три входа</h3>
           <ul>
-            <li>Вкладка «Комментарии» в ящике редактора теста — равноправный способ работы, не вспомогательный:
+            <li>Вкладка «Рецензирование» в ящике редактора теста — равноправный способ работы, не вспомогательный:
               автор читает, отвечает, переходит по якорю, закрывает с исходом и САМ создаёт комментарии, не запуская
               прогон.</li>
             <li>Та же панель — вкладкой в полном отладчике PRD-18.</li>
@@ -590,5 +590,19 @@
         if (want && navBtn(want)) showState(navBtn(want), want);
       })();
     </script>
-  </body>
+      <script>
+      window.toggleTheme = function toggleTheme(btn) {
+        var dark = document.body.classList.toggle('ou--dark');
+        document.body.classList.toggle('ou--light', !dark);
+        btn.textContent = dark ? 'Light' : 'Dark';
+        btn.classList.toggle('active', dark);
+      };
+      window.toggleDensity = function toggleDensity(btn) {
+        var compact = document.body.classList.toggle('ou--compact');
+        document.body.classList.toggle('ou--normal', !compact);
+        btn.textContent = compact ? 'Normal' : 'Compact';
+        btn.classList.toggle('active', compact);
+      };
+    </script>
+</body>
 </html>

@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, integer, boolean, timestamp, date, jsonb, uniqueIndex, index, check, uuid, real, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, varchar, text, integer, boolean, timestamp, date, jsonb, uniqueIndex, index, check, uuid, real, doublePrecision, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -7,6 +7,7 @@ import { isAllocationFeasible } from "./questions/allocation";
 import { STORED_ROLES } from "./access/roles";
 import { PLACEHOLDER_TYPES, SETTING_TYPES } from "./template/field-types";
 import type { BreakdownFeedback as BreakdownFeedbackShape } from "./breakdown/types";
+import type { ReportBlockOutcome } from "./report/report-outcome";
 
 export const users = pgTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -385,6 +386,14 @@ export const questions = pgTable("questions", {
   optionFeedbackJson: jsonb("option_feedback_json").$type<Array<string | null>>(),
   contentHash: text("content_hash"),
   /**
+   * PRD-52 (issue 61): when the question's REVIEWED content last changed - the prompt, the options, the key or
+   * the feedback, exactly the fields behind the review content hash (`server/services/review-content-hash`).
+   * Written by the repository in `updateQuestion` and only when that hash moves, so an edit of difficulty,
+   * tags or media does not touch it. NULL = unknown: a row edited before migration `0068` has no date, and
+   * the «изменён после вашей отметки» line then simply carries no time.
+   */
+  contentChangedAt: timestamp("content_changed_at"),
+  /**
    * PRD-66 FR-09a: the fingerprint of the question's CONTENT, by which answers are
    * grouped into an observation series. Written by the repository on every create and
    * update (`shared/questions/psycho-hash`), never by a caller.
@@ -414,6 +423,10 @@ export const testFolders = pgTable("test_folders", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   // PRD-15 FR-01: creation audit. NULL = legacy row (destructive ops admin-only).
   createdBy: varchar("created_by", { length: 36 }),
+  // Folder owner (docs/specs/2026-11-16-folder-access-inheritance-design.md): holds
+  // every right on the folder content. NULL = legacy folder, managed by administrators
+  // only. Backfilled from `created_by` by migration 0066.
+  ownerId: varchar("owner_id", { length: 36 }),
 });
 
 // ─── PRD-6: retake gate / cooldown (ограничение повторного прохождения) ──────
@@ -743,6 +756,13 @@ export const tests = pgTable("tests", {
   // without return the pills are an indicator, not navigation. Default false so an existing
   // test keeps today's frontier without its author touching anything.
   allowFreeSectionNavigation: boolean("allow_free_section_navigation").notNull().default(false),
+  // PRD-73: the обзор's «Завершить раздел / тест» stays disabled while the scope (current
+  // section, or the whole flat test) still holds a question without an answer — not-yet-
+  // delivered ones included. Skipping and returning stay free. Depends on
+  // allowReturnToUnanswered=true: without return nothing can be left unanswered. Forced
+  // finishes (time running out, PRD-67 closing a section on leave) are not restricted.
+  // Default false so an existing test keeps today's finish.
+  requireAllAnsweredToFinish: boolean("require_all_answered_to_finish").notNull().default(false),
   // PRD-43: independent of allowReturnToUnanswered — whether submitting an answer
   // also advances to the next question in one click, or needs a separate «Далее»
   // click. Default false (today's two-step behaviour for a brand-new test); the
@@ -858,6 +878,10 @@ export const testAccessGrants = pgTable("test_access_grants", {
   // run) and nothing else. Stored as plain text, so the value needs no migration.
   accessLevel: text("access_level", { enum: ["edit", "assign", "review"] }).notNull(),
   grantedBy: varchar("granted_by", { length: 36 }), // which admin granted it
+  // PRD-52: when the holder of a `review` grant first opened the review window of this test. NULL for
+  // grants of other levels and for invitations not used yet; the «согласовали N из M» denominator counts
+  // the reviewers whose value is set.
+  acceptedAt: timestamp("accepted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   workIdx: uniqueIndex("test_access_grants_work_idx")
@@ -866,6 +890,24 @@ export const testAccessGrants = pgTable("test_access_grants", {
   reviewIdx: uniqueIndex("test_access_grants_review_idx")
     .on(table.testId, table.userId)
     .where(sql`${table.accessLevel} = 'review'`),
+}));
+
+/**
+ * Grants on a TEST FOLDER (docs/specs/2026-11-16-folder-access-inheritance-design.md).
+ * Inherited by every test and sub-folder below it, as a union with the grants on the
+ * item itself. One grant per (folder, user): `edit` or `assign`. Review is granted on
+ * a specific test only, never on a folder (owner decision 2026-11-16).
+ */
+export const testFolderAccessGrants = pgTable("test_folder_access_grants", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  folderId: varchar("folder_id", { length: 36 }).notNull()
+    .references(() => testFolders.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  accessLevel: text("access_level", { enum: ["edit", "assign"] }).notNull(),
+  grantedBy: varchar("granted_by", { length: 36 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdx: uniqueIndex("test_folder_access_grants_user_idx").on(table.folderId, table.userId),
 }));
 
 /**
@@ -1240,7 +1282,8 @@ export const insertTopicSchema = createInsertSchema(topics).omit({ id: true, upd
   ),
 });
 export const insertQuestionSchema = createInsertSchema(questions)
-  .omit({ id: true })
+  // `contentChangedAt` is written by the repository only (PRD-52, issue 61), never by a caller.
+  .omit({ id: true, contentChangedAt: true })
   // drizzle-zod types jsonb loosely; normalize tags on save (PRD-11 §3a:
   // trim/collapse, dedup, length cap). Scoring left the question in T-40.
   .extend({
@@ -1289,6 +1332,12 @@ export type InsertTestAccessGrant = z.infer<typeof insertTestAccessGrantSchema>;
 /** Which of the two grant slots of a (test, user) pair: `edit`/`assign` or `review`. */
 export type TestGrantSlot = "work" | "review";
 export type TestAccessGrant = typeof testAccessGrants.$inferSelect;
+/** A grant on a test folder, inherited by the folder content. */
+export type TestFolderAccessGrant = typeof testFolderAccessGrants.$inferSelect;
+/** Fields the caller supplies when writing a test folder grant. */
+export type InsertTestFolderAccessGrant = Pick<
+  TestFolderAccessGrant, "folderId" | "userId" | "accessLevel"
+> & { grantedBy?: string | null };
 
 export type InsertFolder = z.infer<typeof insertFolderSchema>;
 export type Folder = typeof folders.$inferSelect;
@@ -2695,9 +2744,16 @@ export const scormAnswers = pgTable("scorm_answers", {
   result: text("result", { enum: ["correct", "incorrect", "neutral"] }).notNull().default("incorrect"),
   /** PRD-54: необязательная. NULL = «оценивать нечего». Оставлена ради прежних читателей. */
   isCorrect: boolean("is_correct"),
-  /** PRD-54: необязательные по той же причине, что и `correctAnswerJson`. */
-  points: integer("points"),
-  maxPoints: integer("max_points"),
+  /**
+   * PRD-54: необязательные по той же причине, что и `correctAnswerJson`.
+   *
+   * Дробные (миграция `0064`): балл за задание бывает долей цены — частичный ответ оцениваемого
+   * задания и прогон сценария приходят числом в 0..1 и из телеметрии, и из импорта выгрузки.
+   * В целочисленной колонке такая запись роняла всю загрузку, а округление выдало бы 0.75 за
+   * полный балл.
+   */
+  points: doublePrecision("points"),
+  maxPoints: doublePrecision("max_points"),
 
 
   // Варианты ответов для отображения в аналитике
@@ -2857,6 +2913,18 @@ export const reportBlocks = pgTable("report_blocks", {
   valuesJson: jsonb("values_json").$type<Record<string, unknown>>().notNull().default({}),
   /** Свойства: значения `settings[]` варианта. */
   settingsJson: jsonb("settings_json").$type<Record<string, unknown>>().notNull().default({}),
+  /**
+   * Содержимое ПО ИСХОДУ: значения полей и свойств, переопределённые для прошедшего
+   * (`passed`) и не прошедшего (`failed`) тест. Лежит РЯДОМ с общими `valuesJson` /
+   * `settingsJson`, а не вместо них: общее печатает прогон без вынесенного вердикта, поэтому
+   * оно обязано пережить любую правку ветвей исхода.
+   *
+   * NULL и `{}` различаются намеренно. NULL — автор содержимым по исходу не распоряжался, и
+   * печатаются умолчания по исходу, объявленные вариантом шаблона (`outcomeDefaults`). `{}` —
+   * автор выключил содержимое по исходу, и умолчания шаблона НЕ возвращаются: иначе
+   * выключение отменялось бы само собой.
+   */
+  outcomeJson: jsonb("outcome_json").$type<ReportBlockOutcome>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -2934,6 +3002,43 @@ export type ReviewAnchorKind = TestReviewComment["anchorKind"];
 
 /** Исход комментария: открыт, учтён, отклонён. */
 export type ReviewCommentStatus = NonNullable<TestReviewComment["status"]>;
+
+/**
+ * Отметка «Согласовано» (PRD-52, спека 2026-11-23-review-approval-flag-design). Принадлежит паре «рецензент -
+ * объект», а не ветке комментария. Якорь - те же поля, что у комментария, плюс `anchorKey` для уникальности:
+ * идентификатор вопроса, страницы или темы, пустая строка у экрана и теста целиком.
+ */
+export const testReviewApprovals = pgTable("test_review_approvals", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  testId: varchar("test_id", { length: 36 })
+    .notNull()
+    .references(() => tests.id, { onDelete: "cascade" }),
+  reviewerId: varchar("reviewer_id", { length: 36 }).notNull(),
+  anchorKind: text("anchor_kind", {
+    enum: ["question", "content-page", "topic", "start", "results", "test"],
+  }).notNull(),
+  anchorKey: varchar("anchor_key", { length: 36 }).notNull().default(""),
+  questionId: varchar("question_id", { length: 36 }),
+  topicId: varchar("topic_id", { length: 36 }),
+  contentPageId: uuid("content_page_id"),
+  /** Снимок контекста строкой, как у комментария. */
+  contextLabel: text("context_label"),
+  /** Хеш содержимого якоря на момент отметки; NULL для экранов и теста в целом. */
+  pinnedContentHash: text("pinned_content_hash"),
+  approvedAt: timestamp("approved_at").notNull().defaultNow(),
+}, (table) => ({
+  // Один рецензент - одна отметка на объект.
+  uniqueIdx: uniqueIndex("test_review_approvals_unique_idx")
+    .on(table.testId, table.reviewerId, table.anchorKind, table.anchorKey),
+  // Лента теста читается целиком.
+  testIdx: index("test_review_approvals_test_idx").on(table.testId),
+}));
+
+/** Отметка «Согласовано», как её отдаёт база. */
+export type TestReviewApproval = typeof testReviewApprovals.$inferSelect;
+
+/** Отметка «Согласовано» на запись. */
+export type InsertTestReviewApproval = typeof testReviewApprovals.$inferInsert;
 
 // Insert schemas
 export const insertScormPackageSchema = createInsertSchema(scormPackages).omit({ id: true });

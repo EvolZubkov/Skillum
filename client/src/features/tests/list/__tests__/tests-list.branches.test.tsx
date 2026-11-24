@@ -190,6 +190,33 @@ describe("<TestsListPage /> — filter facets", () => {
       expect(screen.queryByText("Основы информационной безопасности")).toBeNull(),
     );
   });
+
+  it("«Мои» narrows folders by their owner and the root counter to the shown tests", async () => {
+    installFetch({
+      tests: [
+        buildApiTestRow({ id: "t-mine", title: "Мой тест", ownerId: "current-user" }),
+        buildApiTestRow({ id: "t-other", title: "Чужой тест", ownerId: "other-user", folderId: "f-foreign" }),
+      ],
+      folders: [
+        buildApiFolder({ id: "f-mine", name: "Моя пустая папка", ownerId: "current-user" }),
+        buildApiFolder({ id: "f-foreign", name: "Чужая папка", ownerId: "other-user" }),
+      ],
+    });
+    const { container } = renderPage();
+    await waitFor(() => screen.getByText("Мой тест"));
+    const rootCount = () => container.querySelector(".tree-root-label .folder-count")?.textContent?.trim();
+    expect(rootCount()).toBe("(2)");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Фильтр/ }));
+    const panel = screen.getByRole("dialog", { name: "Фильтр" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Мои" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Применить" }));
+
+    await screen.findByText(/Область: Мои/i);
+    await waitFor(() => expect(screen.queryByText("Чужая папка")).toBeNull());
+    expect(screen.getByText("Моя пустая папка")).toBeInTheDocument();
+    expect(rootCount()).toBe("(1)");
+  });
 });
 
 // ─── Mutation onError toasts ─────────────────────────────────────────────────

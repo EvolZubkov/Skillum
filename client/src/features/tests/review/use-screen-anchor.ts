@@ -9,10 +9,14 @@
  *
  * В адаптивном тесте экран ведёт `adaptiveState.currentQuestionId`, а не плоский
  * список — резолвер это уже учитывает, поэтому дублировать разбор здесь нельзя.
+ *
+ * Резолвер отдаёт вопрос по индексу и на экранах без вопроса (старт, экран раздела, обзор, итоги), поэтому
+ * вопросом место считается только в фазах `question` и `adaptive-session` пакета; иначе - тест целиком.
  */
 import { useMemo, type RefObject } from "react";
 import type { ReviewAnchor } from "@shared/review/anchor";
 import type { InspectorSnapshot } from "@/features/tests/debug-player/inspector-snapshot";
+import { screenShowsQuestion } from "./delivery-order";
 
 export function useScreenAnchor(
   frameRef: RefObject<HTMLIFrameElement | null>,
@@ -22,7 +26,7 @@ export function useScreenAnchor(
   return useMemo(() => {
     const win = frameRef.current?.contentWindow as unknown as Window | undefined;
     const inspector = window.TBInspector;
-    if (!win || !inspector?.currentScreenQuestion) return { kind: "test" };
+    if (!win || !inspector?.currentScreenQuestion || !screenShowsQuestion(win)) return { kind: "test" };
     try {
       const q = inspector.currentScreenQuestion(win) as
         | { id?: string; topicId?: string }

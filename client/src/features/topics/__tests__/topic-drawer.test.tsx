@@ -11,6 +11,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TopicDrawer } from "../topic-drawer";
 import type { Topic } from "@shared/schema";
+import { FULL_TOPIC_RIGHTS } from "@shared/access";
 import { ToastProvider } from "@skillum/ui-kit";
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -41,6 +42,7 @@ const editTopic = {
   folderId: null,
   ownerId: null,
   visibility: "private",
+  rights: FULL_TOPIC_RIGHTS,
 } as unknown as Topic;
 
 describe("<TopicDrawer />", () => {
@@ -62,6 +64,21 @@ describe("<TopicDrawer />", () => {
     expect(screen.getByText("Свойства")).toBeInTheDocument();
     expect(screen.getByText("Доступ")).toBeInTheDocument();
     expect((screen.getByTestId("input-topic-name") as HTMLInputElement).value).toBe("Финансовая грамотность");
+  });
+
+  it("edit mode without the grant right: no «Доступ» tab and no access request", () => {
+    renderWithClient(
+      <TopicDrawer
+        target={{ mode: "edit", topic: { ...editTopic, rights: { manage: true, delete: false, grant: false } } as Topic }}
+        folders={[]}
+        isAdmin={false}
+        initialTab="access"
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByText("Доступ")).not.toBeInTheDocument();
+    expect(screen.getByTestId("input-topic-name")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/access"))).toBe(false);
   });
 
   it("renders nothing interactive when target is null (closed)", () => {
@@ -338,7 +355,7 @@ describe("<TopicDrawer />: толкование темы", () => {
       <TopicDrawer target={{ mode: "edit", topic: withInterpretation }} folders={[]} isAdmin={false} onClose={() => {}} />,
     );
     fireEvent.click(screen.getByTestId("topic-interpretation-edit"));
-    fireEvent.change(await screen.findByTestId("feedback-editor-text"), {
+    fireEvent.change(await screen.findByTestId("feedback-editor-text-input"), {
       target: { value: "Новое толкование" },
     });
     fireEvent.click(screen.getByTestId("feedback-editor-save"));
@@ -361,7 +378,7 @@ describe("<TopicDrawer />: толкование темы", () => {
     );
     fireEvent.change(screen.getByTestId("input-topic-name"), { target: { value: "Новая тема" } });
     fireEvent.click(screen.getByTestId("topic-interpretation"));
-    fireEvent.change(await screen.findByTestId("feedback-editor-text"), {
+    fireEvent.change(await screen.findByTestId("feedback-editor-text-input"), {
       target: { value: "Толкование новой темы" },
     });
     fireEvent.click(screen.getByTestId("feedback-editor-save"));
@@ -389,8 +406,8 @@ describe("<TopicDrawer />: толкование темы", () => {
       <TopicDrawer target={{ mode: "edit", topic: rich }} folders={[]} isAdmin={false} onClose={() => {}} />,
     );
     fireEvent.click(screen.getByTestId("topic-interpretation-edit"));
-    // У форматированного текста поле другое — область RTE, а не textarea.
-    const area = await screen.findByTestId("feedback-editor-rte-area");
+    // У форматированного текста поле другое — область ввода компонента, а не textarea.
+    const area = await screen.findByTestId("feedback-editor-text-area");
     area.innerHTML = "<p>Другой богатый текст</p>";
     fireEvent.input(area);
     fireEvent.click(screen.getByTestId("feedback-editor-save"));
@@ -433,7 +450,7 @@ describe("<TopicDrawer />: толкование темы", () => {
       <TopicDrawer target={{ mode: "edit", topic: withInterpretation }} folders={[]} isAdmin={false} onClose={() => {}} />,
     );
     fireEvent.click(screen.getByTestId("topic-interpretation-edit"));
-    fireEvent.change(await screen.findByTestId("feedback-editor-text"), { target: { value: "   " } });
+    fireEvent.change(await screen.findByTestId("feedback-editor-text-input"), { target: { value: "   " } });
     fireEvent.click(screen.getByTestId("feedback-editor-save"));
     fireEvent.click(screen.getByTestId("button-submit-topic"));
     await waitFor(() => {

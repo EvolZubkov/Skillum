@@ -21,6 +21,11 @@ const { storageMock } = vi.hoisted(() => ({
   },
 }));
 vi.mock("../../server/storage", () => ({ storage: storageMock }));
+// Folder inheritance is covered by test-folder-access.test.ts; here no folder gives any right.
+vi.mock("../../server/services/test-folder-access", () => ({
+  folderRightsForTest: vi.fn(async () => ({ owner: false, edit: false, assign: false, review: false })),
+  testIdsByFolderRights: vi.fn(async () => []),
+}));
 
 import {
   isAdminOrSuper,
@@ -35,6 +40,7 @@ import {
   canReviewTest,
   canChangeOwner,
   readableTestScope,
+  listableTestScope,
 } from "../../server/services/test-access";
 
 /** A test owned by `owner-1`. */
@@ -253,10 +259,52 @@ describe("AC-10 — readableTestScope (list/analytics filtering)", () => {
     expect([...scope.ids].sort()).toEqual(["assign-1", "edit-1", "owned-1"]);
   });
 
+  it("a `review` grant is not a working scope: neither a manager nor an author gets the test", async () => {
+    storageMock.getUserTestGrants.mockResolvedValue([
+      { testId: "review-1", accessLevel: "review" },
+      { testId: "assign-1", accessLevel: "assign" },
+    ]);
+    const manager = await readableTestScope([ROLES.MANAGER], "u1");
+    expect([...manager.ids]).toEqual(["assign-1"]);
+    // The reported user: developer + author + manager.
+    const mixed = await readableTestScope([ROLES.DEVELOPER, ROLES.AUTHOR, ROLES.MANAGER], "u1");
+    expect([...mixed.ids]).toEqual(["assign-1"]);
+  });
+
   it("returns an empty scope for a learner / no content role", async () => {
     const scope = await readableTestScope([ROLES.LEARNER], "u1");
     expect(scope.all).toBe(false);
     expect(scope.ids.size).toBe(0);
+  });
+});
+
+describe("PRD-52 — listableTestScope (the tests list and its folder tree)", () => {
+  beforeEach(() => {
+    storageMock.getUserTestGrants.mockResolvedValue([
+      { testId: "review-1", accessLevel: "review" },
+      { testId: "assign-1", accessLevel: "assign" },
+      { testId: "edit-1", accessLevel: "edit" },
+    ]);
+  });
+
+  it.each([
+    ["author", [ROLES.AUTHOR], ["edit-1", "review-1"]],
+    ["developer", [ROLES.DEVELOPER], ["edit-1", "review-1"]],
+    ["manager", [ROLES.MANAGER], ["assign-1", "edit-1", "review-1"]],
+    ["developer + author + manager", [ROLES.DEVELOPER, ROLES.AUTHOR, ROLES.MANAGER], ["assign-1", "edit-1", "review-1"]],
+  ])("%s: the working scope plus every test they review", async (_name, roles, expected) => {
+    const scope = await listableTestScope(roles, "u1");
+    expect(scope.all).toBe(false);
+    expect([...scope.ids].sort()).toEqual(expected);
+  });
+
+  it("administrator sees everything without a lookup", async () => {
+    await expect(listableTestScope([ROLES.ADMINISTRATOR], "u1")).resolves.toEqual({ all: true, ids: new Set() });
+  });
+
+  it("the reviewed test stays OUT of the working scope used by analytics and home", async () => {
+    const working = await readableTestScope([ROLES.MANAGER], "u1");
+    expect(working.ids.has("review-1")).toBe(false);
   });
 });
 

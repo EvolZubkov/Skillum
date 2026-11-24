@@ -639,6 +639,7 @@ describe("POST /api/topics/bulk-revoke — validation & edges", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("POST /api/topics/:id/duplicate", () => {
   it("404 when the source topic is missing", async () => {
+    storageMock.getTopic.mockResolvedValue(undefined);
     storageMock.duplicateTopicWithQuestions.mockResolvedValue(undefined);
     const res = await asUser(request(app).post("/api/topics/x/duplicate"));
     expect(res.status).toBe(404);
@@ -646,6 +647,8 @@ describe("POST /api/topics/:id/duplicate", () => {
   });
 
   it("201 with the duplicated topic", async () => {
+    // role-model.md §9: the source must be visible, so the route reads it first.
+    storageMock.getTopic.mockResolvedValue(topic("t1"));
     storageMock.duplicateTopicWithQuestions.mockResolvedValue(topic("copy1"));
     const res = await asUser(request(app).post("/api/topics/t1/duplicate"));
     expect(res.status).toBe(201);
@@ -653,6 +656,7 @@ describe("POST /api/topics/:id/duplicate", () => {
   });
 
   it("500 when duplication throws", async () => {
+    storageMock.getTopic.mockResolvedValue(topic("t1"));
     storageMock.duplicateTopicWithQuestions.mockRejectedValue(new Error("db down"));
     const res = await asUser(request(app).post("/api/topics/t1/duplicate"));
     expect(res.status).toBe(500);

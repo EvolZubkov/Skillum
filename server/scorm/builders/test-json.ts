@@ -1,5 +1,6 @@
 import type { Test, TestSection, Topic, Question, TopicCourse, TopicEvent, PassRule, AdaptiveTopicSettings, AdaptiveLevel, AdaptiveLevelLink, ContentPage, ResultVariable, Scale, QuestionMeasurement, RetakePolicy, TestQuestionScoring, ReportBlockRow } from "@shared/schema";
 import { sanitizeHtml, placeholderScope } from "../../utils/html-sanitizer";
+import { ensureExternalLinkTargets } from "@shared/security/html-sanitize";
 import { withCurrentScenario } from "@shared/sim/upgrade";
 import { findEligibilityPlugin, findEligibilityConfig } from "@shared/eligibility/registry";
 import { resolveAnswerCommitScope } from "@shared/flow/answer-commit-scope";
@@ -18,6 +19,7 @@ import { hasGradedContent } from "@shared/questions/question-type";
 import { hasOptionFeedback } from "@shared/questions/option-feedback";
 import { feedbackAssets, normalizeFeedback, topicFeedbackTexts } from "@shared/template/result-context";
 import type { ReportBake } from "@shared/report/report-variants";
+import { normalizeReportBlockOutcome, REPORT_OUTCOMES } from "@shared/report/report-outcome";
 import { CARD_IMAGES_SETTING_KEY, pruneCardImageEntries } from "@shared/template/router-card-images";
 
 interface AdaptiveLevelWithLinks extends AdaptiveLevel {
@@ -357,6 +359,12 @@ export function buildTestJson(data: ExportData): string {
     // PRD-67: baked ONLY when on — the runtime reads absence as the old freeze-on-leave, so
     // the package of a test that never touched the setting stays byte-for-byte the same.
     ...(data.test.closeSectionOnLeave ? { closeSectionOnLeave: true } : {}),
+    // PRD-73: baked ONLY when on and never for an adaptive test (no skipping there, FR-09).
+    // The runtime reads absence as «off», so a package that never touched the setting stays
+    // byte-for-byte the same.
+    ...(data.test.mode !== "adaptive" && data.test.requireAllAnsweredToFinish
+      ? { requireAllAnsweredToFinish: true }
+      : {}),
     // PRD-34 (FR-01, FR-26): настройки защиты для рантайма пакета. `protectionActive`
     // отдельным полем: в отладочном прогоне защита и скрытие выключены, а водяной знак
     // остаётся (FR-19, FR-25).
@@ -804,6 +812,23 @@ export function buildTestJson(data: ExportData): string {
       for (const [k, v] of Object.entries(row.settingsJson ?? {})) {
         settings[k] = typeof v === "string" ? sanitizeHtml(v) : v;
       }
+      // Ветви исхода чистятся тем же правилом, что и общие значения: это та же авторская
+      // разметка, только для прошедшего или не прошедшего тест.
+      const outcome = normalizeReportBlockOutcome(row.outcomeJson);
+      for (const key of REPORT_OUTCOMES) {
+        const branch = outcome[key];
+        if (!branch) continue;
+        if (branch.values) {
+          for (const [k, v] of Object.entries(branch.values)) {
+            branch.values[k] = typeof v === "string" ? sanitizeHtml(v, { scope: placeholderScope(k) }) : v;
+          }
+        }
+        if (branch.settings) {
+          for (const [k, v] of Object.entries(branch.settings)) {
+            branch.settings[k] = typeof v === "string" ? sanitizeHtml(v) : v;
+          }
+        }
+      }
       return {
         block: row.block,
         templateKey: row.templateKey,
@@ -811,6 +836,9 @@ export function buildTestJson(data: ExportData): string {
         enabled: row.enabled,
         values,
         settings,
+        // Пустое содержимое по исходу в пакет не пишется: тест, где его не задавали,
+        // собирает тот же `test.json`, что и до появления колонки.
+        ...(Object.keys(outcome).length ? { outcome } : {}),
       };
     });
   }
@@ -919,7 +947,13 @@ export function buildTestJson(data: ExportData): string {
     };
   }
 
-  return JSON.stringify(test, null, 2);
+  // Stored author markup may predate the sanitiser's link rule: settle `target` for every
+  // external link at bake time so the LMS frame is never navigated away from the attempt.
+  return JSON.stringify(
+    test,
+    (_key, value) => (typeof value === "string" ? ensureExternalLinkTargets(value) : value),
+    2,
+  );
 }
 
 export type { ExportData };

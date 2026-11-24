@@ -10,14 +10,23 @@
  *
  * Added in Phase 2 alongside the permission core; route handlers start calling it
  * in Phase 3 (PRD-13 implementation plan).
+ *
+ * Rights inherited from the test's folder chain
+ * (docs/specs/2026-11-16-folder-access-inheritance-design.md) are a UNION with
+ * the owner and grant branches: each check falls back to them last, so they only
+ * ever widen access. The role still opens the action, exactly as for test grants.
  */
 
-import { ROLES, hasAuthoringRole, type Role } from "@shared/access";
+import { ROLES, hasAuthoringRole, type FolderAccessLevel, type Role } from "@shared/access";
 import { storage } from "../storage";
 import type { Test } from "@shared/schema";
+import { folderRightsForTest, testIdsByFolderRights } from "./test-folder-access";
 
-/** Minimal test shape needed for resolution. */
-type TestRef = Pick<Test, "id" | "ownerId">;
+/**
+ * Minimal test shape needed for resolution. `folderId` is optional: callers that
+ * hold the row pass it, the others make the resolver look it up.
+ */
+type TestRef = Pick<Test, "id" | "ownerId"> & { folderId?: string | null };
 
 function hasRole(roles: readonly Role[], role: Role): boolean {
   return roles.includes(role);
@@ -55,19 +64,22 @@ export async function canEditTest(
   if (hasAuthoringRole(roles)) {
     if (test.ownerId === userId) return true;
     const grant = await storage.getTestGrantForUser(test.id, userId);
-    return grant?.accessLevel === "edit";
+    if (grant?.accessLevel === "edit") return true;
+    return (await folderRightsForTest(userId, test)).edit;
   }
   return false;
 }
 
-/** Can delete/archive the test: owner only (plus admin/super). */
+/** Can delete/archive the test: the test owner or the owner of a folder above it (plus admin/super). */
 export async function canDeleteTest(
   roles: readonly Role[],
   userId: string,
   test: TestRef,
 ): Promise<boolean> {
   if (isAdminOrSuper(roles)) return true;
-  return hasAuthoringRole(roles) && test.ownerId === userId;
+  if (!hasAuthoringRole(roles)) return false;
+  if (test.ownerId === userId) return true;
+  return (await folderRightsForTest(userId, test)).owner;
 }
 
 /** Publishing, SCORM export and the debug run all follow the edit scope. */
@@ -92,7 +104,10 @@ export async function canReviewTest(
 ): Promise<boolean> {
   if (await canEditTest(roles, userId, test)) return true;
   // The review grant has its own slot, so a manager's `assign` beside it does not hide it.
-  return Boolean(await storage.getTestReviewGrant(test.id, userId));
+  if (await storage.getTestReviewGrant(test.id, userId)) return true;
+  // A folder grants no review of its own (review is granted on a test only); `edit` on a
+  // folder of the chain, or owning one, still opens the review of every test below it.
+  return (await folderRightsForTest(userId, test)).review;
 }
 
 /**
@@ -110,7 +125,8 @@ export async function canAssignTest(
   if (hasRole(roles, ROLES.MANAGER)) {
     if (hasAuthoringRole(roles) && (await canEditTest(roles, userId, test))) return true;
     const grant = await storage.getTestGrantForUser(test.id, userId);
-    return grant?.accessLevel === "assign" || grant?.accessLevel === "edit";
+    if (grant?.accessLevel === "assign" || grant?.accessLevel === "edit") return true;
+    return (await folderRightsForTest(userId, test)).assign;
   }
   return false;
 }
@@ -144,10 +160,15 @@ export function canChangeOwner(roles: readonly Role[]): boolean {
 }
 
 /**
- * The set of test ids a user may READ, for list and analytics filtering. For
+ * The set of test ids a user may WORK with, for analytics and home filtering. For
  * administrators/superadmin returns `{ all: true }` (no id set needed).
- * Otherwise the union of owned tests and edit-grants (authoring roles) and all
- * grants (manager role).
+ * Otherwise the union of owned tests and edit-grants (authoring roles) and the
+ * working grants, `assign` or `edit` (manager role), plus the tests of folders where
+ * the same levels are inherited along the folder chain.
+ *
+ * A `review` grant (PRD-52) is NOT part of it: it opens the reviewer window of one
+ * test, not its analytics or the author's home. The tests list adds it on top, see
+ * {@link listableTestScope}.
  */
 export async function readableTestScope(
   roles: readonly Role[],
@@ -163,9 +184,33 @@ export async function readableTestScope(
   if (wantsAuthor || wantsManager) {
     const grants = await storage.getUserTestGrants(userId);
     for (const g of grants) {
+      if (g.accessLevel === "review") continue; // the reviewer slot is not a working scope
       if (wantsManager) ids.add(g.testId); // manager: assign or edit grant
       else if (g.accessLevel === "edit") ids.add(g.testId); // author: edit grant only
     }
+    // Folder grants count with the same levels as test grants for the role.
+    const levels = new Set<FolderAccessLevel>(wantsManager ? ["edit", "assign"] : ["edit"]);
+    for (const id of await testIdsByFolderRights(userId, levels)) ids.add(id);
+  }
+  return { all: false, ids };
+}
+
+/**
+ * The set of test ids a user finds in the tests LIST and its folder tree: the working
+ * scope ({@link readableTestScope}) plus every test the user is invited to review
+ * (PRD-52, decision of 2026-11-23 — a reviewer finds the test in the list and enters
+ * the review window from its row, whatever the roles). Which row actions the user gets
+ * is decided per test (`canEditTest`, `canAssignTest`, `canReviewTest`), not by this set.
+ */
+export async function listableTestScope(
+  roles: readonly Role[],
+  userId: string,
+): Promise<{ all: boolean; ids: Set<string> }> {
+  const scope = await readableTestScope(roles, userId);
+  if (scope.all) return scope;
+  const ids = new Set(scope.ids);
+  for (const g of await storage.getUserTestGrants(userId)) {
+    if (g.accessLevel === "review") ids.add(g.testId);
   }
   return { all: false, ids };
 }

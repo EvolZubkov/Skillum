@@ -47,7 +47,8 @@ const { storageMock } = vi.hoisted(() => ({
     // Route auth (requirePermission -> getEffectiveRoles)
     getUser: vi.fn(),
     getUserRoles: vi.fn(),
-    // Duplication routes
+    // Duplication routes (the source is read first: role-model.md 6.6, §9)
+    getTopic: vi.fn(),
     duplicateQuestion: vi.fn(),
     duplicateTopicWithQuestions: vi.fn(),
   },
@@ -182,6 +183,8 @@ describe("POST /api/questions/:id/duplicate -> media usage index", () => {
       prompt: "Original (копия)",
       mediaUrl: "/api/media/33333333-3333-3333-3333-333333333333",
     };
+    storageMock.getQuestion.mockResolvedValue({ id: "q-original", topicId: "t1" });
+    storageMock.getTopic.mockResolvedValue({ id: "t1", ownerId: "author1", visibility: "private" });
     storageMock.duplicateQuestion.mockResolvedValue(duplicate);
 
     const app = makeApp(questionsRouter, "/api/questions");
@@ -195,6 +198,7 @@ describe("POST /api/questions/:id/duplicate -> media usage index", () => {
   });
 
   it("404 when the source question is gone — nothing to index", async () => {
+    storageMock.getQuestion.mockResolvedValue(undefined);
     storageMock.duplicateQuestion.mockResolvedValue(undefined);
 
     const app = makeApp(questionsRouter, "/api/questions");
@@ -213,6 +217,7 @@ describe("POST /api/topics/:id/duplicate -> media usage index", () => {
   it("indexes every duplicated question under its OWN new id", async () => {
     const dup1 = { id: "q-copy-1", topicId: "t-copy", mediaUrl: "/api/media/44444444-4444-4444-4444-444444444444" };
     const dup2 = { id: "q-copy-2", topicId: "t-copy", mediaUrl: null };
+    storageMock.getTopic.mockResolvedValue({ id: "t-original", ownerId: "author1", visibility: "private" });
     storageMock.duplicateTopicWithQuestions.mockResolvedValue({
       topic: { id: "t-copy", name: "Тема (копия)" },
       questions: [dup1, dup2],
@@ -232,6 +237,7 @@ describe("POST /api/topics/:id/duplicate -> media usage index", () => {
   });
 
   it("404 when the source topic is gone — nothing to index", async () => {
+    storageMock.getTopic.mockResolvedValue(undefined);
     storageMock.duplicateTopicWithQuestions.mockResolvedValue(undefined);
 
     const app = makeApp(topicsRouter, "/api/topics");

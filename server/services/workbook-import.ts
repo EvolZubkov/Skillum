@@ -76,6 +76,9 @@ import { buildFormSet, parseVariantNumbers, type VariantMembership } from "@shar
 import { randomUUID } from "crypto";
 import type { ValueType } from "@shared/formula";
 import type { Role } from "@shared/access";
+import { isAdminOrSuper } from "./test-access";
+import { folderRightsMap } from "./test-folder-access";
+import { planMove, materializeInheritedGrants } from "./test-folder-transfer";
 import { importQuestionRows, type ResolvedQuestion } from "./questions-import";
 import { syncEntityUsages, syncScaleFeedbackUsages, syncVariableFeedbackUsages } from "./media/usage-index";
 // PRD-48 Э3: the page-field rules live in ONE place, and the workbook calls exactly the
@@ -633,33 +636,59 @@ async function keepUnnamedFailureFeedback(
   for (const topic of unnamed) topic.failureFeedback = byTopic.get(topic.topicId) ?? null;
 }
 
+/** Outcome of {@link resolveFolderPath}: the folder, or why the book may not place the test there. */
+type FolderPathResolution = { folderId: string | null } | { error: string };
+
 /**
  * A «Папка / Подпапка» path → the id of the last folder, creating the missing ones.
  *
  * Creating rather than failing: the workbook already creates missing TOPICS by name, and a
  * folder is the same hierarchy of names. Demanding a pre-built tree would ask the author to
  * reproduce by hand the structure the book already describes.
+ *
+ * Folder access inheritance: a name matches only a folder the actor may edit (an
+ * administrator, or a run without an actor, matches any). A name that matches only someone
+ * else's folder refuses the path — the book may not drop a test into a folder its author
+ * cannot change, nor create a twin beside it. Missing folders are created under the last
+ * matched one, which the actor may edit by construction, or in the root.
  */
-async function resolveFolderPath(path: string, actorId: string | null): Promise<string | null> {
+async function resolveFolderPath(
+  path: string,
+  actor: { id: string; roles: readonly Role[] } | undefined,
+): Promise<FolderPathResolution> {
   const names = path.split("/").map((s) => s.trim()).filter(Boolean);
-  if (names.length === 0) return null;
+  if (names.length === 0) return { folderId: null };
 
   const existing = await storage.getTestFolders();
+  const unrestricted = !actor || isAdminOrSuper(actor.roles);
+  const rights = unrestricted ? null : await folderRightsMap(actor.id);
+  const editable = (id: string) => unrestricted || Boolean(rights?.get(id)?.edit);
   let parentId: string | null = null;
   for (const name of names) {
     const key = name.toLowerCase();
-    const found = existing.find(
+    const sameName = existing.filter(
       (f) => f.name.trim().toLowerCase() === key && (f.parentId ?? null) === parentId,
     );
+    const found = sameName.find((f) => editable(f.id));
     if (found) {
       parentId = found.id;
       continue;
     }
-    const created = await storage.createTestFolder({ name, parentId, createdBy: actorId });
+    if (sameName.length > 0) return { error: `Нет прав на папку «${name}»` };
+    const created = await storage.createTestFolder({ name, parentId, createdBy: actor?.id ?? null });
     existing.push(created);
     parentId = created.id;
   }
-  return parentId;
+  return { folderId: parentId };
+}
+
+/** «получит/получат ещё N человек(а)» with the forms the number asks for. */
+function gainPhrase(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const one = mod10 === 1 && mod100 !== 11;
+  const few = mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14);
+  return `${one ? "получит" : "получат"} ещё ${n} ${few ? "человека" : "человек"}`;
 }
 
 // ─── «Страницы» + «Поля страниц» (PRD-48 FR-14/FR-15) ────────────────────────
@@ -1985,8 +2014,26 @@ export async function importWorkbook(
   // The folder resolves HERE, not in the registry: the registry is pure cell parsing,
   // while a path needs storage and may create rows.
   if (!dryRun && settingsDraft.folderPath !== undefined) {
-    const folderId = await resolveFolderPath(settingsDraft.folderPath, actor?.id ?? null);
-    settingsDraft.test.folderId = folderId;
+    const resolved = await resolveFolderPath(settingsDraft.folderPath, actor);
+    if ("error" in resolved) {
+      result.errors.push(`Лист «Настройки», «Папка»: ${resolved.error}`);
+    } else {
+      // A move between folders keeps the rights the test inherited (as a move in the list
+      // does). The import itself is the confirmation, so a wider audience is reported, not
+      // blocked — the same rule as deleting a folder "folder only".
+      const current = await storage.getTest(testId);
+      if (current && (current.folderId ?? null) !== resolved.folderId) {
+        const subject = { kind: "test" as const, id: testId };
+        const plan = await planMove(subject, resolved.folderId);
+        await materializeInheritedGrants(subject, plan, actor?.id ?? null);
+        if (plan.gained.length > 0) {
+          result.warnings.push(
+            `Лист «Настройки», «Папка»: в новой папке доступ к тесту ${gainPhrase(plan.gained.length)}`,
+          );
+        }
+      }
+      settingsDraft.test.folderId = resolved.folderId;
+    }
   }
 
   // ── Pass 6: «Структура» + «Квоты» (FR-16: sections + PRD-11 quotas, router). ──

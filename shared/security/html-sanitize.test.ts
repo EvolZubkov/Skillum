@@ -5,7 +5,7 @@
  * placeholder region happens here too (both hosts then render the same CSS).
  */
 import { describe, it, expect } from "vitest";
-import { sanitizeHtml, sanitizeHtmlWithDiagnostics, sanitizeValuesWithDiagnostics } from "./html-sanitize";
+import { ensureExternalLinkTargets, sanitizeHtml, sanitizeHtmlWithDiagnostics, sanitizeValuesWithDiagnostics } from "./html-sanitize";
 
 const DOC_CSS = '<style>body { display: flex; } .btn { color: red; }</style><div class="btn">x</div>';
 
@@ -184,5 +184,52 @@ describe("sanitizeHtml и внешние адреса", () => {
       '<base href="https://evil.example/"><img src="https://example.com/a.png">',
     );
     expect(removed).toEqual([{ kind: "uri", label: "external src/href", count: 2 }]);
+  });
+});
+
+describe("ensureExternalLinkTargets", () => {
+  it("добавляет target и rel сохранённой ссылке без них", () => {
+    const out = ensureExternalLinkTargets('<p><a href="https://example.com/x">к</a></p>');
+    expect(out).toBe('<p><a href="https://example.com/x" target="_blank" rel="noopener noreferrer">к</a></p>');
+  });
+
+  it("повторный проход ничего не меняет", () => {
+    const once = ensureExternalLinkTargets('<a href="https://example.com">к</a>');
+    expect(ensureExternalLinkTargets(once)).toBe(once);
+  });
+
+  it("не трогает разметку без внешних ссылок и якоря", () => {
+    const src = '<p>текст <a href="#x">якорь</a> <a href="mailto:a@b.c">почта</a></p>';
+    expect(ensureExternalLinkTargets(src)).toBe(src);
+  });
+});
+
+describe("исправление адреса ссылки", () => {
+  const href = (html: string) => /href="([^"]*)"/.exec(sanitizeHtml(html))?.[1];
+
+  it("схлопывает задвоенную схему", () => {
+    expect(href('<a href="https://https://x.ru/a">к</a>')).toBe("https://x.ru/a");
+    expect(href('<a href="http://https://x.ru">к</a>')).toBe("https://x.ru");
+  });
+
+  it("обрезает пробелы вокруг адреса", () => {
+    expect(href('<a href="  https://x.ru/a \n">к</a>')).toBe("https://x.ru/a");
+  });
+
+  it("достраивает второй слэш и выравнивает регистр схемы", () => {
+    expect(href('<a href="https:/x.ru">к</a>')).toBe("https://x.ru");
+    expect(href('<a href="HTTPS://x.ru/Path">к</a>')).toBe("https://x.ru/Path");
+  });
+
+  it("не трогает относительные адреса, mailto и якоря", () => {
+    expect(href('<a href="report.pdf">к</a>')).toBe("report.pdf");
+    expect(href('<a href="www.x.ru">к</a>')).toBe("www.x.ru");
+    expect(href('<a href="mailto:a@b.c">к</a>')).toBe("mailto:a@b.c");
+  });
+
+  it("исправляет и сохранённую ссылку при экспорте", () => {
+    expect(ensureExternalLinkTargets('<a href="https://https://x.ru">к</a>')).toBe(
+      '<a href="https://x.ru" target="_blank" rel="noopener noreferrer">к</a>',
+    );
   });
 });

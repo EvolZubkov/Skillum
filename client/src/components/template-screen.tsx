@@ -16,9 +16,11 @@ import type { ProtectionSpec } from "@shared/template/protection/spec";
 import { fitQuestionScene } from "@shared/template/fit-question";
 import { attachPointerDnd } from "@shared/template/dnd/pointer-dnd";
 import { attachQuestionMediaFullscreen } from "@shared/template/question-media";
+import { attachQuestionMaps } from "@shared/template/question-map-dom";
 import { nextScaleIndex } from "@shared/template/scale-keyboard";
 import { resolveSceneTheme } from "@shared/template/themes";
 import { paintSceneTimers, type SceneTimersState } from "@shared/template/scene-timers";
+import { disableActions } from "@shared/template/action-disable";
 import dsCss from "@/styles/vendor/skillum-ds.css?raw";
 
 /**
@@ -189,6 +191,15 @@ export interface TemplateScreenProps {
   /** Called with the `data-action` value when a button inside the screen is clicked. */
   onAction?: (action: string) => void;
   /**
+   * `data-action` values the host will not execute right now; their elements are rendered
+   * disabled after EVERY paint of the scene, by the same shared `disableActions` the SCORM
+   * runtime calls — so a layout that never heard of the restriction still shows an inert
+   * control. Example: PRD-73 passes `["finish-review"]` while the обзор's finish is
+   * blocked. The host must still refuse the action in `onAction`: a foreign template may
+   * hang it on an element that cannot be disabled. Omitted ⇒ nothing is disabled.
+   */
+  disabledActions?: readonly string[];
+  /**
    * Called once the shadow root exists; may return a cleanup. The seam for interactions
    * a HOST owns rather than the renderer — PRD-44 allocation drives a pointer GESTURE,
    * and a gesture cannot go through `data-action` delegation: the answer must not reach
@@ -219,7 +230,7 @@ export interface TemplateScreenProps {
   fill?: boolean;
 }
 
-export function TemplateScreen({ layout, context, css, slots, content, protection, cssVars, dataAttrs, themeCss, dataTheme, themed, afterHtml, timers, onAction, onShadowReady, className, shell, blocks, fill = true }: TemplateScreenProps) {
+export function TemplateScreen({ layout, context, css, slots, content, protection, cssVars, dataAttrs, themeCss, dataTheme, themed, afterHtml, timers, onAction, disabledActions, onShadowReady, className, shell, blocks, fill = true }: TemplateScreenProps) {
   /**
    * PRD-51: отчёт печатается ДОКУМЕНТОМ из блоков, а не одной раскладкой. Когда блоки
    * пришли, `layout` — это оболочка документа, и рисует его та же общая сборка, которой
@@ -241,6 +252,7 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
   const screenRef = useRef<HTMLElement | null>(null);
   const appliedVarsRef = useRef<string[]>([]);
   const appliedAttrsRef = useRef<string[]>([]);
+  const qnavDetachRef = useRef<(() => void) | null>(null);
   const onActionRef = useRef(onAction);
   onActionRef.current = onAction;
   const onShadowReadyRef = useRef(onShadowReady);
@@ -292,8 +304,8 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
   // and wipe/rebuild the whole shadow tree, which is what made hover flicker and a
   // click land on an already-replaced button.
   const renderKey = useMemo(
-    () => JSON.stringify([layout, css, context, slots, content, protection, cssVars, dataAttrs, themeCss, dataTheme, themed, afterHtml, shell]),
-    [layout, css, context, slots, content, protection, cssVars, dataAttrs, themeCss, dataTheme, themed, afterHtml, shell],
+    () => JSON.stringify([layout, css, context, slots, content, protection, cssVars, dataAttrs, themeCss, dataTheme, themed, afterHtml, shell, disabledActions ?? []]),
+    [layout, css, context, slots, content, protection, cssVars, dataAttrs, themeCss, dataTheme, themed, afterHtml, shell, disabledActions],
   );
 
   useEffect(() => {
@@ -428,6 +440,14 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
     // Header countdowns — the layout ships them hidden, exactly as in the package,
     // and the shared painter reveals whichever is running.
     paintSceneTimers(screen, timers ?? {});
+    // Paged question map: the layout ships the hooks, the shared core pages the dots and
+    // drives the «Все вопросы» panel. The previous render's listeners are dropped first.
+    qnavDetachRef.current?.();
+    qnavDetachRef.current = attachQuestionMaps(screen);
+    // Actions the host refuses right now (PRD-73: the обзор's blocked finish) — inert on
+    // every paint, since each paint replaces the nodes. `disabledActions` is part of
+    // `renderKey`, so a change of the list alone repaints too.
+    disableActions(screen, disabledActions ?? []);
     // NB: the countdown values are deliberately NOT in the dependency list — they
     // change every second, and rebuilding the scene at 1 Hz destroyed the very node
     // the pointer was over (flickering hover, clicks landing on a replaced button).
@@ -470,6 +490,9 @@ export function TemplateScreen({ layout, context, css, slots, content, protectio
     mql.addEventListener("change", apply);
     return () => mql.removeEventListener("change", apply);
   }, [dataTheme, themed]);
+
+  // Drop the question-map listeners (document-level) when the screen goes away.
+  useEffect(() => () => qnavDetachRef.current?.(), []);
 
   // Delegate clicks on [data-action] elements to the host (bound once).
   //

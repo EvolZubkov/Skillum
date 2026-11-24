@@ -14,3 +14,5 @@ export * from "./capabilities";
 export * from "./permissions";
 export * from "./role-assignment";
 export * from "./import-kinds";
+export * from "./folder-inheritance";
+export * from "./topic-rights";

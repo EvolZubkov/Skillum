@@ -17,8 +17,12 @@ import { colorParamKeys } from "@shared/template/theme-params";
 import { resolveTemplateDir, resolveSystemScreenDir } from "../services/template-dir";
 import { requirePermission, requireUserContext } from "../middleware/auth";
 import { requireTestScope } from "../middleware/test-scope";
-import { readableTestScope, canGrantAccess, canAssignTest } from "../services/test-access";
+import { listableTestScope, canGrantAccess, canAssignTest, canEditTest, canReviewTest, isAdminOrSuper } from "../services/test-access";
+import { folderRights, loadTestFolderNodes } from "../services/test-folder-access";
+import { accessPanelPeople, NOT_CONTENT_ACCESS_HOLDER, userMayHoldContentAccess } from "../services/access";
+import { ancestorChain, inheritedAccess } from "@shared/access";
 import { visibleTopic } from "../services/topic-access";
+import { testReferencedTopicIds } from "../services/test-topic-context";
 import { assessTestPublish, type PublishCheckFinding } from "../services/draw-feasibility";
 import { planScormPublication, publishTest } from "../services/test-publish";
 import {
@@ -191,6 +195,8 @@ const testBodyBaseSchema = z.object({
   skipReviewWhenComplete: z.boolean().optional(),
   // PRD-67: leaving a started section with a time limit closes it (see schema).
   closeSectionOnLeave: z.boolean().optional(),
+  // PRD-73: the обзор's finish stays disabled while the scope has an unanswered question.
+  requireAllAnsweredToFinish: z.boolean().optional(),
   // Что SCORM-пакет отдаёт в LMS при нескольких попытках (в вебе не применяется).
   lmsAttemptResult: z.enum(["best", "last"]).optional(),
   // PRD-34 (FR-01): настройки защиты от копирования.
@@ -267,6 +273,10 @@ const reportBlockBodySchema = z.object({
   enabled: z.boolean().optional(),
   values: z.record(z.string(), z.unknown()).optional(),
   settings: z.record(z.string(), z.unknown()).optional(),
+  // Содержимое по исходу. Форма проверяется мягко: чужие ключи не ошибка, а мусор, и
+  // служба сохранения приводит значение к каноническому виду (`normalizeReportBlockOutcome`).
+  // `null` и отсутствие — «автор не распоряжался»: печатаются умолчания шаблона.
+  outcome: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 const updateTestBodySchema = testBodyBaseSchema.extend({
@@ -436,8 +446,9 @@ router.get("/", requirePermission("tests.read"), async (req, res) => {
       ? allTests.filter((t) => t.status === "archived")
       : allTests.filter((t) => t.status !== "archived");
 
-    // PRD-13: restrict the list to tests this user may read (scope by role).
-    const scope = await readableTestScope(req.effectiveRoles ?? [], req.currentUser?.id ?? "");
+    // PRD-13: restrict the list to tests this user may read (scope by role) plus the
+    // tests they are invited to review (PRD-52): a reviewer finds the test here.
+    const scope = await listableTestScope(req.effectiveRoles ?? [], req.currentUser?.id ?? "");
     const visibleTests = scope.all
       ? filteredTests
       : filteredTests.filter((t) => scope.ids.has(t.id));
@@ -520,6 +531,13 @@ router.get("/", requirePermission("tests.read"), async (req, res) => {
           // whether THIS test may be assigned is the object-level answer, so it
           // travels with the row instead of being guessed from the role.
           canAssign: await canAssignTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
+          // Same rule for the author's actions (edit, debug, publish, SCORM, delete):
+          // the role opens them in principle, the test decides. Without the flag the
+          // row offered a debug run the server then refused with 403.
+          canEdit: await canEditTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
+          // PRD-52: the reviewer window. True for anyone who may also edit, so the
+          // client shows «Рецензировать» only when `canReview && !canEdit`.
+          canReview: await canReviewTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
           sections: sectionsWithDetails,
           adaptiveSettings,
           publication,
@@ -787,6 +805,7 @@ router.post("/", requirePermission("tests.create"), async (req, res) => {
       showAttemptsCount,
       skipReviewWhenComplete,
       closeSectionOnLeave,
+      requireAllAnsweredToFinish,
       lmsAttemptResult,
       copyProtection,
       protectionWatermark,
@@ -843,6 +862,13 @@ router.post("/", requirePermission("tests.create"), async (req, res) => {
       });
     }
 
+    // Folder access inheritance: a test is created inside a folder only by someone who may
+    // edit that folder — the same rule as creating a sub-folder or moving a test into it.
+    if (folderId && !isAdminOrSuper(req.effectiveRoles ?? [])
+      && !(await folderRights(req.currentUser?.id ?? "", folderId)).edit) {
+      return res.status(403).json({ error: "forbidden", field: "folderId" });
+    }
+
     // Выбранный шаблон проверяется ровно тем же правилом, что и в `PUT /:id/design`:
     // он должен существовать и быть активным. Версия и версия контракта штампуются
     // здесь же — иначе тест родился бы с оформлением без версии, и редактор никогда
@@ -886,6 +912,7 @@ router.post("/", requirePermission("tests.create"), async (req, res) => {
         showAttemptsCount,
         skipReviewWhenComplete,
         closeSectionOnLeave,
+        requireAllAnsweredToFinish,
         lmsAttemptResult,
         copyProtection,
         protectionWatermark,
@@ -1285,6 +1312,7 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
       showAttemptsCount,
       skipReviewWhenComplete,
       closeSectionOnLeave,
+      requireAllAnsweredToFinish,
       lmsAttemptResult,
       copyProtection,
       protectionWatermark,
@@ -1329,9 +1357,9 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
         ? ((adaptiveSettings ?? []) as AdaptiveTopicPayload[]).map((a) => a.topicId)
         : []),
     ];
-    const existingSections = await storage.getTestSections(req.params.id);
-    const existingScenarios = await storage.getTestScenarios(req.params.id);
-    const exempt = new Set([...existingSections, ...existingScenarios].map((s) => s.topicId));
+    // role-model.md 6.5.1: the topics the test already references are read in its context,
+    // and the same set keeps a re-save from tripping over them.
+    const exempt = await testReferencedTopicIds(req.params.id);
     const invisible = await firstInvisibleTopic(
       req.effectiveRoles ?? [],
       req.currentUser?.id ?? "",
@@ -1364,6 +1392,7 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
         showAttemptsCount,
         skipReviewWhenComplete,
         closeSectionOnLeave,
+        requireAllAnsweredToFinish,
         lmsAttemptResult,
         copyProtection,
         protectionWatermark,
@@ -1427,7 +1456,7 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
     //
     // Разделы (`test_sections.feedback_json`) едут ТЕМ ЖЕ вызовом и под тем же ключом теста
     // (см. `testFeedbackUsageEntity`); перечитываются ПОСЛЕ сохранения — служба пересоздаёт
-    // строки разделов, поэтому `existingSections`, прочитанные до save, здесь уже неверны.
+    // строки разделов, поэтому разделы, прочитанные до save, здесь уже неверны.
     try {
       await syncEntityUsages(
         "test_feedback",
@@ -1889,7 +1918,20 @@ router.get("/:id/access", requirePermission("tests.access.grant"), async (req, r
     // dialog (PRD-52, 14.8) and would show here with a level the panel cannot set.
     const grants = (await storage.getTestAccessGrants(test.id))
       .filter((grant) => grant.accessLevel !== "review");
-    res.json({ testId: test.id, ownerId: test.ownerId ?? null, grants });
+    // Folder access inheritance: who reaches the test through its folder chain (read-only
+    // in the panel; such access is removed in the source folder).
+    const [nodes, folders, folderGrants] = await Promise.all([
+      loadTestFolderNodes(),
+      storage.getTestFolders(),
+      storage.getTestFolderGrants(),
+    ]);
+    const names = new Map(folders.map((f) => [f.id, f.name]));
+    const inherited = inheritedAccess(
+      ancestorChain(test.folderId ?? null, nodes),
+      folderGrants,
+      new Set(test.ownerId ? [test.ownerId] : []),
+    ).map((row) => ({ ...row, folderName: names.get(row.folderId) ?? "" }));
+    res.json({ testId: test.id, ownerId: test.ownerId ?? null, grants, inherited });
   } catch (error) {
     logger.error("Get test access error: " + (error as Error).message, "tests");
     res.status(500).json({ error: "Failed to get test access" });
@@ -1900,7 +1942,8 @@ router.get("/:id/access", requirePermission("tests.access.grant"), async (req, r
 // Behind the panel's own gate, not `users.read`: the author grants access to their
 // own tests yet holds no registry right, so `GET /api/users` answered the panel with
 // a 403 and left the owner, the grantees and the add-user list nameless and empty.
-// Only what the panel shows leaves: id, name, email and roles — no groups, no hashes.
+// Only what the panel shows leaves: id, name, email and roles — no groups, no hashes — and
+// only for the people who may hold access (role-model 6.0) plus those the panel already names.
 router.get("/:id/access/users", requirePermission("tests.access.grant"), async (req, res) => {
   try {
     const test = await storage.getTest(req.params.id);
@@ -1908,9 +1951,18 @@ router.get("/:id/access/users", requirePermission("tests.access.grant"), async (
     if (!canGrantAccess(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test)) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const users = await storage.getUsers();
-    const roles = await Promise.all(users.map((user) => storage.getUserRoles(user.id)));
-    res.json(users.map((user, i) => ({ id: user.id, name: user.name, email: user.email, roles: roles[i] })));
+    const [grants, nodes, folderGrants] = await Promise.all([
+      storage.getTestAccessGrants(test.id),
+      loadTestFolderNodes(),
+      storage.getTestFolderGrants(),
+    ]);
+    // The panel names the owner, the grantees (reviewers included) and everyone the test inherits.
+    const referenced = new Set<string>([
+      ...grants.map((grant) => grant.userId),
+      ...inheritedAccess(ancestorChain(test.folderId ?? null, nodes), folderGrants, new Set()).map((row) => row.userId),
+    ]);
+    if (test.ownerId) referenced.add(test.ownerId);
+    res.json(await accessPanelPeople(referenced));
   } catch (error) {
     logger.error("Get test access users error: " + (error as Error).message, "tests");
     res.status(500).json({ error: "Failed to get users" });
@@ -1934,6 +1986,7 @@ router.post("/:id/access", requirePermission("tests.access.grant"), async (req, 
     }
     const grantee = await storage.getUser(userId);
     if (!grantee) return res.status(404).json({ error: "User not found" });
+    if (!(await userMayHoldContentAccess(grantee))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     const grant = await storage.upsertTestAccessGrant({
       testId: test.id,
       userId,
@@ -1976,6 +2029,7 @@ router.patch("/:id/owner", requirePermission("tests.owner.change"), async (req, 
     if (ownerId) {
       const owner = await storage.getUser(ownerId);
       if (!owner) return res.status(404).json({ error: "Owner user not found" });
+      if (!(await userMayHoldContentAccess(owner))) return res.status(422).json(NOT_CONTENT_ACCESS_HOLDER);
     }
     await storage.setTestOwner(test.id, ownerId ?? null);
     res.json({ testId: test.id, ownerId: ownerId ?? null });

@@ -13,15 +13,19 @@
  */
 import { useState } from "react";
 import {
-  Avatar, Banner, Button, Card, Cluster, EmptyState, SegmentedControl, Stack, Switch, Tag, Text,
-  Textarea,
+  Avatar, Banner, Button, Card, CardBody, Cluster, EmptyState, IconButton, MenuItem, MenuTrigger, SegmentedControl,
+  Stack, Switch, Tag, Text, Textarea,
 } from "@skillum/ui-kit";
-import { ArrowRight, MessageSquarePlus } from "lucide-react";
+import { ArrowRight, Check, MessageSquarePlus, MoreHorizontal, RotateCcw } from "lucide-react";
 import { pluralize } from "@/lib/i18n";
 import { useReviewComments } from "./use-review-comments";
 import { ReviewCommentForm, type ReviewAnchorItem } from "./review-comment-form";
 import type { ReviewThread } from "./review-api";
 import { resolveAnchorTarget, type ReviewAnchor, type AnchorTarget } from "@shared/review/anchor";
+import { initialsOf, when } from "./review-format";
+import { ReviewApprovalBlock, ReviewApprovalLegend } from "./review-approval-block";
+import { ReviewTab } from "./review-tab";
+import { useReviewApprovals } from "./use-review-approvals";
 import "./review-panel.css";
 
 export interface ReviewPanelProps {
@@ -34,6 +38,8 @@ export interface ReviewPanelProps {
   currentUserId?: string;
   /** Место текущего экрана прогона; в режиме `editor` не используется. */
   screenAnchor?: ReviewAnchor;
+  /** Title of the current-question approval card («Вопрос N»); default «Текущий вопрос». */
+  screenTitle?: string;
   /** Разделы и их содержимое для выбора места в режиме `editor`. */
   anchorOptions?: { topics: { id: string; name: string }[]; items?: ReviewAnchorItem[] };
   /** Переход по якорю: панель только зовёт, открывает редактор хозяин панели. */
@@ -49,30 +55,15 @@ function statusTag(thread: ReviewThread) {
   return <Tag size="s" tone="warning">открыто</Tag>;
 }
 
-/**
- * Инициалы для аватара. Имя может не прийти вовсе (пользователь удалён, ответ сервера
- * без него) — тогда кружок остаётся пустым, но с места не уходит: строка не должна
- * прыгать из-за отсутствующего имени.
- */
-function initialsOf(name: string | null | undefined, mine: boolean): string {
-  const source = (name ?? "").trim() || (mine ? "Вы" : "");
-  if (!source) return "";
-  const parts = source.split(/\s+/).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
-
-/** Дата в том виде, в каком её читают в списке: «2 сентября, 14:20». */
-function when(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-}
-
 export function ReviewPanel({
   testId, mode, canResolve = false, currentUserId,
-  screenAnchor, anchorOptions, onNavigate, focusThreadId,
+  screenAnchor, screenTitle, anchorOptions, onNavigate, focusThreadId,
 }: ReviewPanelProps) {
+  // The player window is a narrow inspector: thread actions collapse into one row with a «⋯» menu.
+  const compact = mode === "player";
   const review = useReviewComments(testId);
+  // Окно прогона: пункт «Согласование» в рейле есть, только когда есть рецензент, принявший приглашение.
+  const approvals = useReviewApprovals(testId, { enabled: mode === "player" });
   const [composing, setComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [resolving, setResolving] = useState<{ id: string; status: "accepted" | "rejected" } | null>(null);
@@ -115,6 +106,11 @@ export function ReviewPanel({
     );
   }
 
+  // Рейл выбирает пункт по умолчанию при первой отрисовке, поэтому ждём ответа про рецензентов.
+  if (mode === "player" && approvals.isLoading) {
+    return <Text tone="muted" variant="body-s">Загружаем комментарии…</Text>;
+  }
+
   async function submitResolve() {
     if (!resolving) return;
     // При отклонении ответ обязателен — сервер это тоже проверяет, но человек не
@@ -129,7 +125,7 @@ export function ReviewPanel({
 
   const rejectBlocked = resolving?.status === "rejected" && !rejectReply.trim();
 
-  return (
+  const comments = (
     <Stack gap={3} className="rvp">
       <Cluster gap={3} align="center" className="rvp__bar">
         <Button
@@ -217,139 +213,197 @@ export function ReviewPanel({
                 data-testid={`thread-${thread.id}`}
                 data-expanded={thread.id === focusThreadId ? "true" : "false"}
               >
-                <Cluster gap={2} align="center" className="rvp__head">
-                  {/* Аватар с инициалами: в ветке на десяток реплик имя читается медленнее,
-                      чем цветной кружок, — по нему взгляд и находит своего собеседника. */}
-                  <Avatar size="xs" initials={initialsOf(thread.authorName, mine)} />
-                  <strong className="rvp__who">{thread.authorName || (mine ? "Вы" : thread.authorId)}</strong>
-                  <span className="rvp__when">{when(thread.createdAt)}</span>
-                  <span className="rvp__spacer" />
-                  {statusTag(thread)}
-                </Cluster>
-                {thread.contextLabel ? <div className="rvp__ctx">{thread.contextLabel}</div> : null}
-                <p className="rvp__text">{thread.body}</p>
-
-                {thread.replies.length ? (
-                  <div className="rvp__replies">
-                    {thread.replies.map((reply) => (
-                      <div key={reply.id}>
-                        <Cluster gap={2} align="center" className="rvp__head">
-                          <Avatar
-                            size="xs"
-                            initials={initialsOf(reply.authorName, reply.authorId === currentUserId)}
-                          />
-                          <strong className="rvp__who">
-                            {reply.authorName || (reply.authorId === currentUserId ? "Вы" : reply.authorId)}
-                          </strong>
-                          <span className="rvp__when">{when(reply.createdAt)}</span>
-                        </Cluster>
-                        <p className="rvp__text">{reply.body}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {replyTo === thread.id ? (
-                  <ReviewCommentForm
-                    mode="reply"
-                    busy={review.create.isPending}
-                    onCancel={() => setReplyTo(null)}
-                    onSubmit={async (input) => {
-                      await review.create.mutateAsync({ body: input.body, parentId: thread.id });
-                      setReplyTo(null);
-                    }}
-                  />
-                ) : null}
-
-                {resolving?.id === thread.id ? (
-                  <Stack gap={2} className="rvp__resolve">
-                    {/* Исход — выбор ОДНОГО из двух, а не две команды: эскиз ставит здесь
-                        переключатель с подписью поля. Двумя кнопками выбранный исход
-                        читался как «нажми обе». */}
-                    <div className="ou-formfield">
-                      <span className="ou-formfield__lbl">Исход</span>
-                      <SegmentedControl<"accepted" | "rejected">
-                        size="s"
-                        variant="accent"
-                        aria-label="Исход комментария"
-                        value={resolving.status}
-                        items={[
-                          { value: "accepted", label: "Учтено" },
-                          { value: "rejected", label: "Отклонено" },
-                        ]}
-                        onChange={(status) => setResolving({ id: thread.id, status })}
-                      />
-                    </div>
-                    {resolving.status === "rejected" ? (
-                      <Textarea
-                        label="Ответ автора"
-                        hint="При отклонении ответ обязателен: эксперт должен увидеть причину."
-                        placeholder="Почему комментарий отклонён"
-                        rows={3}
-                        value={rejectReply}
-                        onChange={(e) => setRejectReply(e.target.value)}
-                        data-testid="reject-reply"
-                      />
-                    ) : null}
-                    <Cluster gap={2} align="center">
-                      <Button variant="ghost" size="s" onClick={() => { setResolving(null); setRejectReply(""); }}>
-                        Отмена
-                      </Button>
-                      <span className="rvp__spacer" />
-                      <Button
-                        variant="primary"
-                        size="s"
-                        disabled={rejectBlocked || review.resolve.isPending}
-                        onClick={submitResolve}
-                        data-testid="confirm-resolve"
-                      >
-                        Закрыть комментарий
-                      </Button>
-                    </Cluster>
-                  </Stack>
-                ) : (
-                  <Cluster gap={2} align="center" className="rvp__actions">
-                    {thread.stale ? (
-                      <Tag size="s" variant="outline">изменено после комментария</Tag>
-                    ) : null}
-                    {thread.orphaned ? <Tag size="s" variant="soft">объект удалён</Tag> : null}
-                    {target ? (
-                      <Button
-                        variant="secondary"
-                        size="s"
-                        disabled={!canNavigate}
-                        onClick={() => canNavigate && onNavigate!(target!, thread)}
-                        data-testid={`goto-${thread.id}`}
-                        trailingIcon={<ArrowRight size={13} aria-hidden="true" />}
-                      >
-                        Перейти к вопросу
-                      </Button>
-                    ) : null}
-                    <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
-                      Ответить
-                    </Button>
+                <CardBody>
+                  <Cluster gap={2} align="center" className="rvp__head">
+                    {/* Аватар с инициалами: в ветке на десяток реплик имя читается медленнее,
+                        чем цветной кружок, — по нему взгляд и находит своего собеседника. */}
+                    <Avatar size="xs" initials={initialsOf(thread.authorName, mine)} />
+                    <strong className="rvp__who">{thread.authorName || (mine ? "Вы" : thread.authorId)}</strong>
+                    <span className="rvp__when">{when(thread.createdAt)}</span>
                     <span className="rvp__spacer" />
-                    {canResolve && thread.status === "open" ? (
-                      <Button
-                        variant="secondary"
-                        size="s"
-                        onClick={() => setResolving({ id: thread.id, status: "accepted" })}
-                        data-testid={`resolve-${thread.id}`}
-                      >
-                        Закрыть комментарий
-                      </Button>
-                    ) : null}
-                    {canResolve && thread.status !== "open" ? (
-                      <Button
-                        variant="secondary"
-                        size="s"
-                        onClick={() => review.reopen.mutate(thread.id)}
-                      >
-                        Открыть заново
-                      </Button>
-                    ) : null}
+                    {statusTag(thread)}
                   </Cluster>
-                )}
+                  {thread.contextLabel ? <div className="rvp__ctx">{thread.contextLabel}</div> : null}
+                  <p className="rvp__text">{thread.body}</p>
+
+                  {thread.replies.length ? (
+                    <div className="rvp__replies">
+                      {thread.replies.map((reply) => (
+                        <div key={reply.id}>
+                          <Cluster gap={2} align="center" className="rvp__head">
+                            <Avatar
+                              size="xs"
+                              initials={initialsOf(reply.authorName, reply.authorId === currentUserId)}
+                            />
+                            <strong className="rvp__who">
+                              {reply.authorName || (reply.authorId === currentUserId ? "Вы" : reply.authorId)}
+                            </strong>
+                            <span className="rvp__when">{when(reply.createdAt)}</span>
+                          </Cluster>
+                          <p className="rvp__text">{reply.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {replyTo === thread.id ? (
+                    <ReviewCommentForm
+                      mode="reply"
+                      busy={review.create.isPending}
+                      onCancel={() => setReplyTo(null)}
+                      onSubmit={async (input) => {
+                        await review.create.mutateAsync({ body: input.body, parentId: thread.id });
+                        setReplyTo(null);
+                      }}
+                    />
+                  ) : null}
+
+                  {resolving?.id === thread.id ? (
+                    <Stack gap={2} className="rvp__resolve">
+                      {/* Исход — выбор ОДНОГО из двух, а не две команды: эскиз ставит здесь
+                          переключатель с подписью поля. Двумя кнопками выбранный исход
+                          читался как «нажми обе». */}
+                      <div className="ou-formfield">
+                        <span className="ou-formfield__lbl">Исход</span>
+                        <SegmentedControl<"accepted" | "rejected">
+                          size="s"
+                          variant="accent"
+                          aria-label="Исход комментария"
+                          value={resolving.status}
+                          items={[
+                            { value: "accepted", label: "Учтено" },
+                            { value: "rejected", label: "Отклонено" },
+                          ]}
+                          onChange={(status) => setResolving({ id: thread.id, status })}
+                        />
+                      </div>
+                      {resolving.status === "rejected" ? (
+                        <Textarea
+                          label="Ответ автора"
+                          hint="При отклонении ответ обязателен: эксперт должен увидеть причину."
+                          placeholder="Почему комментарий отклонён"
+                          rows={3}
+                          value={rejectReply}
+                          onChange={(e) => setRejectReply(e.target.value)}
+                          data-testid="reject-reply"
+                        />
+                      ) : null}
+                      <Cluster gap={2} align="center">
+                        <Button variant="ghost" size="s" onClick={() => { setResolving(null); setRejectReply(""); }}>
+                          Отмена
+                        </Button>
+                        <span className="rvp__spacer" />
+                        <Button
+                          variant="primary"
+                          size="s"
+                          disabled={rejectBlocked || review.resolve.isPending}
+                          onClick={submitResolve}
+                          data-testid="confirm-resolve"
+                        >
+                          Закрыть комментарий
+                        </Button>
+                      </Cluster>
+                    </Stack>
+                  ) : (
+                    <Cluster gap={2} align="center" className="rvp__actions">
+                      {thread.stale ? (
+                        <Tag size="s" variant="outline">изменено после комментария</Tag>
+                      ) : null}
+                      {thread.orphaned ? <Tag size="s" variant="soft">объект удалён</Tag> : null}
+                      {compact ? (
+                        // Narrow inspector (approved wireframe prd52-review-approval): one row, «Ответить» leads,
+                        // the rest sits under «⋯» so the row never wraps in the 176 px rail window.
+                        <>
+                          <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
+                            Ответить
+                          </Button>
+                          <span className="rvp__spacer" />
+                          {target || canResolve ? (
+                            <MenuTrigger
+                              size="sm"
+                              placement="bottom-end"
+                              trigger={
+                                <IconButton
+                                  variant="ghost"
+                                  size="s"
+                                  aria-label="Другие действия"
+                                  data-testid={`more-${thread.id}`}
+                                  icon={<MoreHorizontal size={16} aria-hidden="true" />}
+                                />
+                              }
+                            >
+                              {target ? (
+                                <MenuItem
+                                  icon={<ArrowRight size={16} aria-hidden="true" />}
+                                  disabled={!canNavigate}
+                                  onClick={() => canNavigate && onNavigate!(target!, thread)}
+                                  data-testid={`goto-${thread.id}`}
+                                >
+                                  Перейти к вопросу
+                                </MenuItem>
+                              ) : null}
+                              {canResolve && thread.status === "open" ? (
+                                <MenuItem
+                                  icon={<Check size={16} aria-hidden="true" />}
+                                  onClick={() => setResolving({ id: thread.id, status: "accepted" })}
+                                  data-testid={`resolve-${thread.id}`}
+                                >
+                                  Закрыть комментарий
+                                </MenuItem>
+                              ) : null}
+                              {canResolve && thread.status !== "open" ? (
+                                <MenuItem
+                                  icon={<RotateCcw size={16} aria-hidden="true" />}
+                                  onClick={() => review.reopen.mutate(thread.id)}
+                                >
+                                  Открыть заново
+                                </MenuItem>
+                              ) : null}
+                            </MenuTrigger>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                        {target ? (
+                          <Button
+                            variant="secondary"
+                            size="s"
+                            disabled={!canNavigate}
+                            onClick={() => canNavigate && onNavigate!(target!, thread)}
+                            data-testid={`goto-${thread.id}`}
+                            trailingIcon={<ArrowRight size={13} aria-hidden="true" />}
+                          >
+                            Перейти к вопросу
+                          </Button>
+                        ) : null}
+                        <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
+                          Ответить
+                        </Button>
+                        <span className="rvp__spacer" />
+                        {canResolve && thread.status === "open" ? (
+                          <Button
+                            variant="secondary"
+                            size="s"
+                            onClick={() => setResolving({ id: thread.id, status: "accepted" })}
+                            data-testid={`resolve-${thread.id}`}
+                          >
+                            Закрыть комментарий
+                          </Button>
+                        ) : null}
+                        {canResolve && thread.status !== "open" ? (
+                          <Button
+                            variant="secondary"
+                            size="s"
+                            onClick={() => review.reopen.mutate(thread.id)}
+                          >
+                            Открыть заново
+                          </Button>
+                        ) : null}
+                        </>
+                      )}
+                    </Cluster>
+                  )}
+                </CardBody>
               </Card>
             );
           })}
@@ -365,6 +419,29 @@ export function ReviewPanel({
             : ""}
         </Text>
       </div>
+
     </Stack>
+  );
+
+  if (mode !== "player") return comments;
+
+  // PRD-52, утверждённый эскиз окна: рейл «Согласование / Комментарии» как в редакторе. «Согласование» - карточки
+  // текущего экрана и легенда карты; пока рецензентов нет, пункта нет и остаются комментарии.
+  return (
+    <ReviewTab
+      compact
+      openComments={review.openCount}
+      approval={
+        approvals.hasReviewers ? (
+          <Stack gap={3}>
+            {screenAnchor ? (
+              <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} screenTitle={screenTitle} />
+            ) : null}
+            <ReviewApprovalLegend testId={testId} />
+          </Stack>
+        ) : undefined
+      }
+      comments={comments}
+    />
   );
 }

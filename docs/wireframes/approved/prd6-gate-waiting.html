@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+    Wireframe: PRD-6 — ожидание проверки допуска (retake gate) в SCORM-пакете.
+    Спека: docs/specs/prd-6/retake-cooldown-gate.md (NFR-06), cooldown-trusted-date.md.
+    Поверхность: учащийся, экран пакета ДО вердикта гейта — то, что сейчас занимает
+    строка «Загрузка теста...» (server/scorm/assets/index.html, #loading).
+    Шаблон оформления в этот момент ещё не загружен; styles.css пакета уже подключён.
+    Состояния:
+      s-wait        — проверка идёт, первые 5 секунд 
+      s-wait-long   — проверка идёт дольше 5 секунд (+ пояснение)
+      s-docs        — Пояснения, карточки состояний, DS Mapping
+    Согласован владельцем 2026-11-18: вариант А (спиннер); вариант Б (полоса) отклонён.
+    -->
+    <title>PRD-6 — Ожидание проверки допуска</title>
+    <link rel="stylesheet" href="/docs/wireframes/ds/skillum-ds.css" />
+    <link rel="stylesheet" href="/docs/wireframes/prd7-shared.css" />
+    <script defer src="/docs/wireframes/prd7-shared.js"></script>
+    <link rel="stylesheet" href="/docs/wireframes/ds/wf-utils.css" />
+    <link rel="stylesheet" href="/docs/wireframes/tb-components.css" />
+    <style>
+      .wf-stack { display: flex; flex-direction: column; gap: var(--ou-space-4); }
+      .wf-muted { color: var(--ou-fg-muted); }
+      /* Sketch of the package viewport before the gate verdict. */
+      .wf-wait { display: flex; align-items: center; justify-content: center; min-height: var(--wf-size-320); padding: var(--ou-space-8) var(--ou-space-4); }
+      .wf-wait__body { max-width: var(--wf-size-400); width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--ou-space-3); text-align: center; }
+    </style>
+
+    <style data-wf-template-overrides>
+      .wf-nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        display: flex; align-items: center; gap: var(--ou-space-2);
+        padding: var(--ou-space-2) var(--ou-space-4);
+        background: var(--ou-bg-elevated);
+        border-bottom: var(--wf-border-w) solid var(--ou-border-soft);
+        box-shadow: var(--ou-shadow-xs); color: var(--ou-fg-default); flex-wrap: wrap;
+      }
+      .wf-nav-title { font: var(--ou-text-body-s); font-weight: 600; color: var(--ou-fg-muted); margin-right: var(--ou-space-2); white-space: nowrap; }
+      .wf-nav button {
+        padding: var(--ou-space-1) var(--ou-space-3);
+        border: var(--wf-border-w) solid var(--ou-border-default);
+        border-radius: var(--ou-radius-s); background: transparent;
+        color: var(--ou-fg-default); font: var(--ou-text-body-s); cursor: pointer;
+      }
+      .wf-nav button:hover { background: var(--ou-bg-hover); }
+      .wf-nav button.active { background: var(--ou-accent-default); color: var(--ou-fg-on-accent); border-color: var(--ou-accent-default); }
+      .wf-nav-sep { width: var(--wf-border-w); height: var(--ou-space-5); background: var(--ou-border-soft); margin: 0 var(--ou-space-2); }
+      .wf-nav-link { font: var(--ou-text-body-s); color: var(--ou-accent-default); white-space: nowrap; }
+      .wf-state { display: none; padding: var(--wf-size-72) var(--ou-space-6) var(--ou-space-10); max-width: var(--wf-size-720); }
+      .wf-state.active { display: block; }
+      .wf-doc { padding: var(--ou-space-6) var(--ou-space-6) var(--ou-space-10); }
+    </style>
+  </head>
+  <body class="ou ou--light ou--normal">
+    <nav class="wf-nav" aria-label="Wireframe state switcher">
+      <span class="wf-nav-title">Ожидание гейта:</span>
+      <button type="button" class="active" onclick="showState(this, 'wait')">до 5 с</button>
+      <button type="button" onclick="showState(this, 'wait-long')">дольше 5 с</button>
+      <span class="wf-nav-sep"></span>
+      <button type="button" onclick="showState(this, 'docs')">Пояснения</button>
+      <span class="wf-nav-sep"></span>
+      <button type="button" onclick="toggleTheme(this)">Dark</button>
+      <button type="button" onclick="toggleDensity(this)">Compact</button>
+      <span class="wf-nav-sep"></span>
+      <a class="wf-nav-link" href="prd6-retake-policy.html">&harr; Блок-экран</a>
+    </nav>
+
+    <!-- ════════════════ s-wait: проверка идёт, первые 5 секунд ════════════════ -->
+    <div id="wf-wait" class="wf-state active">
+      <div class="wf-wait">
+        <div class="wf-wait__body" role="status" aria-live="polite">
+          <span class="ou-spinner ou-spinner--l ou-spinner--accent" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle class="ou-spinner__track" cx="12" cy="12" r="10" />
+              <circle class="ou-spinner__head" cx="12" cy="12" r="10" />
+            </svg>
+          </span>
+          <p>Проверяем доступ к прохождению…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ s-wait-long: проверка идёт дольше 5 секунд ════════════════ -->
+    <div id="wf-wait-long" class="wf-state">
+      <div class="wf-wait">
+        <div class="wf-wait__body" role="status" aria-live="polite">
+          <span class="ou-spinner ou-spinner--l ou-spinner--accent" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle class="ou-spinner__track" cx="12" cy="12" r="10" />
+              <circle class="ou-spinner__head" cx="12" cy="12" r="10" />
+            </svg>
+          </span>
+          <p>Проверяем доступ к прохождению…</p>
+          <p class="wf-muted">Проверка может занять до 30 секунд. Не закрывайте окно.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ Пояснения, карточки состояний, DS Mapping ════════════════ -->
+    <div id="wf-docs" class="wf-state">
+      <div class="wf-doc">
+      <div class="wf-notes">
+        <h3 class="wf-notes-title">Пояснения — Wireframe</h3>
+        <table>
+          <thead><tr><th>Элемент</th><th>Поле / условие</th><th>Примечание</th></tr></thead>
+          <tbody>
+            <tr><td>Переключатель состояний</td><td><code>showState(btn, id)</code>, тоглы темы/плотности</td><td>Каркас эскиза; в продукте отсутствует</td></tr>
+            <tr><td>Поверхность</td><td>SCORM-пакет, <code>#loading</code> внутри <code>#app</code></td><td>Заменяет строку «Загрузка теста...» только у теста с ограничением повторного прохождения; у остальных тестов строка прежняя</td></tr>
+            <tr><td>Когда показывается</td><td>с разбора <code>app.js</code> до вердикта гейта</td><td>Запрос списка обучений стартует в тот же момент, не дожидаясь <code>window.load</code> и <code>SCORM.init</code></td></tr>
+            <tr><td>Пояснение «до N секунд»</td><td>появляется через 5 с; N = <code>timeoutMs</code> / 1000</td><td><code>timeoutMs</code> из конфига плагина, по умолчанию 30 000</td></tr>
+            <tr><td>Чем заканчивается</td><td>вердикт гейта</td><td>Допуск — обычный стартовый экран; блокировка — стартовый экран с состоянием охлаждения (FR-20); таймаут — по <code>failPolicy</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wf-notes">
+        <h3 class="wf-notes-title">Карточки состояний</h3>
+        <table>
+          <thead><tr><th>Пункт</th><th>s-wait</th><th>s-wait-long</th></tr></thead>
+          <tbody>
+            <tr><td>Что изображено</td><td>Спиннер и строка «Проверяем доступ к прохождению…» по центру окна пакета</td><td>То же плюс приглушённое пояснение о сроке и просьба не закрывать окно</td></tr>
+            <tr><td>Сценарий пользователя</td><td>Ученик запустил курс из LMS и ждёт старта</td><td>Ученик ждёт дольше обычного, у него длинная история обучений</td></tr>
+            <tr><td>Исходные данные</td><td colspan="2">Тест с включённым ограничением повторного прохождения и плагином WebTutor; <code>timeoutMs</code> из конфига плагина</td></tr>
+            <tr><td>Как попадает</td><td>Сразу при открытии пакета</td><td>Через 5 с в s-wait, если вердикта нет</td></tr>
+            <tr><td>Действия на экране</td><td colspan="2">Нет. Кнопок и ссылок нет: проверку нельзя ни пропустить, ни отменить</td></tr>
+            <tr><td>Куда ведёт</td><td colspan="2">Допуск — стартовый экран теста; блокировка — стартовый экран с охлаждением (<a href="prd6-retake-policy.html">эскиз PRD-6</a>); ошибка или таймаут при <code>failClosed</code> — экран «Не удалось проверить доступ»; при <code>failOpen</code> — стартовый экран</td></tr>
+            <tr><td>Что меняется в данных</td><td colspan="2">Ничего: до вердикта пакет не пишет в <code>cmi.*</code></td></tr>
+            <tr><td>Ошибки и граничные случаи</td><td>Повторный вход в текущее назначение — вердикт мгновенный, экран мелькает или не виден вовсе</td><td>Истёк <code>timeoutMs</code> — решает <code>failPolicy</code>; отдельного экрана таймаута нет</td></tr>
+            <tr><td>Отмена и клавиатура</td><td colspan="2">Отмены нет. Фокус не ставится; область с <code>role="status"</code> и <code>aria-live="polite"</code> озвучивает строку и появление пояснения</td></tr>
+            <tr><td>Открытые вопросы</td><td colspan="2">Нет</td></tr>
+            <tr><td>Требование</td><td colspan="2">NFR-06 (новый бюджет <code>timeoutMs</code>, по умолчанию 30 с), индикатор ожидания на время работы плагина</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wf-mapping">
+        <h2 class="wf-mapping-title">DS Mapping</h2>
+        <p class="wf-mapping-sub">Пакет не несёт CSS дизайн-системы: правила индикатора переносятся в <code>server/scorm/templates/default/styles/base.css</code> на токенах шаблона, разметка повторяет DS-классы ниже.</p>
+        <table>
+          <thead><tr><th>Элемент wireframe</th><th>DS-компонент</th><th>Используемые токены</th><th>Примечания</th></tr></thead>
+          <tbody>
+            <tr><td>Спиннер</td><td><code>Spinner</code> (<code>ou-spinner--l ou-spinner--accent</code>)</td><td><code>--ou-accent-default</code></td><td>Чистый CSS + inline SVG, без значков</td></tr>
+            <tr><td>Строка и пояснение</td><td>текст</td><td><code>--ou-fg-default</code>, <code>--ou-fg-muted</code></td><td>Пояснение показывается через 5 с</td></tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
+    </div>
+
+    <script>
+      window.showState = function showState(btn, id) {
+        var target = document.getElementById('wf-' + id) || document.getElementById(id);
+        document.querySelectorAll('.wf-state').forEach(function (el) { el.classList.toggle('active', el === target); });
+        document.querySelectorAll('.wf-nav button[onclick*="showState"]').forEach(function (button) { button.classList.toggle('active', button === btn); });
+      };
+      window.toggleTheme = function toggleTheme(btn) {
+        var dark = document.body.classList.toggle('ou--dark');
+        document.body.classList.toggle('ou--light', !dark);
+        btn.textContent = dark ? 'Light' : 'Dark';
+        btn.classList.toggle('active', dark);
+      };
+      window.toggleDensity = function toggleDensity(btn) {
+        var compact = document.body.classList.toggle('ou--compact');
+        document.body.classList.toggle('ou--normal', !compact);
+        btn.textContent = compact ? 'Normal' : 'Compact';
+        btn.classList.toggle('active', compact);
+      };
+    </script>
+  </body>
+</html>

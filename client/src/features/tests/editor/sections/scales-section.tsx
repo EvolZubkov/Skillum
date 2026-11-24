@@ -346,7 +346,7 @@ function ScalesListPane({
 
   useEffect(() => {
     let alive = true;
-    loadContributionQuestions(topicIds)
+    loadContributionQuestions(topicIds, model.id)
       .then((questions) => {
         if (!alive) return;
         const types: Record<string, QuestionType> = {};
@@ -366,7 +366,7 @@ function ScalesListPane({
     return () => {
       alive = false;
     };
-  }, [topicIds]);
+  }, [topicIds, model.id]);
 
   /** The domain the contributions of one scale can actually reach, or null. */
   const suggestedDomainOf = useCallback(
@@ -1323,13 +1323,13 @@ function ContributionsPane({
   useEffect(() => {
     let alive = true;
     setLoadError(false);
-    loadContributionQuestions(topicIds)
+    loadContributionQuestions(topicIds, model.id)
       .then((qs) => alive && setQuestions(qs))
       .catch(() => alive && setLoadError(true));
     return () => {
       alive = false;
     };
-  }, [topicIds]);
+  }, [topicIds, model.id]);
 
   const cellMap = useMemo(() => {
     const map = new Map<string, number>();

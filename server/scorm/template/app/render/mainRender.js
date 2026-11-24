@@ -235,14 +235,28 @@ function hasUnansweredInScope(topicId) {
 // (return to a skipped question, or revise an answer). Otherwise the flow goes
 // straight to the section results.
 function reviewIsWorthShowing(topicId) {
-    // Автор мог скрыть экран обзора целиком (решение владельца 2026-09-20) — тогда
-    // спрашивать, есть ли там что делать, уже не о чем.
-    if (typeof screenHidden === 'function' && screenHidden('review')) return false;
     var TB = typeof TBTemplate !== 'undefined' ? TBTemplate : null;
+    var hasUnanswered = hasUnansweredInScope(topicId);
+    // Автор мог скрыть экран обзора целиком (решение владельца 2026-09-20) — тогда
+    // спрашивать, есть ли там что делать, уже не о чем. PRD-73 §3.5: пока завершение
+    // запрещено, скрытие уступает — обзор остаётся единственным путём к пропущенным.
+    var hidden = typeof screenHidden === 'function' && screenHidden('review');
+    if (hidden) {
+        var gate = {
+            requireAllAnsweredToFinish: TEST_DATA.requireAllAnsweredToFinish,
+            allowReturnToUnanswered: TEST_DATA.allowReturnToUnanswered,
+            hasUnanswered: hasUnanswered
+        };
+        var hiddenNow = (TB && typeof TB.reviewHiddenByAuthor === 'function')
+            ? TB.reviewHiddenByAuthor(true, gate)
+            // Bundle missing (defensive): the same rule inline.
+            : !(gate.requireAllAnsweredToFinish === true && gate.allowReturnToUnanswered !== false && gate.hasUnanswered);
+        if (hiddenNow) return false;
+    }
     var input = {
         allowReturnToUnanswered: TEST_DATA.allowReturnToUnanswered,
         allowAnswerChange: TEST_DATA.allowAnswerChange,
-        hasUnanswered: hasUnansweredInScope(topicId),
+        hasUnanswered: hasUnanswered,
         // Авторское «когда отвечено всё, обзор не нужен». Отсутствие в пакете,
         // собранном до этой настройки, читается как прежнее поведение.
         skipReviewWhenComplete: TEST_DATA.skipReviewWhenComplete,
@@ -379,7 +393,12 @@ function renderReviewScreen() {
         finishLabel: finishLabel,
         currentIndex: fromButton ? state.currentIndex : -1,
         canReturn: fromButton,
-        backLabel: 'Назад'
+        backLabel: 'Назад',
+        // PRD-73: the shared builder decides whether «Завершить …» may be used and, while
+        // it may not, prints the reason into `review.hint`. Absent in a package built
+        // without the setting = off.
+        requireAllAnsweredToFinish: TEST_DATA.requireAllAnsweredToFinish === true,
+        allowReturnToUnanswered: TEST_DATA.allowReturnToUnanswered
     });
     var context = {
         course: {
@@ -403,6 +422,11 @@ function renderReviewScreen() {
     });
     // Reveal + paint the running countdowns (the обзор is mid-test).
     if (typeof revealSceneTimers === 'function') revealSceneTimers(app);
+    // PRD-73 FR-04: any template's finish control renders inert while it is blocked —
+    // the same shared call the web host makes after every paint.
+    if (built.review.finishBlocked && typeof TB.disableActions === 'function') {
+        TB.disableActions(app, ['finish-review']);
+    }
     var actionEls = app.querySelectorAll('[data-action]');
     Array.prototype.forEach.call(actionEls, function (el) {
         var a = el.getAttribute('data-action') || '';
@@ -424,6 +448,9 @@ function renderReviewScreen() {
             });
         } else if (a === 'finish-review') {
             el.addEventListener('click', function () {
+                // PRD-73 FR-04: refused while blocked — a foreign template may hang the action
+                // on an element `disabled` does not stop. No confirm either (FR-07).
+                if (built.review.finishBlocked) return;
                 state.reviewOrigin = null;
                 var unanswered = built.review.unansweredCount;
                 if (sectionScope && scopeTopicId) {
@@ -717,6 +744,9 @@ function renderStandardQuestion(qData, current, total, progress) {
         // by the `disabled` attribute the builder set on non-reachable pills). The map
         // pills are `.ou-quiz__dot` (revision «Стандартный»); the old `.tb-pill`
         // selector matched nothing, so the navigator was dead on the question screen.
+        // The shared core pages a long map and drives its «Все вопросы» panel; the panel's
+        // dots are `.ou-quiz__dot[data-action]` too, so the loop below wires them as well.
+        if (TB.attachQuestionMaps) TB.attachQuestionMaps(app);
         var pills = app.querySelectorAll('.ou-quiz__dot[data-action]');
         Array.prototype.forEach.call(pills, function (btn) {
             btn.addEventListener('click', function () {

@@ -66,6 +66,50 @@ const plainSection = (): RuntimeSection => ({
   topicId: "tp1", topicName: "О компании", drawCount: 3, questions: bank(12),
 });
 
+describe("tbDebugApplyFreeNavigation — свободная навигация вместе с «Все вопросы темы»", () => {
+  const apply = (testData: Record<string, unknown>, hash: string) =>
+    runtime<(td: unknown, win: unknown) => boolean>("tbDebugApplyFreeNavigation")(testData, { location: { hash } });
+
+  it("с флагом включает оба признака свободной навигации", () => {
+    const td: Record<string, unknown> = { mode: "standard", allowReturnToUnanswered: false, allowFreeSectionNavigation: false };
+    expect(apply(td, "#tbfa=1")).toBe(true);
+    expect(td).toMatchObject({ allowReturnToUnanswered: true, allowFreeSectionNavigation: true });
+  });
+
+  it("без флага (боевой запуск из LMS) ничего не трогает", () => {
+    const td: Record<string, unknown> = { mode: "standard", allowReturnToUnanswered: false, allowFreeSectionNavigation: false };
+    expect(apply(td, "")).toBe(false);
+    expect(apply(td, "#tbff=%7B%7D")).toBe(false);
+    expect(td).toMatchObject({ allowReturnToUnanswered: false, allowFreeSectionNavigation: false });
+  });
+
+  it("адаптивный тест не трогает: вопросом там ведёт адаптивная логика", () => {
+    const td: Record<string, unknown> = { mode: "adaptive", allowReturnToUnanswered: false, allowFreeSectionNavigation: false };
+    expect(apply(td, "#tbfa=1")).toBe(false);
+    expect(td).toMatchObject({ allowReturnToUnanswered: false, allowFreeSectionNavigation: false });
+  });
+
+  it("generateVariant вызывает её: после выдачи банка навигация свободна", () => {
+    const state: Record<string, unknown> = {};
+    const TEST_DATA = {
+      mode: "standard", allowReturnToUnanswered: false, allowFreeSectionNavigation: false,
+      sections: [plainSection()], flowPolicy: { mode: "linear_flat" },
+    };
+    runtime<() => void>("generateVariant", { state, TEST_DATA, window: { location: { hash: "#tbfa=1" } } })();
+    expect(TEST_DATA).toMatchObject({ allowReturnToUnanswered: true, allowFreeSectionNavigation: true });
+  });
+
+  it("без флага generateVariant навигацию не меняет", () => {
+    const state: Record<string, unknown> = {};
+    const TEST_DATA = {
+      mode: "standard", allowReturnToUnanswered: false, allowFreeSectionNavigation: false,
+      sections: [plainSection()], flowPolicy: { mode: "linear_flat" },
+    };
+    runtime<() => void>("generateVariant", { state, TEST_DATA, window: { location: { hash: "" } } })();
+    expect(TEST_DATA).toMatchObject({ allowReturnToUnanswered: false, allowFreeSectionNavigation: false });
+  });
+});
+
 describe("tbDebugFullDraw — чтение флага", () => {
   const read = (hash: string) =>
     runtime<(win?: unknown) => boolean>("tbDebugFullDraw")({ location: { hash } });

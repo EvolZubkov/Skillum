@@ -16,12 +16,51 @@
       </div>
     </div>
     {{#if state.questionsProgress}}
-    <div class="ou-quiz ou-quiz--circle ou-quiz--m tb-scene__map" role="group" aria-label="Карта вопросов">
-      <div class="ou-quiz__dots">
+    <!-- Question map. Long tests are PAGED by the shared core (`attachQuestionMap`, hooks
+         `data-qnav-*`): arrows turn the pages, «Все вопросы» opens a panel with every dot.
+         Every control ships `hidden` — the core un-hides them only when the questions do
+         not fit on one page, so a short test keeps the plain row. -->
+    <div class="ou-quiz ou-quiz--circle ou-quiz--m tb-scene__map" role="group" aria-label="Карта вопросов" data-qnav>
+      <button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" data-qnav-prev hidden aria-label="Предыдущие вопросы"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+      <div class="ou-quiz__dots" data-qnav-dots>
         {{#each state.questionsProgress.states}}
-        <button type="button" class="ou-quiz__dot {{statusClass}}" {{#unless clickable}}disabled{{/unless}} data-action="goto:{{index}}" aria-label="{{ariaLabel}}">{{number}}</button>
+        <button type="button" class="ou-quiz__dot {{statusClass}}" {{#unless clickable}}disabled{{/unless}} data-action="goto:{{index}}" data-number="{{number}}" aria-label="{{ariaLabel}}">{{number}}</button>
         {{/each}}
       </div>
+      <button type="button" class="ou-iconbtn ou-iconbtn--ghost ou-iconbtn--s" data-qnav-next hidden aria-label="Следующие вопросы"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+      <span class="tb-qnav__range" data-qnav-range aria-live="polite" hidden></span>
+      <button type="button" class="ou-btn ou-btn--ghost ou-btn--xs" data-qnav-current hidden>К текущему вопросу</button>
+      <span class="tb-qnav__pop">
+        <button type="button" class="ou-btn ou-btn--secondary ou-btn--s" data-qnav-open hidden aria-expanded="false" aria-haspopup="dialog">
+          <span class="ou-btn__ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg></span>
+          Все вопросы
+          {{#if state.questionsProgress.skippedCount}}<span class="ou-quiz__legend-dot is-flagged" aria-hidden="true"></span><span class="tb-qnav__sr">, есть пропущенные</span>{{/if}}
+        </button>
+        <div class="ou-popover ou-popover--no-arrow tb-qnav__panel" role="dialog" aria-label="Все вопросы" data-qnav-panel hidden>
+          <div class="ou-popover__header">
+            <div class="ou-popover__header-text">
+              <h3 class="ou-popover__title">Все вопросы</h3>
+              <p class="ou-popover__subtitle">отвечено {{state.questionsProgress.answeredCount}} из {{state.questionsProgress.total}} · пропущено {{state.questionsProgress.skippedCount}}</p>
+            </div>
+            <button type="button" class="ou-popover__close" data-qnav-close aria-label="Закрыть"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+          </div>
+          <div class="ou-popover__body">
+            <div class="ou-quiz ou-quiz--circle ou-quiz--l">
+              <div class="ou-quiz__dots tb-qnav__grid">
+                {{#each state.questionsProgress.states}}
+                <button type="button" class="ou-quiz__dot {{statusClass}}" {{#unless clickable}}disabled{{/unless}} data-action="goto:{{index}}" aria-label="{{ariaLabel}}">{{number}}</button>
+                {{/each}}
+              </div>
+            </div>
+          </div>
+          <div class="ou-popover__footer tb-qnav__legend">
+            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-flagged"></span>пропущен</span>
+            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-current"></span>текущий</span>
+            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot"></span>не отвечен</span>
+            <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-answered"></span>отвечен</span>
+          </div>
+        </div>
+      </span>
       <div class="ou-quiz__legend">
         <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-flagged"></span>пропущен</span>
         <span class="ou-quiz__legend-item"><span class="ou-quiz__legend-dot is-current"></span>текущий</span>

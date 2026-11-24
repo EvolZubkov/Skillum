@@ -184,6 +184,8 @@
 .dbg__tabscroll:disabled { opacity: 0.4; cursor: default; }
 
 .dbg__ins-body { flex: 1; min-height: 0; overflow: auto; padding: var(--ou-space-3) var(--ou-space-4) var(--ou-space-5); }
+/* Вкладка «Рецензирование»: рейл прижат к краям инспектора (утверждённый эскиз окна), свои отступы у содержимого рейла. */
+.dbg__ins-body--flush { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .dbg__ins-h {
   font: var(--ou-text-body-s);
   font-weight: 600;

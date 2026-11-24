@@ -30,8 +30,11 @@ const gateSrc = read("server/scorm/template/app/eligibility/gate.js");
 // the package assembles it.
 const trustedNowSrc = read("server/scorm/template/app/utils/trusted-now.js");
 
-/** The gate's own sub-budget for resolving the date (NFR-TD-01), mirrored from gate.js. */
+/** The gate's own sub-budget for resolving the date (NFR-TD-01), mirrored from trusted-now.js. */
 const DATE_TIMEOUT_MS = 2500;
+
+/** The default gate budget (NFR-06) when the plugin config carries no `timeoutMs`, mirrored from gate.js. */
+const DEFAULT_GATE_TIMEOUT_MS = 30000;
 
 /** Build a fresh RetakeGate over the supplied runtime globals. */
 function makeGate(state: Record<string, unknown>, SCORM: unknown) {
@@ -54,6 +57,8 @@ function makeGate(state: Record<string, unknown>, SCORM: unknown) {
  */
 function stubFetch(opts: {
   dateHeader?: string | null;
+  /** `Date` of the records response; defaults to `dateHeader` (one server, one clock). */
+  collectionDateHeader?: string | null;
   chrome?: string;
   ok?: boolean;
   status?: number;
@@ -67,10 +72,11 @@ function stubFetch(opts: {
     bodies.push({ url: String(url), body: init?.body });
     const headers = { get: (k: string) => (String(k).toLowerCase() === "date" ? opts.dateHeader ?? null : null) };
     if (String(url).indexOf("extjs_json_collection_data") !== -1) {
+      const collectionDate = opts.collectionDateHeader !== undefined ? opts.collectionDateHeader : opts.dateHeader;
       return Promise.resolve({
         ok: true,
         status: 200,
-        headers,
+        headers: { get: (k: string) => (String(k).toLowerCase() === "date" ? collectionDate ?? null : null) },
         json: () => Promise.resolve({ success: true, total: records.length, results: records }),
         text: () => Promise.resolve(""),
       });
@@ -413,14 +419,14 @@ describe("PRD-6 gate — trusted date", () => {
     expect((state.retake as any)?.availableDate).toBe("2026-07-01");
   });
 
-  // NFR-06 + NFR-TD-01: GATE_TIMEOUT_MS (5 s) is the budget for the WHOLE gate, and the
-  // date resolution spends part of it, so the plugin must inherit the REMAINDER. A portal
-  // that accepts the connection and then answers nothing stalls BOTH steps — the date
-  // resolve and the plugin's SECID scrape — which is the only case where the two budgets
-  // could stack. Driving the fake clock pins the verdict to 5 s: still pending at 4999 ms
-  // (so the assertion cannot pass vacuously) and present at 5000 ms. Before the fix this
-  // took 7500 ms (2500 date + a fresh 5000 for the plugin).
-  it("keeps the whole gate inside GATE_TIMEOUT_MS when the portal never answers", async () => {
+  // NFR-06 + NFR-TD-01: the gate budget (`timeoutMs`, 30 s by default) bounds the WHOLE
+  // gate. A portal that accepts the connection and then answers nothing stalls BOTH the
+  // fallback date and the plugin's SECID scrape — the only case where two budgets could
+  // stack. The fallback date is started together with the records request, under its
+  // own 2500 ms, so it has settled long before the gate budget runs out. Driving the
+  // fake clock pins the verdict to the budget: still pending 1 ms before it (so the
+  // assertion cannot pass vacuously) and present at it.
+  it("keeps the whole gate inside the default budget when the portal never answers", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
     vi.stubGlobal("fetch", () => new Promise(() => {})); // connects, never settles
@@ -448,7 +454,7 @@ describe("PRD-6 gate — trusted date", () => {
       () => { started = true; },
     );
 
-    await vi.advanceTimersByTimeAsync(4999);
+    await vi.advanceTimersByTimeAsync(DEFAULT_GATE_TIMEOUT_MS - 1);
     await flush();
     expect(started).toBe(false);
 
@@ -462,5 +468,97 @@ describe("PRD-6 gate — trusted date", () => {
     // to the machine clock. Were the sub-budget missing or longer, the gate would still
     // be waiting on the date and `todayDate` would never be set.
     expect((state.retake as any)?.todayDate).toBe("2026-06-30");
+  });
+  // The day comes from the `Date` header of the RECORDS response — the freshest server
+  // stamp the gate holds, taken from the very request the verdict is built on — and
+  // only without a usable one from the portal chrome.
+  it("takes the day from the records response header before the portal chrome", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    // The chrome says 30.06 (cooldown elapsed); the records response says 30.05 (active).
+    stubFetch({
+      dateHeader: "Tue, 30 Jun 2026 09:00:00 GMT",
+      collectionDateHeader: "Sat, 30 May 2026 09:00:00 GMT",
+    });
+    const log = captureLog();
+    const state: Record<string, unknown> = { templateLayouts: {} };
+    let started = false;
+    try {
+      makeGate(state, SCORM_NO_SESSION).run(webtutorGate(), () => { started = true; });
+      await flush();
+    } finally {
+      log.restore();
+    }
+
+    expect((state.retake as any)?.todayDate).toBe("2026-05-30");
+    expect((state.retake as any)?.allowed).toBe(false);
+    expect(started).toBe(false);
+    expect(log.text()).toContain("date source: network (records response)");
+  });
+
+  it("falls back to the portal chrome header when the records response has none", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    stubFetch({ dateHeader: "Sat, 30 May 2026 09:00:00 GMT", collectionDateHeader: null });
+    const state: Record<string, unknown> = { templateLayouts: {} };
+
+    makeGate(state, SCORM_NO_SESSION).run(webtutorGate(), () => {});
+    await flush();
+
+    expect((state.retake as any)?.todayDate).toBe("2026-05-30");
+    expect((state.retake as any)?.allowed).toBe(false);
+  });
+
+  it("falls back to the portal chrome header when the records header is unparseable", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    stubFetch({ dateHeader: "Sat, 30 May 2026 09:00:00 GMT", collectionDateHeader: "garbage" });
+    const state: Record<string, unknown> = { templateLayouts: {} };
+
+    makeGate(state, SCORM_NO_SESSION).run(webtutorGate(), () => {});
+    await flush();
+
+    expect((state.retake as any)?.todayDate).toBe("2026-05-30");
+  });
+
+  // NFR-06: the budget is the plugin config's `timeoutMs` when it is a positive number.
+  it("honours timeoutMs from the plugin config", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    vi.stubGlobal("fetch", () => new Promise(() => {})); // never settles
+    const td = webtutorGate();
+    (td.retakePlugin.config as Record<string, unknown>).timeoutMs = 8000;
+    const state: Record<string, unknown> = { templateLayouts: {} };
+
+    let started = false;
+    makeGate(state, SCORM_NO_SESSION).run(td, () => { started = true; });
+
+    await vi.advanceTimersByTimeAsync(7999);
+    await flush();
+    expect(started).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(started).toBe(true);
+    expect((state.retake as any)?.reason).toBe("plugin_error_fail_open");
+  });
+
+  it.each([0, -1, "30000", Number.NaN])("ignores an invalid timeoutMs (%s) and keeps the default", async (bad) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T10:00:00Z"));
+    vi.stubGlobal("fetch", () => new Promise(() => {}));
+    const td = webtutorGate();
+    (td.retakePlugin.config as Record<string, unknown>).timeoutMs = bad;
+    const state: Record<string, unknown> = { templateLayouts: {} };
+
+    let started = false;
+    makeGate(state, SCORM_NO_SESSION).run(td, () => { started = true; });
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_GATE_TIMEOUT_MS - 1);
+    await flush();
+    expect(started).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(started).toBe(true);
   });
 });

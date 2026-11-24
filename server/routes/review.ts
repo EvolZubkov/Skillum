@@ -26,7 +26,9 @@ import { respondWorkbookReadError, workbookUploadSingle } from "../middleware/up
 import { requireReviewScope } from "../middleware/review-scope";
 import { requireTestScope } from "../middleware/test-scope";
 import { storage } from "../storage";
-import { describeAnchor, isAnchorStale, isAnchorOrphaned } from "../services/review-anchor";
+import {
+  anchorChangedAt, changedAfter, describeAnchor, isAnchorStale, isAnchorOrphaned,
+} from "../services/review-anchor";
 import { openRunSession, servePackageFile, closeRunSession } from "../scorm/debug-player/run-session";
 import { inviteReviewers } from "../services/review-invite";
 import {
@@ -39,9 +41,9 @@ import {
   readGivenRows,
   recipientRefusalMessage,
 } from "../services/recipient-list";
-import { canGrantAccess } from "../services/test-access";
+import { canEditTest, canGrantAccess } from "../services/test-access";
 import { readShimJs, readInspectorComputeJs } from "../scorm/debug-player/assets";
-import type { ReviewAnchor, ReviewAnchorKind } from "@shared/review/anchor";
+import { anchorKeyOf, resolveAnchorTarget, type ReviewAnchor, type ReviewAnchorKind } from "@shared/review/anchor";
 import { audit, logger } from "../logger";
 
 const router = Router();
@@ -84,9 +86,34 @@ function anchorOf(row: {
   };
 }
 
+/** Имена людей по идентификаторам одним проходом. */
+async function nameMap(ids: Iterable<string>): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  await Promise.all(
+    [...new Set(ids)].map(async (id) => {
+      const user = await storage.getUser(id);
+      if (user) names.set(id, user.name || user.email || "Участник");
+    }),
+  );
+  return names;
+}
+
+/**
+ * Первое обращение держателя гранта `review` к окну рецензирования - это и есть «принял приглашение» (спека
+ * 2026-11-23, решение 9). Сбой записи не роняет чтение: потеряется только знаменатель счётчика автора.
+ */
+async function noteReviewerAccepted(testId: string, userId: string): Promise<void> {
+  try {
+    await storage.markReviewGrantAccepted(testId, userId);
+  } catch (error) {
+    logger.warn("Review acceptance not recorded: " + (error as Error).message, "review");
+  }
+}
+
 // GET /api/tests/:id/review/comments — ветки теста с пометками состояния якоря.
 router.get("/:id/review/comments", ...reviewGate, async (req: Request, res: Response) => {
   try {
+    await noteReviewerAccepted(req.params.id, req.currentUser!.id);
     const threads = await storage.listReviewThreads(req.params.id);
 
     // Имена авторов: комментарий подписан ЧЕЛОВЕКОМ, а не идентификатором. Читаются
@@ -271,6 +298,115 @@ router.post("/:id/review/comments/:commentId/reopen", ...resolveGate, async (req
   } catch (error) {
     logger.error("Review comment reopen failed: " + (error as Error).message, "review");
     res.status(500).json({ error: "Не удалось открыть комментарий" });
+  }
+});
+
+// ─── Отметки «Согласовано» ───────────────────────────────────────────────────
+// Отметка принадлежит паре «рецензент - объект». Рецензент видит ТОЛЬКО свои (решение владельца 2026-11-23):
+// фильтр выполняется здесь, а не на клиенте. Ставит и снимает отметку только держатель гранта `review`:
+// автор и владелец теста согласование принимают, а не дают.
+
+// GET /api/tests/:id/review/approvals — отметки теста с пометками состояния якоря.
+router.get("/:id/review/approvals", ...reviewGate, async (req: Request, res: Response) => {
+  try {
+    const userId = req.currentUser!.id;
+    const test = await storage.getTest(req.params.id);
+    const isAuthor = Boolean(test) && (await canEditTest(req.effectiveRoles ?? [], userId, test!));
+    const viewer = isAuthor ? "author" : "reviewer";
+    await noteReviewerAccepted(req.params.id, userId);
+
+    const rows = await storage.listReviewApprovals(
+      req.params.id,
+      isAuthor ? undefined : { reviewerId: userId },
+    );
+    const names = await nameMap(rows.map((row) => row.reviewerId));
+    const approvals = await Promise.all(
+      rows.map(async (row) => {
+        const anchor = anchorOf(row);
+        const [stale, orphaned] = await Promise.all([
+          isAnchorStale(anchor, row.pinnedContentHash),
+          isAnchorOrphaned(anchor),
+        ]);
+        // `stale` и `orphaned` НЕ хранятся: это состояние теста на момент чтения, как у комментариев.
+        // `changedAt` (issue 61) - когда объект менялся; только у устаревшей отметки и только если время известно.
+        const changedAt = stale ? changedAfter(await anchorChangedAt(anchor), row.approvedAt) : null;
+        return { ...row, reviewerName: names.get(row.reviewerId) ?? null, stale, orphaned, changedAt };
+      }),
+    );
+    if (!isAuthor) return res.json({ viewer, approvals });
+
+    // Рецензенты автора: ВСЕ приглашённые и все, кто ставил отметки. Флаг `accepted` отделяет круг, по которому
+    // считается «согласовали N из M» (принявшие приглашение и поставившие отметку), от тех, кто ещё не открыл окно:
+    // таблица рецензентов показывает и их, но в знаменатель они не входят (спека 2026-11-23, решение 9).
+    const grants = (await storage.getTestAccessGrants(req.params.id))
+      .filter((grant) => grant.accessLevel === "review");
+    const approvers = new Set(rows.map((row) => row.reviewerId));
+    const ids = [...new Set([...grants.map((grant) => grant.userId), ...approvers])];
+    const reviewerNames = await nameMap(ids);
+    res.json({
+      viewer,
+      approvals,
+      reviewers: ids.map((id) => ({
+        userId: id,
+        name: reviewerNames.get(id) ?? null,
+        accepted: approvers.has(id) || grants.some((grant) => grant.userId === id && Boolean(grant.acceptedAt)),
+      })),
+    });
+  } catch (error) {
+    logger.error("Review approvals read failed: " + (error as Error).message, "review");
+    res.status(500).json({ error: "Не удалось прочитать отметки" });
+  }
+});
+
+// PUT /api/tests/:id/review/approvals — поставить свою отметку.
+router.put("/:id/review/approvals", ...reviewGate, async (req: Request, res: Response) => {
+  const userId = req.currentUser!.id;
+  try {
+    if (!(await storage.getTestReviewGrant(req.params.id, userId))) {
+      return res.status(403).json({ error: "Согласовывать может только рецензент теста" });
+    }
+    const anchor = parseAnchor(req.body?.anchor);
+    if (!anchor || resolveAnchorTarget(anchor) === null) {
+      return res.status(400).json({ error: "Не указано место отметки" });
+    }
+    if (await isAnchorOrphaned(anchor)) {
+      return res.status(422).json({ error: "Объект удалён из теста" });
+    }
+    const snapshot = await describeAnchor(anchor);
+    const row = await storage.upsertReviewApproval({
+      testId: req.params.id,
+      reviewerId: userId,
+      anchorKind: anchor.kind,
+      anchorKey: anchorKeyOf(anchor),
+      questionId: anchor.questionId ?? null,
+      topicId: anchor.topicId ?? null,
+      contentPageId: anchor.contentPageId ?? null,
+      contextLabel: snapshot.contextLabel,
+      pinnedContentHash: snapshot.pinnedContentHash,
+    });
+    await noteReviewerAccepted(req.params.id, userId);
+    res.json(row);
+  } catch (error) {
+    logger.error("Review approval put failed: " + (error as Error).message, "review");
+    res.status(500).json({ error: "Не удалось сохранить отметку" });
+  }
+});
+
+// DELETE /api/tests/:id/review/approvals/:approvalId — снять свою отметку.
+router.delete("/:id/review/approvals/:approvalId", ...reviewGate, async (req: Request, res: Response) => {
+  try {
+    const row = await storage.getReviewApproval(req.params.approvalId);
+    if (!row || row.testId !== req.params.id) {
+      return res.status(404).json({ error: "Отметка не найдена" });
+    }
+    if (row.reviewerId !== req.currentUser!.id) {
+      // Чужую отметку не снимает никто, включая владельца теста: согласование - оценка самого рецензента.
+      return res.status(403).json({ error: "Чужая отметка" });
+    }
+    res.json({ deleted: await storage.deleteReviewApproval(row.id) });
+  } catch (error) {
+    logger.error("Review approval delete failed: " + (error as Error).message, "review");
+    res.status(500).json({ error: "Не удалось снять отметку" });
   }
 });
 

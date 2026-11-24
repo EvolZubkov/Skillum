@@ -29,6 +29,9 @@ import {
 } from "../run-inspector/panels";
 import { ReviewPanel } from "../review/review-panel";
 import { useScreenAnchor } from "../review/use-screen-anchor";
+import { useScreenTitle } from "../review/use-screen-title";
+import { ReviewApprovalTooltip } from "../review/review-approval-tooltip";
+import { useReviewApprovalMarks } from "../review/use-approval-marks";
 import { QuestionEditorDrawer } from "@/features/questions/question-editor-drawer";
 import { useQuery } from "@tanstack/react-query";
 import type { Question, Topic } from "@shared/schema";
@@ -41,7 +44,7 @@ const TABS: { id: TabId; label: string }[] = [
   // PRD-52: комментарии рецензентов видит и автор — в том же прогоне, где он их
   // проверяет. Первой вкладку не ставим: у автора отладчик прежде всего про
   // математику теста, а комментарии — то, ради чего он сюда вернулся.
-  { id: "review", label: "Комментарии" },
+  { id: "review", label: "Рецензирование" },
   { id: "score", label: "Результаты" },
   { id: "protocol", label: "Протокол" },
   { id: "draw", label: "Выдача" },
@@ -177,6 +180,9 @@ export default function DebugPlayerPage() {
   // Выдача фиксируется на первом вопросе — дальше режим не переключить.
   // Место комментария — вопрос текущего экрана прогона (PRD-52 FR-18).
   const screenAnchor = useScreenAnchor(iframeRef, snap);
+  const screenTitle = useScreenTitle(iframeRef, snap, screenAnchor);
+  // PRD-52: бейджи «Согласовано» на карте вопросов в кадре пакета - круг рецензентов (автор видит всех).
+  useReviewApprovalMarks(iframeRef, testId, snap);
   const drawStarted = Boolean(snap.draw?.started);
   const stageSrc = state.playUrl ? state.playUrl + drawHash : undefined;
 
@@ -268,6 +274,7 @@ export default function DebugPlayerPage() {
                 {stageSrc ? (
                   <iframe key={runKey} ref={iframeRef} className="dbg__iframe" title="Прогон отладки" src={stageSrc} />
                 ) : null}
+                <ReviewApprovalTooltip frameRef={iframeRef} testId={testId} tick={snap} />
               </div>
             </div>
             {building ? (
@@ -319,13 +326,14 @@ export default function DebugPlayerPage() {
           />
           <div className="dbg__ins-main">
             <TabHead tab={tab} onTab={setTab} />
-            <div className="dbg__ins-body">
+            <div className={"dbg__ins-body" + (tab === "review" ? " dbg__ins-body--flush" : "")}>
               {tab === "review" && (
                 <ReviewPanel
                   testId={testId}
                   mode="player"
                   canResolve
                   screenAnchor={screenAnchor}
+                  screenTitle={screenTitle}
                   onNavigate={(target) => {
                     if (target.target === "question-editor") setEditingQuestionId(target.questionId);
                     else openEditor();

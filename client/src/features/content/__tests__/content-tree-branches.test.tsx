@@ -50,6 +50,7 @@ vi.mock("@/components/folder-tree-select", () => ({
 // NOTE: bulk-content-ops is intentionally NOT mocked (see module JSDoc).
 
 import { ContentTree } from "../content-tree";
+import { FULL_TOPIC_RIGHTS } from "@shared/access";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 // f1 (root) ⊃ f2 (sub) ⊃ t3; f1 also has t1, t4 directly. t2 is standalone.
@@ -59,10 +60,10 @@ const folders = [
   { id: "f2", name: "Аналитика", parentId: "f1" },
 ];
 const topics = [
-  { id: "t1", name: "Бюджетирование", folderId: "f1", ownerId: "u1", visibility: "shared" },
-  { id: "t2", name: "Инвестиции", folderId: null, ownerId: null, visibility: "private" },
-  { id: "t3", name: "Секретная", folderId: "f2", ownerId: "u2", visibility: "private" },
-  { id: "t4", name: "Резервы", folderId: "f1", ownerId: "u9", visibility: "shared" },
+  { id: "t1", name: "Бюджетирование", folderId: "f1", ownerId: "u1", visibility: "shared", rights: FULL_TOPIC_RIGHTS },
+  { id: "t2", name: "Инвестиции", folderId: null, ownerId: null, visibility: "private", rights: FULL_TOPIC_RIGHTS },
+  { id: "t3", name: "Секретная", folderId: "f2", ownerId: "u2", visibility: "private", rights: FULL_TOPIC_RIGHTS },
+  { id: "t4", name: "Резервы", folderId: "f1", ownerId: "u9", visibility: "shared", rights: FULL_TOPIC_RIGHTS },
 ];
 const questions = [
   { id: "q1", topicId: "t1", type: "single", prompt: "Сколько будет 2+2?", difficulty: 50, tags: ["налоги"], mediaType: "image", createdBy: "u1" },

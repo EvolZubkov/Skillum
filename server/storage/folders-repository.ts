@@ -2,8 +2,9 @@
  * @module server/storage/folders-repository
  * @description Data access for the two organizational folder trees: content
  * folders (`folders`, holding topics) and test folders (`test_folders`, holding
- * tests). Folders are purely organizational and carry no permissions, so no
- * content-guard is involved. Delete variants relocate or cascade the folder's
+ * tests). Test folders carry an owner (`owner_id` = creator on create); their
+ * grants and the resolution of inherited rights live in the access repository
+ * and `server/services/test-folder-access.ts`. No content-guard is involved. Delete variants relocate or cascade the folder's
  * contents as one unit: the "folder only" deletes reparent topics/tests and
  * child folders to a destination (root by default), while
  * `deleteTestFolderCascade` removes every test in the subtree together with the
@@ -15,6 +16,7 @@
 import { randomUUID } from "crypto";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "../db";
+import { purgeTest } from "./tests-repository";
 import {
   folders, testFolders, topics, tests,
   type Folder, type InsertFolder,
@@ -99,6 +101,8 @@ export class FoldersRepository {
       name: folder.name,
       parentId: folder.parentId || null,
       createdBy: folder.createdBy || null,
+      // The creator owns the folder (folder access inheritance design).
+      ownerId: folder.createdBy || null,
     }).returning();
     return newFolder;
   }
@@ -121,9 +125,9 @@ export class FoldersRepository {
 
   /**
    * Recursively delete a folder, its sub-folders and every test inside them.
-   * Test-side soft cleanup (adaptive levels/links/topic-settings) is the
-   * caller's responsibility (route handler), keeping this method focused on
-   * the folder/test row deletion.
+   * Each test goes through {@link purgeTest} — the same deletion as a single
+   * test, so its grants, assignments, attempts, snapshots and LMS trail go with
+   * it instead of being left orphaned. Folder grants go via FK ON DELETE CASCADE.
    */
   async deleteTestFolderCascade(id: string): Promise<boolean> {
     // Collect all descendant folder ids breadth-first.
@@ -144,11 +148,11 @@ export class FoldersRepository {
     }
 
     // Delete every test in any of those folders, then the folders — as one unit.
-    // Adaptive children rows are assumed cleaned up by the route handler first.
     // `descendantIds` always contains at least `id` (the BFS seed), so an unknown
     // id still runs the delete and reports false via the empty RETURNING set.
     return db.transaction(async (tx) => {
-      await tx.delete(tests).where(inArray(tests.folderId, descendantIds));
+      const inside = await tx.select({ id: tests.id }).from(tests).where(inArray(tests.folderId, descendantIds));
+      for (const t of inside) await purgeTest(tx, t.id);
       const result = await tx.delete(testFolders).where(inArray(testFolders.id, descendantIds)).returning();
       return result.length > 0;
     });

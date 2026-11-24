@@ -49,6 +49,7 @@ import {
   type ReviewCommentInput,
   type ReviewThread,
 } from "./storage/review-comments-repository";
+import { ReviewApprovalsRepository, type ReviewApprovalInput } from "./storage/review-approvals-repository";
 import {
   TestTransferRepository,
   type ImportWriteResult,
@@ -88,6 +89,7 @@ import type {
   Group, InsertGroup,
   UserGroup,
   TestAccessGrant, InsertTestAccessGrant, TestGrantSlot,
+  TestFolderAccessGrant, InsertTestFolderAccessGrant,
   TestSnapshot,
   TestPublicLink,
   TopicAccessGrant,
@@ -102,6 +104,7 @@ import type {
   MediaAsset, InsertMediaAsset, MediaUsage, MediaEntityType,
   ReportBlockRow,
   TestReviewComment,
+  TestReviewApproval,
 } from "@shared/schema";
 import type { StoredRole } from "@shared/access";
 import type { OrgField, OrgValueCount } from "@shared/org-fields";
@@ -161,6 +164,18 @@ export interface IStorage {
   getTestReviewGrant(testId: string, userId: string): Promise<TestAccessGrant | undefined>;
   upsertTestAccessGrant(grant: InsertTestAccessGrant): Promise<TestAccessGrant>;
   removeTestAccessGrant(testId: string, userId: string, slot: TestGrantSlot): Promise<boolean>;
+
+  // Test folder ownership + grants, inherited by the folder content
+  // (docs/specs/2026-11-16-folder-access-inheritance-design.md).
+  setTestFolderOwner(folderId: string, ownerId: string | null): Promise<void>;
+  getTestFolderGrants(): Promise<TestFolderAccessGrant[]>;
+  getTestFolderGrantsForFolder(folderId: string): Promise<TestFolderAccessGrant[]>;
+  upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant>;
+  removeTestFolderGrant(folderId: string, userId: string): Promise<boolean>;
+  /** Folder of a test: `null` = root, `undefined` = no such test. */
+  getTestFolderIdOfTest(testId: string): Promise<string | null | undefined>;
+  getFolderIdsOfTests(testIds: readonly string[]): Promise<Map<string, string | null>>;
+  getTestIdsInFolders(folderIds: readonly string[]): Promise<string[]>;
 
   // "Where used" lookups (PRD-15 FR-03): tests depending on shared content.
   getTestsUsingTopic(topicId: string): Promise<TestUsageRef[]>;
@@ -539,6 +554,12 @@ export interface IStorage {
   reopenReviewComment(id: string): Promise<TestReviewComment | undefined>;
   countOpenReviewComments(testId: string): Promise<number>;
   countOpenReviewCommentsByTests(testIds: string[]): Promise<Record<string, number>>;
+  // Отметки «Согласовано» (PRD-52)
+  listReviewApprovals(testId: string, filter?: { reviewerId?: string }): Promise<TestReviewApproval[]>;
+  getReviewApproval(id: string): Promise<TestReviewApproval | undefined>;
+  upsertReviewApproval(input: ReviewApprovalInput): Promise<TestReviewApproval>;
+  deleteReviewApproval(id: string): Promise<boolean>;
+  markReviewGrantAccepted(testId: string, userId: string): Promise<void>;
   listReportBlocks(testId: string, mode: ReportDocumentMode): Promise<ReportBlockRow[]>;
   replaceReportBlocks(
     testId: string,
@@ -576,6 +597,7 @@ export class DatabaseStorage implements IStorage {
   private readonly mediaRepo = new MediaRepository();
   private readonly reportBlocksRepo = new ReportBlocksRepository();
   private readonly reviewCommentsRepo = new ReviewCommentsRepository();
+  private readonly reviewApprovalsRepo = new ReviewApprovalsRepository();
   private readonly transferRepo = new TestTransferRepository();
 
   // ============================================
@@ -797,6 +819,38 @@ export class DatabaseStorage implements IStorage {
 
   removeTestAccessGrant(testId: string, userId: string, slot: TestGrantSlot): Promise<boolean> {
     return this.accessRepo.removeTestAccessGrant(testId, userId, slot);
+  }
+
+  setTestFolderOwner(folderId: string, ownerId: string | null): Promise<void> {
+    return this.accessRepo.setTestFolderOwner(folderId, ownerId);
+  }
+
+  getTestFolderGrants(): Promise<TestFolderAccessGrant[]> {
+    return this.accessRepo.getTestFolderGrants();
+  }
+
+  getTestFolderGrantsForFolder(folderId: string): Promise<TestFolderAccessGrant[]> {
+    return this.accessRepo.getTestFolderGrantsForFolder(folderId);
+  }
+
+  upsertTestFolderGrant(grant: InsertTestFolderAccessGrant): Promise<TestFolderAccessGrant> {
+    return this.accessRepo.upsertTestFolderGrant(grant);
+  }
+
+  removeTestFolderGrant(folderId: string, userId: string): Promise<boolean> {
+    return this.accessRepo.removeTestFolderGrant(folderId, userId);
+  }
+
+  getTestFolderIdOfTest(testId: string): Promise<string | null | undefined> {
+    return this.accessRepo.getTestFolderIdOfTest(testId);
+  }
+
+  getFolderIdsOfTests(testIds: readonly string[]): Promise<Map<string, string | null>> {
+    return this.accessRepo.getFolderIdsOfTests(testIds);
+  }
+
+  getTestIdsInFolders(folderIds: readonly string[]): Promise<string[]> {
+    return this.accessRepo.getTestIdsInFolders(folderIds);
   }
 
   // ============================================
@@ -1693,6 +1747,27 @@ export class DatabaseStorage implements IStorage {
 
   countOpenReviewCommentsByTests(testIds: string[]): Promise<Record<string, number>> {
     return this.reviewCommentsRepo.countOpenReviewCommentsByTests(testIds);
+  }
+
+  // Отметки «Согласовано» (delegated to ReviewApprovalsRepository; PRD-52)
+  listReviewApprovals(testId: string, filter?: { reviewerId?: string }): Promise<TestReviewApproval[]> {
+    return this.reviewApprovalsRepo.listReviewApprovals(testId, filter);
+  }
+
+  getReviewApproval(id: string): Promise<TestReviewApproval | undefined> {
+    return this.reviewApprovalsRepo.getReviewApproval(id);
+  }
+
+  upsertReviewApproval(input: ReviewApprovalInput): Promise<TestReviewApproval> {
+    return this.reviewApprovalsRepo.upsertReviewApproval(input);
+  }
+
+  deleteReviewApproval(id: string): Promise<boolean> {
+    return this.reviewApprovalsRepo.deleteReviewApproval(id);
+  }
+
+  markReviewGrantAccepted(testId: string, userId: string): Promise<void> {
+    return this.accessRepo.markReviewGrantAccepted(testId, userId);
   }
 
   listReportBlocks(testId: string, mode: ReportDocumentMode): Promise<ReportBlockRow[]> {

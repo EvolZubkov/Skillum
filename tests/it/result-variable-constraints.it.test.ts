@@ -3,9 +3,11 @@
  * @description Proves the correctness constraints reconciled into schema.ts are
  * actually enforced by the database (they were silently dropped by an earlier
  * `drizzle-kit push` and are invisible to the mock-based unit suite):
- *  - at most one success / one completion controller per test (partial unique),
  *  - unique variable name / scale key within a test (natural unique),
  *  - name / key must be a DSL identifier (regex CHECK).
+ * And that the one limit deliberately LIFTED stays lifted: since migration 0044
+ * several variables may drive the same status (the runtime ORs their verdicts),
+ * so a second success controller in a test is accepted.
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
@@ -46,7 +48,7 @@ async function makeTest(): Promise<string> {
 }
 
 describe("result-variable / scale correctness constraints (real DB)", () => {
-  it("rejects a second success controller in the same test", async () => {
+  it("accepts several success controllers in the same test (limit lifted by 0044)", async () => {
     const testId = await makeTest();
     await storage.createResultVariable({
       testId, name: "a", label: "", type: "boolean", formula: "1", controlsStatus: "success",
@@ -55,7 +57,7 @@ describe("result-variable / scale correctness constraints (real DB)", () => {
       storage.createResultVariable({
         testId, name: "b", label: "", type: "boolean", formula: "1", controlsStatus: "success",
       } as never),
-    ).rejects.toThrow();
+    ).resolves.toBeTruthy();
   });
 
   it("allows one success plus one completion controller in the same test", async () => {

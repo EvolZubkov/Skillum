@@ -10,10 +10,34 @@
  * both shapes: a manifest directly in the directory and one a `template/` level deeper.
  * Its preview is written back into ITS OWN repository — that is where the file belongs.
  *
+ * VENDORED-OUT TEMPLATES ONLY ON REQUEST (`--external`). By default the script writes the
+ * previews of the built-in templates alone. `npm run build` starts with this script, and
+ * the vendored-out repositories sit at ONE path shared by every worktree: a default run
+ * used to rewrite their previews from whatever branch was being built, the product commit
+ * never took those files, and they hung modified in the template repositories with nobody
+ * to commit them. A vendored-out preview is regenerated when THAT template releases a
+ * version, and goes into the template's own commit.
+ *
+ * ONE TEMPLATE AT A TIME (`--template-dir`). A template repository cannot build its preview
+ * alone — half of the file is the product runtime — so its `build.ps1` calls this script
+ * with its own package directory. Only that preview is written: neither the built-in one
+ * (it would hang modified in the product) nor the neighbouring vendored-out template.
+ * The directory is taken as given, so a worktree of a template repository works too.
+ *
  * The directory holding those repositories comes from SKILLUM_TEMPLATES_DIR, falling back
  * to the agreed location next to the product.
  *
- * Usage: node scripts/docs/generate-prd1-template-previews.mjs
+ * Usage:
+ *   node scripts/docs/generate-prd1-template-previews.mjs
+ *       built-in templates only (what `npm run build` runs)
+ *   node scripts/docs/generate-prd1-template-previews.mjs --external
+ *       plus every vendored-out template
+ *   node scripts/docs/generate-prd1-template-previews.mjs --external=standard-rt
+ *       plus the named vendored-out templates (comma-separated manifest ids)
+ *   node scripts/docs/generate-prd1-template-previews.mjs --template-dir=<path>
+ *       exactly one template package (the directory holding its manifest.json)
+ *
+ * Exit code is 1 when any preview failed to build.
  */
 
 import fs from "node:fs";
@@ -28,10 +52,52 @@ const externalTemplatesDir =
     ? process.env.SKILLUM_TEMPLATES_DIR
     : path.join("C:", "Repositories", "skill'um", "templates");
 
-/** Roots scanned for template packages: the built-in dir and the vendored-out repos. */
+/**
+ * Parsed command line.
+ *
+ * @typedef {object} PreviewOptions
+ * @property {boolean} includeExternal Whether vendored-out repositories are scanned.
+ * @property {Set<string>|null} externalIds Manifest ids to keep among vendored-out
+ *   templates; `null` keeps all of them.
+ * @property {string|null} templateDir A single template package to build, or `null`.
+ */
+
+/**
+ * Read the options from the command line.
+ *
+ * @param {string[]} args Arguments after the script name.
+ * @returns {PreviewOptions} Parsed options.
+ */
+function parseOptions(args) {
+  /** @type {PreviewOptions} */
+  const options = { includeExternal: false, externalIds: null, templateDir: null };
+  for (const arg of args) {
+    if (arg === "--external") {
+      options.includeExternal = true;
+    } else if (arg.startsWith("--external=")) {
+      options.includeExternal = true;
+      const ids = arg.slice("--external=".length).split(",").map((v) => v.trim()).filter(Boolean);
+      options.externalIds = new Set([...(options.externalIds ?? []), ...ids]);
+    } else if (arg.startsWith("--template-dir=")) {
+      options.templateDir = path.resolve(arg.slice("--template-dir=".length));
+    } else {
+      console.error(`Unknown argument: ${arg}`);
+      process.exit(1);
+    }
+  }
+  return options;
+}
+
+const options = parseOptions(process.argv.slice(2));
+const includeExternal = options.includeExternal;
+
+/**
+ * Roots scanned for template packages: the built-in dir, plus the vendored-out repos when
+ * `--external` is given.
+ */
 const TEMPLATE_ROOTS = [
   path.join(root, "server", "scorm", "templates"),
-  externalTemplatesDir,
+  ...(includeExternal ? [externalTemplatesDir] : []),
 ];
 const runtimeDir    = path.join(root, "server", "scorm", "template", "app");
 
@@ -86,7 +152,38 @@ function escAttr(value) {
 
 // ─── Template discovery ───────────────────────────────────────────────────────
 
+/**
+ * Read a template's id from its manifest.
+ *
+ * @param {string} dir Template package directory (holds `manifest.json`).
+ * @param {string} fallback Id to use when the manifest declares none or is unreadable.
+ * @returns {string} The id declared by the template.
+ */
+function manifestId(dir, fallback) {
+  try {
+    const declared = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")).id;
+    if (typeof declared === "string" && declared.length > 0) return declared;
+  } catch {
+    /* unreadable manifest: fall back and let the build report it */
+  }
+  return fallback;
+}
+
+/**
+ * Template packages to build, per the command line.
+ *
+ * @returns {{id: string, dir: string}[]} Packages in build order.
+ */
 function discoverTemplateDirs() {
+  if (options.templateDir) {
+    const dir = options.templateDir;
+    if (!fs.existsSync(path.join(dir, "manifest.json"))) {
+      console.error(`No manifest.json in ${dir}`);
+      process.exit(1);
+    }
+    return [{ id: manifestId(dir, path.basename(dir)), dir }];
+  }
+  const builtInRoot = TEMPLATE_ROOTS[0];
   const seen = new Set();
   const out = [];
   for (const base of TEMPLATE_ROOTS) {
@@ -101,13 +198,8 @@ function discoverTemplateDirs() {
       if (!dir) continue;
       // The id is the template's own, declared in its manifest — a repository is named
       // after its package (`skillum-template-certification`), not after the template.
-      let id = e.name;
-      try {
-        const declared = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")).id;
-        if (typeof declared === "string" && declared.length > 0) id = declared;
-      } catch {
-        /* unreadable manifest: fall back to the directory name and let the build report it */
-      }
+      const id = manifestId(dir, e.name);
+      if (base !== builtInRoot && options.externalIds && !options.externalIds.has(id)) continue;
       if (seen.has(id)) continue; // first root wins on id collision
       seen.add(id);
       out.push({ id, dir });
@@ -459,5 +551,15 @@ for (const { id, dir: templateDir } of templateDirs) {
     console.log(`  ✓ ${path.relative(root, output)}`);
   } catch (err) {
     console.error(`  ✗ ${id}: ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
+if (options.externalIds) {
+  const found = new Set(templateDirs.map((t) => t.id));
+  const missing = [...options.externalIds].filter((id) => !found.has(id));
+  if (missing.length > 0) {
+    console.error(`  ✗ not found in ${externalTemplatesDir}: ${missing.join(", ")}`);
+    process.exitCode = 1;
   }
 }

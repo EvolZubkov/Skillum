@@ -17,7 +17,22 @@
 // Side effects (fetch, suspend_data read, render) live here; the pure logic is
 // EligibilityEngine/EligibilityPlugins.
 var RetakeGate = (function () {
-  var GATE_TIMEOUT_MS = 5000; // NFR-06
+  // NFR-06. The budget used to be a fixed 5 s, and a learner with a long learning
+  // history timed out on it: WebTutor takes that long to answer the records query. It
+  // is now the plugin config's `timeoutMs`, with this as the default.
+  var DEFAULT_TIMEOUT_MS = 30000;
+
+  // How long the waiting indicator shows the bare line before it adds the note that
+  // the check may take a while (approved wireframe prd6-gate-waiting.html).
+  var WAIT_HINT_DELAY_MS = 5000;
+
+  // The records request started at script parse time (see prefetch). `run` consumes
+  // it, so the request is already in flight while the page finishes loading.
+  var pending = null;
+
+  // Set once the verdict is reached, so the delayed hint never writes into a page
+  // that has already moved on.
+  var waitingDone = false;
 
   // Monotonic clock for the gate's own budget: a wall-clock jump (NTP step after the
   // machine wakes) must not eat the plugin's remaining time. Wall time stays in
@@ -60,13 +75,25 @@ var RetakeGate = (function () {
     return EligibilityEngine.formatIsoDate(Math.floor(ms / 86400000));
   }
 
+  /** The gate budget in ms: the plugin config's `timeoutMs`, else DEFAULT_TIMEOUT_MS. */
+  function gateTimeoutMs(td) {
+    var cfg = td && td.retakePlugin && td.retakePlugin.config;
+    var v = cfg ? cfg.timeoutMs : undefined;
+    return (typeof v === 'number' && isFinite(v) && v > 0) ? v : DEFAULT_TIMEOUT_MS;
+  }
+
   // Trusted "today" (PRD-6 trusted-date). The clock itself, its sub-budget and every
-  // degradation branch now live in the shared TrustedNow module (app/utils/trusted-now.js),
+  // degradation branch live in the shared TrustedNow module (app/utils/trusted-now.js),
   // because PRD-31's hour interval needs the same portal clock — with a full instant
   // rather than a day. The gate keeps only the day conversion.
-  function resolveToday(config) {
+  //
+  // The day is resolved AFTER the records arrive, not before: the verdict is the only
+  // place that needs it, and the `Date` header of the records response is the freshest
+  // server stamp available. Without a usable one, TrustedNow reads the portal chrome —
+  // already fetched for the SECID, so that costs no extra request either.
+  function resolveToday(config, preferredHeader) {
     var src = (config && config.secidSource) || {};
-    return TrustedNow.resolveNowMs(src.endpoint || '/').then(function (ms) {
+    return TrustedNow.resolveNowMs(src.endpoint || '/', preferredHeader || '').then(function (ms) {
       return isoDayFromMs(ms);
     });
   }
@@ -81,6 +108,9 @@ var RetakeGate = (function () {
     return own || td.title || '';
   }
 
+  // The plugin context WITHOUT the day: the records request needs only the course name
+  // and the config, so it can start before the clock is known. `runtime.todayDate` is
+  // filled in by `evaluate` once the records (and their `Date` header) are in.
   function buildContext(td) {
     var tz = '';
     try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { tz = ''; }
@@ -88,24 +118,22 @@ var RetakeGate = (function () {
     var courseName = lmsCourseName(td);
     glog('LMS course name:', courseName,
       (courseName === (td.title || '') ? '(the test title)' : '(set by the author; test title: ' + (td.title || '') + ')'));
-    return resolveToday(config).then(function (todayDate) {
-      return {
-        test: { id: td.id || '', title: td.title || '' },
-        retakePolicy: {
-          cooldownPeriodDays: td.retakePolicy.cooldownPeriodDays,
-          cooldownByOutcome: td.retakePolicy.cooldownByOutcome,
-          cooldownPeriodDaysPassed: td.retakePolicy.cooldownPeriodDaysPassed,
-          cooldownPeriodDaysFailed: td.retakePolicy.cooldownPeriodDaysFailed
-        },
-        runtime: {
-          todayDate: todayDate,
-          timezone: tz,
-          launchUrl: typeof location !== 'undefined' ? location.href : ''
-        },
-        lms: { scormVersion: '2004', courseName: courseName },
-        config: config
-      };
-    });
+    return {
+      test: { id: td.id || '', title: td.title || '' },
+      retakePolicy: {
+        cooldownPeriodDays: td.retakePolicy.cooldownPeriodDays,
+        cooldownByOutcome: td.retakePolicy.cooldownByOutcome,
+        cooldownPeriodDaysPassed: td.retakePolicy.cooldownPeriodDaysPassed,
+        cooldownPeriodDaysFailed: td.retakePolicy.cooldownPeriodDaysFailed
+      },
+      runtime: {
+        todayDate: '',
+        timezone: tz,
+        launchUrl: typeof location !== 'undefined' ? location.href : ''
+      },
+      lms: { scormVersion: '2004', courseName: courseName },
+      config: config
+    };
   }
 
   // Normalize the WebTutor collection response to a flat array of records. The
@@ -125,32 +153,83 @@ var RetakeGate = (function () {
       .replace(/\{\{\s*personId\s*\}\}/g, personId || '');
   }
 
-  // Scrape the session SECID (32-hex) the collection POST requires. It is present in
-  // the portal chrome; `secidSource.endpoint` (default "/") is fetched same-origin.
-  // The fetch itself is TrustedNow's — memoized there, so SECID, person id and the
-  // clock still cost ONE request per URL between them.
+  // The portal windows around the course frame, nearest first: the parent chain up to
+  // `top`, then the window that opened the player. They share the course's origin
+  // (confirmed 2026-08-01), so their HTML is readable with no request at all. A window
+  // of another origin throws on `.document` and is skipped.
+  function portalWindows() {
+    var out = [];
+    if (typeof window === 'undefined') return out;
+    function add(w) { if (w && w !== window && out.indexOf(w) === -1) out.push(w); }
+    var w = window;
+    for (var i = 0; i < 10; i++) {
+      var p = null;
+      try { p = w.parent; } catch (e) { p = null; }
+      if (!p || p === w) break;
+      add(p);
+      w = p;
+    }
+    try { add(window.top && window.top.opener); } catch (e) { /* cross-origin opener */ }
+    try { add(window.opener); } catch (e) { /* cross-origin opener */ }
+    return out;
+  }
+
+  /** First match of `pattern` in the HTML of an already loaded portal window, or null. */
+  function scanPortalWindows(pattern) {
+    var re = new RegExp(pattern);
+    var wins = portalWindows();
+    for (var i = 0; i < wins.length; i++) {
+      var html = '';
+      try { html = wins[i].document.documentElement.outerHTML || ''; } catch (e) { html = ''; }
+      var m = re.exec(html);
+      if (m) return m;
+    }
+    return null;
+  }
+
+  function secidPattern(config) {
+    return (config.secidSource && config.secidSource.pattern) || '[A-F0-9]{32}';
+  }
+
+  // Scrape the session SECID (32-hex) the collection POST requires. It is taken from
+  // the portal page ALREADY LOADED around the course first. Fetching the portal home
+  // page (`secidSource.endpoint`, default "/") is the fallback only: that page lists the
+  // learner's learnings, and for a learner with a long list WebTutor rendered it longer
+  // than the whole gate budget (live log 2026-11-18: the page never answered within
+  // 30 s, while the records query itself took 62 ms).
   function resolveSecid(config) {
+    var local = scanPortalWindows(secidPattern(config));
+    if (local) return Promise.resolve({ value: local[0], source: 'portal window' });
     var src = config.secidSource || {};
-    var pattern = src.pattern || '[A-F0-9]{32}';
     return TrustedNow.fetchPortalChrome(src.endpoint || '/').then(function (page) {
-      var m = new RegExp(pattern).exec(page.text || '');
-      return m ? m[0] : '';
+      var m = new RegExp(secidPattern(config)).exec(page.text || '');
+      return { value: m ? m[0] : '', source: 'GET ' + (src.endpoint || '/') };
     });
   }
 
   // Resolve cur_person_id. WebTutor's collection query is scoped to the learner by
-  // `cur_person_id`; it is not in SCORM (pre-Initialize) so it is scraped from the
-  // portal chrome via `personIdSource.pattern`, with an optional config override.
+  // `cur_person_id`; it is not in SCORM (pre-Initialize) so it is scraped — from the
+  // loaded portal windows first, then from the portal page — via
+  // `personIdSource.pattern`, with an optional config override.
   // NOTE: the live contract allows an EMPTY value (the endpoint is session-scoped),
   // so a miss here is not an error.
   function resolvePersonId(config) {
     if (config.personId) return Promise.resolve(String(config.personId));
     var src = config.personIdSource || {};
     if (!src.pattern) return Promise.resolve('');
+    var local = scanPortalWindows(src.pattern);
+    if (local) return Promise.resolve(local[1] || local[0]);
     return TrustedNow.fetchPortalChrome(src.endpoint || '/').then(function (page) {
       var m = new RegExp(src.pattern).exec(page.text || '');
       return m ? (m[1] || m[0]) : '';
     });
+  }
+
+  /** Whether the gate can do without the portal page: SECID (and person id) are local. */
+  function portalPageNeeded(config) {
+    if (!scanPortalWindows(secidPattern(config))) return true;
+    var pid = config.personIdSource || {};
+    return !!(pid.pattern && !config.personId && !scanPortalWindows(pid.pattern));
   }
 
   function formEncode(obj) {
@@ -177,12 +256,17 @@ var RetakeGate = (function () {
   // `X-Requested-With: XMLHttpRequest`. Records come back under `results`, sorted
   // last_usage_date DESC; all assignments of one course share `name` (matched via the
   // filter's nameField = the test title). Endpoint/collection/filter are admin-config.
-  function webtutorEvaluate(ctx, config) {
+  //
+  // Resolves to `{ dateHeader, decide }`: the records are fetched without knowing the
+  // day, and `decide(ctx)` produces the verdict once `ctx.runtime.todayDate` is set from
+  // `dateHeader` (the `Date` of THIS response) — see evaluate.
+  function webtutorFetch(ctx, config) {
     var endpoint = config.collectionEndpoint || '';
     if (!endpoint) return Promise.reject(new Error('collection_endpoint_not_configured'));
     return Promise.all([resolveSecid(config), resolvePersonId(config)]).then(function (ids) {
-      var secid = ids[0], personId = ids[1];
-      glog('secid:', secid ? 'found' : '(NOT FOUND)', '| cur_person_id:', personId || '(session-scoped)');
+      var secid = ids[0].value, personId = ids[1];
+      glog('secid:', secid ? 'found (' + ids[0].source + ')' : '(NOT FOUND, ' + ids[0].source + ')',
+        '| cur_person_id:', personId || '(session-scoped)');
       if (!secid) throw new Error('secid_not_resolved');
       var refererUrl = typeof location !== 'undefined' ? location.href : '';
       var body = formEncode({
@@ -194,7 +278,10 @@ var RetakeGate = (function () {
         page: 1,
         start: 0
       });
-      var url = endpoint + (endpoint.indexOf('?') === -1 ? '?' : '&') + '_dc=' + (ctx.runtime.todayDate || '');
+      // `_dc` is ExtJS's cache-buster: any value unique per request will do, and the day
+      // is not known yet at this point.
+      var url = endpoint + (endpoint.indexOf('?') === -1 ? '?' : '&') + '_dc=' + Date.now();
+      var postAt = monotonicNow();
       glog('collection POST:', endpoint, '| collection_code:', config.collectionCode);
       return fetch(url, {
         method: 'POST',
@@ -206,49 +293,154 @@ var RetakeGate = (function () {
         },
         body: body
       }).then(function (r) {
-        glog('collection HTTP', r.status);
+        glog('collection HTTP', r.status, '| answered in', Math.round(monotonicNow() - postAt), 'ms');
         if (!r.ok) throw new Error('webtutor_http_' + r.status);
-        return r.json();
-      }).then(function (json) {
+        var dateHeader = '';
+        try { dateHeader = (r.headers && r.headers.get && r.headers.get('Date')) || ''; } catch (e) { dateHeader = ''; }
+        return r.json().then(function (json) { return { json: json, dateHeader: dateHeader }; });
+      }).then(function (res) {
+        var json = res.json;
         if (json && json.success === false) throw new Error('collection_error: ' + (json.messageText || 'unknown'));
         var records = extractRecords(json);
         glog('records:', records.length, '| total:', (json && json.total), '| course:', ctx.lms.courseName,
           '| filter:', JSON.stringify(config.attemptFilter || {}));
-        var result = EligibilityPlugins.webtutorCooldownDecide(records, config.attemptFilter || {}, ctx, ctx.lms.courseName);
-        glog('selected lastAttemptDate:',
-          (result.data && result.data.lastAttemptDate) || '(none — no finished attempt for this course)');
-        return result;
+        return {
+          dateHeader: res.dateHeader,
+          decide: function (dayCtx) {
+            var result = EligibilityPlugins.webtutorCooldownDecide(
+              records, config.attemptFilter || {}, dayCtx, dayCtx.lms.courseName);
+            glog('selected lastAttemptDate:',
+              (result.data && result.data.lastAttemptDate) || '(none — no finished attempt for this course)');
+            return result;
+          }
+        };
       });
     });
   }
 
-  function runPlugin(td, ctx) {
+  function startPlugin(td, ctx) {
     var entry = td.retakePlugin.runtimeEntry;
-    if (entry === 'webtutorCooldown') return webtutorEvaluate(ctx, td.retakePlugin.config || {});
-    return Promise.resolve(true); // unknown adapter => allow (core default spirit)
+    if (entry === 'webtutorCooldown') return webtutorFetch(ctx, td.retakePlugin.config || {});
+    // unknown adapter => allow (core default spirit)
+    return Promise.resolve({ dateHeader: '', decide: function () { return true; } });
   }
 
-  // `startedAt` is the MONOTONIC reading taken when the WHOLE gate began (see run) and is
-  // REQUIRED — `run` is the only caller. The plugin gets the REMAINDER of GATE_TIMEOUT_MS,
-  // not a fresh copy of it: everything the gate did first — notably resolving the trusted
-  // date — already spent part of NFR-06's budget, and giving the plugin the full 5 s again
-  // would make the worst case the SUM of the two.
-  function evaluate(td, ctx, startedAt) {
-    var failPolicy = (td.retakePolicy.eligibilityPlugin && td.retakePolicy.eligibilityPlugin.failPolicy) || 'failOpen';
-    var budgetLeft = Math.max(0, GATE_TIMEOUT_MS - (monotonicNow() - startedAt));
+  /**
+   * Start the records request NOW and remember it for `run`. Called at script parse
+   * time for a gated package (bottom of this module), i.e. before `window.load`,
+   * SCORM.Initialize and the suspend_data read — the request is the slow part of the
+   * gate, so it gets the whole budget instead of what the other steps left over.
+   * The budget is counted from here, on the monotonic clock.
+   */
+  function prefetch(td) {
+    // A fresh evaluation: drop any portal response cached by a previous run in this
+    // window (e.g. a prior failed fetch) so the portal is always asked again.
+    TrustedNow.reset();
+    waitingDone = false;
+    var startedAt = monotonicNow();
+    var ctx = buildContext(td);
     var work;
-    try { work = Promise.resolve(runPlugin(td, ctx)); } catch (e) { work = Promise.reject(e); }
+    try { work = Promise.resolve(startPlugin(td, ctx)); } catch (e) { work = Promise.reject(e); }
+    // `run` attaches the real handler later; this keeps an early failure from being
+    // reported as an unhandled rejection in the meantime.
+    work.catch(function () {});
+    // The fallback day. When the portal page has to be fetched anyway (SECID not found in
+    // the loaded windows), it is started NOW: it reads that same page's headers under
+    // TrustedNow's own 2500 ms sub-budget, so it has long settled when the gate budget
+    // runs out and the whole gate stays inside `timeoutMs`. When SECID is local, the
+    // portal page is NOT requested up front at all — it is the slow request — and the
+    // day is asked for only if the records response carries no usable `Date`.
+    var fallbackToday = portalPageNeeded(ctx.config) ? resolveToday(ctx.config, '') : null;
+    glog('records request started | budget:', gateTimeoutMs(td), 'ms | portal page:',
+      fallbackToday ? 'requested (SECID not in the loaded portal windows)' : 'not needed');
+    pending = { td: td, ctx: ctx, startedAt: startedAt, work: work, fallbackToday: fallbackToday };
+    showWaiting(td, startedAt);
+    return pending;
+  }
+
+  // The plugin gets the REMAINDER of the budget counted from `prefetch`, so the worst
+  // case stays `timeoutMs` however long the page took to load around the request. The
+  // day comes from the records response's `Date` header when it carries a usable one,
+  // otherwise from the fallback day `prefetch` started (the portal chrome, then the
+  // machine clock). A failed plugin still needs the day: the verdict state carries it.
+  function evaluate(p) {
+    var td = p.td, ctx = p.ctx;
+    var failPolicy = (td.retakePolicy.eligibilityPlugin && td.retakePolicy.eligibilityPlugin.failPolicy) || 'failOpen';
+    var config = td.retakePlugin.config || {};
+    var budgetLeft = Math.max(0, gateTimeoutMs(td) - (monotonicNow() - p.startedAt));
+    var timer = null;
     var timeout = new Promise(function (_resolve, reject) {
-      setTimeout(function () { reject(new Error('eligibility_timeout')); }, budgetLeft);
+      timer = setTimeout(function () { reject(new Error('eligibility_timeout')); }, budgetLeft);
     });
-    return Promise.race([work, timeout])
-      .then(function (v) { return EligibilityEngine.normalizeVerdict(v); })
+    function withDay(header) {
+      var headerMs = header ? Date.parse(header) : NaN;
+      var day = (headerMs && isFinite(headerMs))
+        ? resolveToday(config, header)
+        : (p.fallbackToday || resolveToday(config, ''));
+      return day.then(function (todayDate) {
+        ctx.runtime.todayDate = todayDate;
+        return ctx;
+      });
+    }
+    return Promise.race([p.work, timeout])
+      .then(function (raw) {
+        clearTimeout(timer);
+        return withDay(raw && raw.dateHeader).then(function (dayCtx) {
+          return { ctx: dayCtx, result: EligibilityEngine.normalizeVerdict(raw.decide(dayCtx)) };
+        });
+      })
       .catch(function (e) {
+        clearTimeout(timer);
         var msg = (e && e.message) ? e.message : String(e);
         glog('plugin FAILED:', msg, '- applying failPolicy:', failPolicy,
           failPolicy === 'failClosed' ? '(blocked)' : '(ALLOWED — the gate is now inert)');
-        return EligibilityEngine.applyFailPolicy(failPolicy, msg);
+        return withDay('').then(function (dayCtx) {
+          return { ctx: dayCtx, result: EligibilityEngine.applyFailPolicy(failPolicy, msg) };
+        });
       });
+  }
+
+  // Russian plural of «секунда» for the waiting hint: 1 секунду, 2–4 секунды, 5+ секунд.
+  function secondsWord(n) {
+    var mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'секунду';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'секунды';
+    return 'секунд';
+  }
+
+  // The waiting indicator (approved wireframe docs/wireframes/approved/prd6-gate-waiting.html).
+  // It replaces the «Загрузка теста...» line inside `#loading`, so whatever renders next
+  // into `#app` removes it with no extra step. The template is not loaded yet, so the
+  // SVG carries its own size and stroke: a template without the `.tb-gate-wait` rules
+  // still shows a ring of sane size, just not spinning.
+  function showWaiting(td, startedAt) {
+    if (typeof document === 'undefined') return;
+    var host = document.getElementById('loading');
+    if (!host) return;
+    // The DS tokens resolve only under `.ou`, which templateCore puts on <html> once the
+    // template manifest says which theme to use — after the gate. Until then the page is
+    // the browser's white, so the indicator is its own light DS root.
+    host.className = 'ou ou--light ou--normal tb-gate-wait';
+    host.setAttribute('role', 'status');
+    host.setAttribute('aria-live', 'polite');
+    host.innerHTML =
+      '<svg class="tb-gate-wait__spinner" width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+      '<circle class="tb-gate-wait__track" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" opacity="0.18"></circle>' +
+      '<circle class="tb-gate-wait__head" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5"' +
+      ' stroke-linecap="round" stroke-dasharray="62.83" stroke-dashoffset="47"></circle>' +
+      '</svg>' +
+      '<p class="tb-gate-wait__text">Проверяем доступ к прохождению…</p>';
+    var seconds = Math.ceil(gateTimeoutMs(td) / 1000);
+    var delay = Math.max(0, WAIT_HINT_DELAY_MS - (monotonicNow() - startedAt));
+    setTimeout(function () {
+      if (waitingDone) return;
+      var el = document.getElementById('loading');
+      if (!el || !el.classList.contains('tb-gate-wait') || el.querySelector('.tb-gate-wait__hint')) return;
+      var hint = document.createElement('p');
+      hint.className = 'tb-gate-wait__hint';
+      hint.textContent = 'Проверка может занять до ' + seconds + ' ' + secondsWord(seconds) + '. Не закрывайте окно.';
+      el.appendChild(hint);
+    }, delay);
   }
 
   function appEl() {
@@ -477,13 +669,22 @@ var RetakeGate = (function () {
   }
 
   function run(td, onAllowedStart) {
-    // Each gate run is a fresh evaluation: drop any portal response cached by a
-    // previous run in this window (e.g. a prior failed fetch) so the portal is
-    // always asked again rather than replaying a stale or failed result.
-    TrustedNow.reset();
-    // Monotonic, not Date.now(): a system-clock step during the gate must not zero the
-    // remaining budget and time the plugin out on a learner who did nothing wrong.
-    var startedAt = monotonicNow();
+    // Take the request `prefetch` started at parse time. No `TrustedNow.reset()` here
+    // any more: it would throw away the portal response that request is built on. A run
+    // without a prefetch (another TEST_DATA, or a host that skipped it) starts one now,
+    // which resets the cache itself.
+    var p;
+    try {
+      p = (pending && pending.td === td) ? pending : prefetch(td);
+    } catch (e) {
+      // bootstrap/main.js calls run() with no try/catch: a throw here would leave the
+      // learner on the loading screen for good. Start the course (failOpen spirit).
+      glog('GATE CRASHED (context build):', (e && e.stack) || e, '- starting the course (failOpen spirit)');
+      pending = null;
+      onAllowedStart();
+      return;
+    }
+    pending = null;
 
     // Open the session FIRST: suspend_data is what distinguishes a new assignment
     // from a re-entry, and it cannot be read before Initialize. runCourse calls
@@ -495,58 +696,68 @@ var RetakeGate = (function () {
     }
 
     if (alreadyPlayedThisRegistration()) {
+      // The records request already in flight is simply left to settle unread: it only
+      // reads, so an extra one costs nothing but the round trip.
+      waitingDone = true;
       glog('re-entry into the CURRENT assignment (suspend_data carries attempts)' +
         ' — barrier A does not apply; the start screen enforces the interval');
       onAllowedStart();
       return;
     }
 
-    buildContext(td).then(function (ctx) {
-      glog('gated. plugin:', td.retakePlugin.runtimeEntry,
-        '| cooldownPeriodDays:', ctx.retakePolicy.cooldownPeriodDays,
-        '| today:', ctx.runtime.todayDate);
-      return evaluate(td, ctx, startedAt).then(function (result) {
-        var retake = EligibilityEngine.buildRetakeState(result, {
-          todayDate: ctx.runtime.todayDate,
-          cooldownPeriodDays: ctx.retakePolicy.cooldownPeriodDays
-        });
-        if (typeof state !== 'undefined' && state) state.retake = retake;
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('PRD-6 retake gate:', result.allowed ? 'allowed' : 'blocked',
-            '(' + (retake.reason || '') + (retake.availableDate ? ', available ' + retake.availableDate : '') + ')');
-        }
-        // buildRetakeState drops `data`, so the underlying error would otherwise be
-        // lost even though the verdict was decided by failPolicy rather than by data.
-        if (result.data && result.data.error) glog('decided by failPolicy. error was:', result.data.error);
-        glog('lastAttemptDate:', (result.data && result.data.lastAttemptDate) || '(none)',
-          '| availableDate:', retake.availableDate || '(none)');
-        // PRD-19 FR-19: eligible => NO gate-shell. Hand straight to the normal
-        // course (onAllowedStart = runCourse: the standard start page), so an
-        // elapsed-cooldown test is indistinguishable from an ordinary one.
-        // FR-20: blocked => the cooldown state renders ON the standard start page,
-        // not a separate wall.
-        if (!result.allowed) {
-          // PRD-6 §9.1: nothing was written to `cmi.*` on this path, so closing the
-          // session at once keeps a blocked launch from becoming a completed record —
-          // which is what NFR-01 actually protects. Failure to terminate must not
-          // swallow the cooldown screen, hence the try.
-          try {
-            if (typeof SCORM !== 'undefined' && SCORM.terminate) SCORM.terminate();
-          } catch (e) {
-            glog('terminate after a blocked launch failed:', (e && e.message) || e);
-          }
-          renderCooldownStart(retake, td);
-        } else onAllowedStart();
+    glog('gated. plugin:', td.retakePlugin.runtimeEntry,
+      '| cooldownPeriodDays:', p.ctx.retakePolicy.cooldownPeriodDays);
+    evaluate(p).then(function (outcome) {
+      waitingDone = true;
+      var ctx = outcome.ctx, result = outcome.result;
+      glog('today:', ctx.runtime.todayDate);
+      var retake = EligibilityEngine.buildRetakeState(result, {
+        todayDate: ctx.runtime.todayDate,
+        cooldownPeriodDays: ctx.retakePolicy.cooldownPeriodDays
       });
+      if (typeof state !== 'undefined' && state) state.retake = retake;
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('PRD-6 retake gate:', result.allowed ? 'allowed' : 'blocked',
+          '(' + (retake.reason || '') + (retake.availableDate ? ', available ' + retake.availableDate : '') + ')');
+      }
+      // buildRetakeState drops `data`, so the underlying error would otherwise be
+      // lost even though the verdict was decided by failPolicy rather than by data.
+      if (result.data && result.data.error) glog('decided by failPolicy. error was:', result.data.error);
+      glog('lastAttemptDate:', (result.data && result.data.lastAttemptDate) || '(none)',
+        '| availableDate:', retake.availableDate || '(none)');
+      // PRD-19 FR-19: eligible => NO gate-shell. Hand straight to the normal
+      // course (onAllowedStart = runCourse: the standard start page), so an
+      // elapsed-cooldown test is indistinguishable from an ordinary one.
+      // FR-20: blocked => the cooldown state renders ON the standard start page,
+      // not a separate wall.
+      if (!result.allowed) {
+        // PRD-6 §9.1: nothing was written to `cmi.*` on this path, so closing the
+        // session at once keeps a blocked launch from becoming a completed record —
+        // which is what NFR-01 actually protects. Failure to terminate must not
+        // swallow the cooldown screen, hence the try.
+        try {
+          if (typeof SCORM !== 'undefined' && SCORM.terminate) SCORM.terminate();
+        } catch (e) {
+          glog('terminate after a blocked launch failed:', (e && e.message) || e);
+        }
+        renderCooldownStart(retake, td);
+      } else onAllowedStart();
     }).catch(function (e) {
       // evaluate() already absorbs plugin errors via failPolicy, so reaching here means
-      // the GATE itself broke — either BEFORE the verdict (buildContext: the trusted-date
-      // resolve) or after it (retake state build / template render). Previously this was
-      // an unhandled rejection: no log, and a learner left on a blank #app.
-      glog('GATE CRASHED (context build or verdict handling):', (e && e.stack) || e,
+      // the GATE itself broke after the verdict (retake state build / template render).
+      // Previously this was an unhandled rejection: no log, and a learner left on a
+      // blank #app.
+      glog('GATE CRASHED (verdict handling):', (e && e.stack) || e,
         '- starting the course (failOpen spirit)');
       try { onAllowedStart(); } catch (e2) { glog('course start also failed:', (e2 && e2.stack) || e2); }
     });
+  }
+
+  // Start the records request at parse time, before the page finishes loading. The
+  // module is concatenated after testData.js, so TEST_DATA is already defined here; a
+  // host that evaluates the gate without it (unit tests) leaves the start to `run`.
+  if (typeof TEST_DATA !== 'undefined' && isGated(TEST_DATA)) {
+    try { prefetch(TEST_DATA); } catch (e) { glog('records prefetch failed to start:', (e && e.message) || e); }
   }
 
   return { isGated: isGated, run: run };

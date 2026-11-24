@@ -54,13 +54,46 @@ export type TestListEntry = {
    * The server decides; absence means «an older answer», which keeps the action.
    */
   canAssign?: boolean;
+  /**
+   * May the reader work on THIS test as an author (edit, debug run, publish, export,
+   * delete)? The role opens those actions in principle, the test decides. The server
+   * decides; absence means «an older answer», which keeps the actions.
+   */
+  canEdit?: boolean;
+  /**
+   * May the reader open the review window of THIS test (PRD-52)? True for everyone who
+   * may also edit, so the row offers «Рецензировать» only when `canReview && !canEdit`.
+   */
+  canReview?: boolean;
 };
 
 export type FolderEntry = {
   id: string;
   name: string;
   parentId: string | null;
+  /**
+   * Folder access inheritance: may the reader change the folder (rename, delete,
+   * put tests in)? Absent means «an older answer» and keeps the actions.
+   */
+  canEdit?: boolean;
+  /** May the reader manage the folder's grants (owner or administrator)? Absent = yes. */
+  canManageAccess?: boolean;
+  /** `transit`: shown only as the path to an accessible test. */
+  visibility?: "direct" | "transit";
+  /**
+   * Folder owner (`test_folders.owner_id`, 2.58.0). Drives the «Мои» / «Доступные»
+   * scope of the list filter for folders. NULL = legacy folder without an owner;
+   * absent = the caller did not pass it.
+   */
+  ownerId?: string | null;
 };
+
+/**
+ * Ownership scope of the list filter applied to FOLDERS (the «Область» condition).
+ * `mine` keeps the reader's own folders, `accessible` keeps folders of other owners;
+ * a folder outside the scope stays only as the path to visible content below it.
+ */
+export type FolderScope = { kind: "mine" | "accessible"; userId: string };
 
 /** Row produced by the tree builder. The page renders these in order. */
 export type TreeRow =

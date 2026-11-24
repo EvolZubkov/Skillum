@@ -291,6 +291,13 @@
 .tb-tests-list .dropdown-item:hover { background: var(--ou-bg-hover); }
 .tb-tests-list .dropdown-item.danger { color: var(--ou-error-default); }
 .tb-tests-list .dropdown-item.danger:hover { background: var(--ou-error-soft); }
+/* A menu item the reader has no right to: shown, not clickable (folder access, 2026-11-16). */
+.tb-tests-list .dropdown-item:disabled,
+.tb-tests-list .dropdown-item.danger:disabled {
+  color: var(--ou-fg-disabled);
+  cursor: not-allowed;
+  background: none;
+}
 .tb-tests-list .dropdown-sep {
   border: 0; border-top: var(--wf-border-w) solid var(--ou-border-soft);
   margin: var(--ou-space-1) 0;

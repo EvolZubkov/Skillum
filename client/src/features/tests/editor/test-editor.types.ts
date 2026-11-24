@@ -9,6 +9,7 @@
 
 import type { DrawBlueprint, FormSet, RetakePolicy, SectionGroup, SimScoringSettings } from "@shared/schema";
 import type { DraftBlock } from "./use-report-document";
+import type { ReportBlockOutcome } from "@shared/report/report-outcome";
 import type { ReportSettings, TestIntro, BreakdownDisplaySetting } from "@shared/schema";
 import type { LearnerVisibility, LevelTone, Valence } from "@shared/scales/interpretation";
 import type { TestQuestionOrder } from "@shared/draw/assemble-delivery";
@@ -679,6 +680,13 @@ export type TestEditorModel = {
      */
     closeSectionOnLeave: boolean;
     /**
+     * PRD-73: the обзор's «Завершить раздел / тест» stays disabled while the scope still
+     * holds a question without an answer. Meaningful only with `allowReturnToUnanswered`.
+     * Optional in the TYPE only: the mappers always fill it, and making it required would
+     * churn every test fixture that spells the whole runtime block out. Absent = off.
+     */
+    requireAllAnsweredToFinish?: boolean;
+    /**
      * Что SCORM-пакет отдаёт в LMS при нескольких попытках: лучшую по проценту или только
      * что завершённую. В вебе не применяется — внешней системы там нет. Умолчание `best`:
      * так ведут себя уже выданные пакеты.
@@ -824,6 +832,8 @@ export type TestSettingsPayload = {
   skipReviewWhenComplete: boolean;
   // PRD-67: leaving a started section with a time limit closes it.
   closeSectionOnLeave: boolean;
+  // PRD-73: the обзор's finish stays disabled while the scope has an unanswered question.
+  requireAllAnsweredToFinish?: boolean;
   lmsAttemptResult: "best" | "last";
   // PRD-34: настройки защиты текста задания.
   copyProtection: boolean;
@@ -872,6 +882,8 @@ export type TestSettingsPayload = {
     enabled: boolean;
     values: Record<string, unknown>;
     settings: Record<string, unknown>;
+    /** Содержимое по исходу; отсутствует, пока автор им не распоряжался. */
+    outcome?: ReportBlockOutcome;
   }>;
   expectedVersion: number;
   /** Only sent on create (FAB folder-pick). PUT path leaves it undefined and

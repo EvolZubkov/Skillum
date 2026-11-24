@@ -9,7 +9,9 @@
  *     the SHARED feedback editor (FeedbackEditorModal / FeedbackPreview) over
  *     topics.feedback_json (TD-02 r.2).
  *   - «Доступ» (edit mode only): owner, visibility (private/shared) and the
- *     use/manage grant list with two-mode revoke. Grantees are USERS only.
+ *     use/manage grant list with two-mode revoke. Grantees are USERS only, and
+ *     only those with an administrative role are offered as an owner or a
+ *     grantee (role-model 6.0); the owner is picked in a searchable field.
  *
  * Save model (per prd15-topic-access wireframe): properties + visibility + owner
  * are batched and applied on «Сохранить» (PUT /topics/:id then PATCH /visibility,
@@ -26,9 +28,11 @@ import {
 } from "@skillum/ui-kit";
 import { Trash2, KeyRound, RotateCcw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { rightsOfTopic } from "@shared/access";
 import { FolderTreeSelect } from "@/components/folder-tree-select";
 import { FeedbackEditorModal } from "@/features/tests/editor/sections/feedback-editor-modal";
 import { FeedbackPreview } from "@/features/tests/editor/sections/feedback-preview";
+import { mayReceiveAccess, ownerOptions, personOption } from "@/features/tests/access/access-people";
 import type {
   FeedbackContent,
   Folder as FolderType,
@@ -47,7 +51,7 @@ interface GrantRow {
   accessLevel: AccessLevel;
   state: GrantState;
 }
-interface AccessUser { id: string; name: string | null; email: string }
+interface AccessUser { id: string; name: string | null; email: string; roles?: string[]; isExternal?: boolean }
 interface AccessResponse {
   topicId: string;
   ownerId: string | null;
@@ -153,6 +157,9 @@ export function TopicDrawer({
   const isEdit = target?.mode === "edit";
   const topic = target?.mode === "edit" ? target.topic : null;
   const topicId = topic?.id ?? null;
+  // role-model.md 6.6: the «Доступ» tab reads and changes visibility and grants — the owner's
+  // and the administrator's business. Without the right its request would only answer 403.
+  const canGrant = isEdit && rightsOfTopic(topic).grant;
 
   // ── Properties draft ──────────────────────────────────────────────────────
   const [tab, setTab] = useState<TopicTab>(initialTab);
@@ -177,7 +184,7 @@ export function TopicDrawer({
   // Reset the draft whenever a new target is opened.
   useEffect(() => {
     if (!target) return;
-    setTab(target.mode === "create" ? "props" : initialTab);
+    setTab(target.mode === "create" || !rightsOfTopic(target.mode === "edit" ? target.topic : null).grant ? "props" : initialTab);
     if (target.mode === "edit") {
       setName(target.topic.name ?? "");
       setCode(target.topic.code ?? "");
@@ -204,7 +211,7 @@ export function TopicDrawer({
   // ── Users (for owner + grants) ──────────────────────────────────────────────
   const { data: users = [] } = useQuery<AccessUser[]>({
     queryKey: ["/api/users"],
-    enabled: open && isEdit,
+    enabled: open && canGrant,
   });
 
   // ── Access state (edit only) ────────────────────────────────────────────────
@@ -215,7 +222,7 @@ export function TopicDrawer({
       if (!res.ok) throw new Error("Не удалось загрузить доступ");
       return res.json();
     },
-    enabled: open && isEdit && !!topicId,
+    enabled: open && canGrant && !!topicId,
   });
   useEffect(() => {
     if (!access) return;
@@ -254,7 +261,7 @@ export function TopicDrawer({
     [access],
   );
   const addableUsers = useMemo(
-    () => users.filter((u) => u.id !== ownerId && !grantedIds.has(u.id)),
+    () => users.filter((u) => u.id !== ownerId && !grantedIds.has(u.id) && mayReceiveAccess(u)),
     [users, ownerId, grantedIds],
   );
 
@@ -364,7 +371,7 @@ export function TopicDrawer({
 
   const grants = access?.grants ?? [];
   const owner = ownerId ? usersById.get(ownerId) : undefined;
-  const tabItems = isEdit
+  const tabItems = canGrant
     ? [{ id: "props" as const, label: "Свойства" }, { id: "access" as const, label: "Доступ" }]
     : [{ id: "props" as const, label: "Свойства" }];
 
@@ -479,19 +486,20 @@ export function TopicDrawer({
           </Stack>
         )}
 
-        {tab === "access" && isEdit && (
+        {tab === "access" && canGrant && (
           <Stack gap={6} padTop={4}>
             {/* Owner */}
             <Stack as="section" gap={3}>
               <Text variant="body-s" weight="semibold" tone="muted" className="tb-caps">Владелец</Text>
               {changingOwner && isAdmin ? (
-                <Select
+                <Combobox
                   aria-label="Владелец темы"
                   fullWidth
-                  placeholder="Выберите владельца…"
-                  value={ownerId ?? ""}
-                  options={users.map((u) => ({ value: u.id, label: displayName(u) }))}
-                  onChange={(v) => setOwnerId(v || null)}
+                  placeholder="Найдите владельца…"
+                  value={ownerId}
+                  options={ownerOptions(users, access?.ownerId ?? null)}
+                  // Clearing the field does not unset the owner.
+                  onChange={(v) => v && setOwnerId(v)}
                 />
               ) : (
                 <Cluster gap={3} wrap={false}>
@@ -537,11 +545,7 @@ export function TopicDrawer({
                   placeholder="Выберите пользователя…"
                   value={addUserId}
                   onChange={(v) => setAddUserId(v)}
-                  options={addableUsers.map((u) => ({
-                    value: u.id,
-                    label: displayName(u),
-                    searchText: `${u.name ?? ""} ${u.email ?? ""}`,
-                  }))}
+                  options={addableUsers.map(personOption)}
                 />
                 <Select<AccessLevel>
                   aria-label="Уровень доступа"
