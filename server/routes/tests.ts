@@ -21,6 +21,7 @@ import { listableTestScope, canGrantAccess, canAssignTest, canEditTest, canRevie
 import { folderRights, loadTestFolderNodes } from "../services/test-folder-access";
 import { ancestorChain, inheritedAccess } from "@shared/access";
 import { visibleTopic } from "../services/topic-access";
+import { testReferencedTopicIds } from "../services/test-topic-context";
 import { assessTestPublish, type PublishCheckFinding } from "../services/draw-feasibility";
 import { planScormPublication, publishTest } from "../services/test-publish";
 import {
@@ -1350,9 +1351,9 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
         ? ((adaptiveSettings ?? []) as AdaptiveTopicPayload[]).map((a) => a.topicId)
         : []),
     ];
-    const existingSections = await storage.getTestSections(req.params.id);
-    const existingScenarios = await storage.getTestScenarios(req.params.id);
-    const exempt = new Set([...existingSections, ...existingScenarios].map((s) => s.topicId));
+    // role-model.md 6.5.1: the topics the test already references are read in its context,
+    // and the same set keeps a re-save from tripping over them.
+    const exempt = await testReferencedTopicIds(req.params.id);
     const invisible = await firstInvisibleTopic(
       req.effectiveRoles ?? [],
       req.currentUser?.id ?? "",
@@ -1448,7 +1449,7 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
     //
     // Разделы (`test_sections.feedback_json`) едут ТЕМ ЖЕ вызовом и под тем же ключом теста
     // (см. `testFeedbackUsageEntity`); перечитываются ПОСЛЕ сохранения — служба пересоздаёт
-    // строки разделов, поэтому `existingSections`, прочитанные до save, здесь уже неверны.
+    // строки разделов, поэтому разделы, прочитанные до save, здесь уже неверны.
     try {
       await syncEntityUsages(
         "test_feedback",

@@ -25,6 +25,7 @@ import debugPlayerRouter from "./debug-player";
 import publicLinkRouter from "./public-link";
 import publicPlayRouter from "./public-play";
 import reviewRouter from "./review";
+import testContextQuestionsRouter from "./test-context-questions";
 import homeRouter from "./home";
 import reportRouter from "./report";
 import mediaRouter from "./media";
@@ -74,6 +75,7 @@ export const routerConfig = [
   { path: "/api/tests", router: publicLinkRouter }, // public test link: author API
   { path: "/api/tests", router: debugPlayerRouter }, // PRD-18 debug player (session/play/delete)
   { path: "/api/tests", router: reviewRouter }, // PRD-52 рецензирование: комментарии и прогон
+  { path: "/api/tests", router: testContextQuestionsRouter }, // вопросы тем теста в контексте теста (role-model 6.5.1)
   { path: "/api/workbook", router: workbookRouter },
   { path: "/api/folders", router: foldersRouter },
   { path: "/api/test-folders", router: testFoldersRouter },
