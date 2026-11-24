@@ -689,6 +689,54 @@ export function LimitsPane({ model, updateModel }: SettingsSectionProps) {
   );
 }
 
+// ─── PRD-73: «Требовать ответ на все вопросы перед завершением» ──────────────
+
+/**
+ * PRD-73 switch, right under «Разрешить возврат к неотвеченным вопросам» in «Навигация»
+ * (wireframe `approved/prd73-finish-requires-all-answers.html`, states `s-on` and
+ * `s-no-return`). Without returning nothing can be skipped, so the switch is dimmed, shown
+ * off and explained by the same banner as its sibling dependants; the description of the
+ * live switch says what happens to the finish button and that time still ends a section.
+ */
+function RequireAllAnsweredField({ model, updateModel }: SettingsSectionProps) {
+  const disabled = !model.runtime.allowReturnToUnanswered;
+  const checked = model.runtime.requireAllAnsweredToFinish === true && !disabled;
+  return (
+    <div className="ou-formfield">
+      <label className={disabled ? "ou-switch-field is-disabled" : "ou-switch-field"}>
+        <Switch
+          size="m"
+          checked={checked}
+          disabled={disabled}
+          aria-label="Требовать ответ на все вопросы перед завершением"
+          onChange={(e) => {
+            const next = e.target.checked;
+            updateModel((m) => ({ ...m, runtime: { ...m.runtime, requireAllAnsweredToFinish: next } }));
+          }}
+          data-testid="settings-require-all-answered-switch"
+        />
+        <span className="ou-switch-field__text">
+          <span className="ou-switch-field__label">Требовать ответ на все вопросы перед завершением</span>
+          {!disabled && (
+            <span className="ou-switch-field__desc">
+              Кнопка «Завершить раздел» или «Завершить тест» станет активной, когда ответ дан на каждый
+              вопрос. Когда истекает время, раздел или тест завершается как обычно.
+            </span>
+          )}
+        </span>
+      </label>
+      {disabled && (
+        <Banner
+          tone="warning"
+          size="sm"
+          icon={false}
+          description="Доступно только при включённом возврате к неотвеченным."
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── PRD-67: «Закрывать раздел при выходе» ───────────────────────────────────
 
 /**
@@ -1251,12 +1299,17 @@ export function NavigationPane({ model, updateModel }: SettingsSectionProps) {
                 allowFreeSectionNavigation: checked
                   ? m.runtime.allowFreeSectionNavigation
                   : false,
+                // PRD-73: без возврата пропустить вопрос нельзя — запрещать нечего.
+                requireAllAnsweredToFinish: checked
+                  ? m.runtime.requireAllAnsweredToFinish
+                  : false,
               },
             }));
           }}
           data-testid="settings-allow-return-checkbox"
         />
       </div>
+      <RequireAllAnsweredField model={model} updateModel={updateModel} />
       <div className="ou-formfield">
         <Switch
           label="Свободная навигация внутри раздела"
