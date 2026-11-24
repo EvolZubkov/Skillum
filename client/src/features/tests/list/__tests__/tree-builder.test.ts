@@ -24,6 +24,8 @@ function test(
     mode: "standard",
     flowMode: "linear_flat",
     folderId: null,
+    ownerId: null,
+    ownerName: null,
     topicCount: 1,
     questionCount: 10,
     assignmentCount: 0,
@@ -157,6 +159,79 @@ describe("buildTreeRows", () => {
     expect(rows.filter((r) => r.kind === "folder").map((r) => "name" in r && r.name)).toEqual(
       ["А", "К", "Я"],
     );
+  });
+});
+
+// ─── buildTreeRows: ownership scope of folders ────────────────────────────────
+
+describe("buildTreeRows with a folder scope", () => {
+  const ME = "me";
+  const owned = (id: string, name: string, ownerId: string | null, parentId: string | null = null): FolderEntry => ({
+    id,
+    name,
+    parentId,
+    ownerId,
+  });
+  const folderIds = (rows: ReturnType<typeof buildTreeRows>) =>
+    rows.filter((r) => r.kind === "folder").map((r) => ("id" in r ? r.id : ""));
+
+  it("«Мои»: keeps my folders even when empty and hides foreign folders without my content", () => {
+    const rows = buildTreeRows({
+      tests: [],
+      folders: [owned("mine", "Моя", ME), owned("foreign", "Чужая", "other"), owned("legacy", "Старая", null)],
+      expandedFolderIds: new Set(),
+      sort: "title_asc",
+      folderScope: { kind: "mine", userId: ME },
+    });
+    expect(folderIds(rows)).toEqual(["mine"]);
+  });
+
+  it("«Мои»: shows a foreign folder as the path to my test or to my folder inside it", () => {
+    const rows = buildTreeRows({
+      tests: [test({ id: "t1", title: "Мой тест", folderId: "foreignA", ownerId: ME })],
+      folders: [
+        owned("foreignA", "А чужая", "other"),
+        owned("foreignB", "Б чужая", "other"),
+        owned("mineInB", "Моя внутри", ME, "foreignB"),
+        owned("foreignC", "В чужая", "other"),
+      ],
+      expandedFolderIds: new Set(["foreignB"]),
+      sort: "title_asc",
+      folderScope: { kind: "mine", userId: ME },
+    });
+    expect(folderIds(rows)).toEqual(["foreignA", "foreignB", "mineInB"]);
+  });
+
+  it("«Доступные»: keeps folders of other owners and hides my folders without their content", () => {
+    const rows = buildTreeRows({
+      tests: [],
+      folders: [owned("mine", "Моя", ME), owned("foreign", "Чужая", "other"), owned("legacy", "Старая", null)],
+      expandedFolderIds: new Set(),
+      sort: "title_asc",
+      folderScope: { kind: "accessible", userId: ME },
+    });
+    expect(folderIds(rows)).toEqual(["legacy", "foreign"]);
+  });
+
+  it("«Доступные»: shows my folder as the path to a foreign test inside it", () => {
+    const rows = buildTreeRows({
+      tests: [test({ id: "t1", title: "Чужой тест", folderId: "mine", ownerId: "other" })],
+      folders: [owned("mine", "Моя", ME)],
+      expandedFolderIds: new Set(["mine"]),
+      sort: "title_asc",
+      folderScope: { kind: "accessible", userId: ME },
+    });
+    expect(rows.map((r) => `${r.kind}:${"id" in r ? r.id : ""}`)).toEqual(["root:", "folder:mine", "test:t1"]);
+  });
+
+  it("without a folder scope every folder stays, empty ones included", () => {
+    const rows = buildTreeRows({
+      tests: [],
+      folders: [owned("mine", "Моя", ME), owned("foreign", "Чужая", "other")],
+      expandedFolderIds: new Set(),
+      sort: "title_asc",
+    });
+    expect(folderIds(rows)).toEqual(["mine", "foreign"]);
   });
 });
 

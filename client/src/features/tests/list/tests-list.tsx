@@ -218,6 +218,7 @@ export function TestsListPage(): React.JSX.Element {
       canEdit: f.canEdit,
       canManageAccess: f.canManageAccess,
       visibility: f.visibility,
+      ownerId: f.ownerId ?? null,
     })),
     [rawFolders],
   );
@@ -603,12 +604,18 @@ export function TestsListPage(): React.JSX.Element {
 
   // ─── Derived rows ────────────────────────────────────────────────────────
   const isSearchMode = searchQuery.trim().length > 0;
+  // «Область» narrows folders by THEIR owner, not only tests by theirs: an empty folder of
+  // mine stays under «Мои», a foreign one stays only as the path to my content.
+  const folderScope = useMemo(
+    () => (testFilter.scope === "all" ? undefined : { kind: testFilter.scope, userId }),
+    [testFilter.scope, userId],
+  );
   const treeRows = useMemo(
     () =>
       isSearchMode
         ? []
-        : buildTreeRows({ tests: filteredEntries, folders, expandedFolderIds, sort: sortBy }),
-    [isSearchMode, filteredEntries, folders, expandedFolderIds, sortBy],
+        : buildTreeRows({ tests: filteredEntries, folders, expandedFolderIds, sort: sortBy, folderScope }),
+    [isSearchMode, filteredEntries, folders, expandedFolderIds, sortBy, folderScope],
   );
   const searchRows = useMemo(
     () =>
@@ -766,7 +773,7 @@ export function TestsListPage(): React.JSX.Element {
       ) : (
         <DefaultTree
           rows={treeRows}
-          totalTests={entries.length}
+          totalTests={filteredEntries.length}
           expandedFolderIds={expandedFolderIds}
           onToggleFolder={(id) =>
             setExpandedFolderIds((prev) => {

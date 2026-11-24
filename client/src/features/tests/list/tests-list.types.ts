@@ -80,7 +80,20 @@ export type FolderEntry = {
   canManageAccess?: boolean;
   /** `transit`: shown only as the path to an accessible test. */
   visibility?: "direct" | "transit";
+  /**
+   * Folder owner (`test_folders.owner_id`, 2.58.0). Drives the «Мои» / «Доступные»
+   * scope of the list filter for folders. NULL = legacy folder without an owner;
+   * absent = the caller did not pass it.
+   */
+  ownerId?: string | null;
 };
+
+/**
+ * Ownership scope of the list filter applied to FOLDERS (the «Область» condition).
+ * `mine` keeps the reader's own folders, `accessible` keeps folders of other owners;
+ * a folder outside the scope stays only as the path to visible content below it.
+ */
+export type FolderScope = { kind: "mine" | "accessible"; userId: string };
 
 /** Row produced by the tree builder. The page renders these in order. */
 export type TreeRow =
