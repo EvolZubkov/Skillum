@@ -266,6 +266,50 @@ describe("окно прогона: рейл «Согласование / Ком�
   });
 });
 
+describe("окно прогона: действия ветки под «⋯»", () => {
+  const anchor = { kind: "question" as const, questionId: "q7", topicId: "tp1" };
+
+  async function renderCompact(props: Partial<React.ComponentProps<typeof ReviewPanel>> = {}) {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "author", approvals: [], reviewers: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor, ...props });
+    return screen.findByTestId("more-c1");
+  }
+
+  it("в строке только «Ответить» и «⋯», остальные действия в меню", async () => {
+    const more = await renderCompact({ canResolve: true, onNavigate: vi.fn() });
+    expect(screen.getByRole("button", { name: "Ответить" })).toBeInTheDocument();
+    expect(screen.queryByTestId("goto-c1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("resolve-c1")).not.toBeInTheDocument();
+    fireEvent.click(more);
+    expect(await screen.findByTestId("goto-c1")).toBeInTheDocument();
+    expect(screen.getByTestId("resolve-c1")).toBeInTheDocument();
+  });
+
+  it("пункт «Перейти к вопросу» зовёт хозяина панели", async () => {
+    const onNavigate = vi.fn();
+    fireEvent.click(await renderCompact({ onNavigate }));
+    fireEvent.click(await screen.findByTestId("goto-c1"));
+    expect(onNavigate).toHaveBeenCalledWith(
+      { target: "question-editor", questionId: "q1" },
+      expect.objectContaining({ id: "c1" }),
+    );
+  });
+
+  it("пункт «Закрыть комментарий» открывает форму исхода", async () => {
+    fireEvent.click(await renderCompact({ canResolve: true }));
+    fireEvent.click(await screen.findByTestId("resolve-c1"));
+    expect(await screen.findByTestId("confirm-resolve")).toBeInTheDocument();
+  });
+
+  it("ветка без места и без права закрытия: меню не нужно", async () => {
+    apiMock.fetchReviewThreads.mockResolvedValue([thread({ anchorKind: "question", questionId: null })]);
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "author", approvals: [], reviewers: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor });
+    expect(await screen.findByRole("button", { name: "Ответить" })).toBeInTheDocument();
+    expect(screen.queryByTestId("more-c1")).not.toBeInTheDocument();
+  });
+});
+
 describe("ссылка на ветку", () => {
   it("раскрывает ветку, на которую ведёт ссылка, и метит её в разметке", async () => {
     renderPanel({ focusThreadId: "c1" });

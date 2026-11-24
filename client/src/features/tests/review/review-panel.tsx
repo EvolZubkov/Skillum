@@ -13,10 +13,10 @@
  */
 import { useState } from "react";
 import {
-  Avatar, Banner, Button, Card, CardBody, Cluster, EmptyState, SegmentedControl, Stack, Switch, Tag, Text,
-  Textarea,
+  Avatar, Banner, Button, Card, CardBody, Cluster, EmptyState, IconButton, MenuItem, MenuTrigger, SegmentedControl,
+  Stack, Switch, Tag, Text, Textarea,
 } from "@skillum/ui-kit";
-import { ArrowRight, MessageSquarePlus } from "lucide-react";
+import { ArrowRight, Check, MessageSquarePlus, MoreHorizontal, RotateCcw } from "lucide-react";
 import { pluralize } from "@/lib/i18n";
 import { useReviewComments } from "./use-review-comments";
 import { ReviewCommentForm, type ReviewAnchorItem } from "./review-comment-form";
@@ -59,6 +59,8 @@ export function ReviewPanel({
   testId, mode, canResolve = false, currentUserId,
   screenAnchor, screenTitle, anchorOptions, onNavigate, focusThreadId,
 }: ReviewPanelProps) {
+  // The player window is a narrow inspector: thread actions collapse into one row with a «⋯» menu.
+  const compact = mode === "player";
   const review = useReviewComments(testId);
   // Окно прогона: пункт «Согласование» в рейле есть, только когда есть рецензент, принявший приглашение.
   const approvals = useReviewApprovals(testId, { enabled: mode === "player" });
@@ -308,41 +310,97 @@ export function ReviewPanel({
                         <Tag size="s" variant="outline">изменено после комментария</Tag>
                       ) : null}
                       {thread.orphaned ? <Tag size="s" variant="soft">объект удалён</Tag> : null}
-                      {target ? (
-                        <Button
-                          variant="secondary"
-                          size="s"
-                          disabled={!canNavigate}
-                          onClick={() => canNavigate && onNavigate!(target!, thread)}
-                          data-testid={`goto-${thread.id}`}
-                          trailingIcon={<ArrowRight size={13} aria-hidden="true" />}
-                        >
-                          Перейти к вопросу
+                      {compact ? (
+                        // Narrow inspector (approved wireframe prd52-review-approval): one row, «Ответить» leads,
+                        // the rest sits under «⋯» so the row never wraps in the 176 px rail window.
+                        <>
+                          <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
+                            Ответить
+                          </Button>
+                          <span className="rvp__spacer" />
+                          {target || canResolve ? (
+                            <MenuTrigger
+                              size="sm"
+                              placement="bottom-end"
+                              trigger={
+                                <IconButton
+                                  variant="ghost"
+                                  size="s"
+                                  aria-label="Другие действия"
+                                  data-testid={`more-${thread.id}`}
+                                  icon={<MoreHorizontal size={16} aria-hidden="true" />}
+                                />
+                              }
+                            >
+                              {target ? (
+                                <MenuItem
+                                  icon={<ArrowRight size={16} aria-hidden="true" />}
+                                  disabled={!canNavigate}
+                                  onClick={() => canNavigate && onNavigate!(target!, thread)}
+                                  data-testid={`goto-${thread.id}`}
+                                >
+                                  Перейти к вопросу
+                                </MenuItem>
+                              ) : null}
+                              {canResolve && thread.status === "open" ? (
+                                <MenuItem
+                                  icon={<Check size={16} aria-hidden="true" />}
+                                  onClick={() => setResolving({ id: thread.id, status: "accepted" })}
+                                  data-testid={`resolve-${thread.id}`}
+                                >
+                                  Закрыть комментарий
+                                </MenuItem>
+                              ) : null}
+                              {canResolve && thread.status !== "open" ? (
+                                <MenuItem
+                                  icon={<RotateCcw size={16} aria-hidden="true" />}
+                                  onClick={() => review.reopen.mutate(thread.id)}
+                                >
+                                  Открыть заново
+                                </MenuItem>
+                              ) : null}
+                            </MenuTrigger>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                        {target ? (
+                          <Button
+                            variant="secondary"
+                            size="s"
+                            disabled={!canNavigate}
+                            onClick={() => canNavigate && onNavigate!(target!, thread)}
+                            data-testid={`goto-${thread.id}`}
+                            trailingIcon={<ArrowRight size={13} aria-hidden="true" />}
+                          >
+                            Перейти к вопросу
+                          </Button>
+                        ) : null}
+                        <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
+                          Ответить
                         </Button>
-                      ) : null}
-                      <Button variant="ghost" size="s" onClick={() => setReplyTo(thread.id)}>
-                        Ответить
-                      </Button>
-                      <span className="rvp__spacer" />
-                      {canResolve && thread.status === "open" ? (
-                        <Button
-                          variant="secondary"
-                          size="s"
-                          onClick={() => setResolving({ id: thread.id, status: "accepted" })}
-                          data-testid={`resolve-${thread.id}`}
-                        >
-                          Закрыть комментарий
-                        </Button>
-                      ) : null}
-                      {canResolve && thread.status !== "open" ? (
-                        <Button
-                          variant="secondary"
-                          size="s"
-                          onClick={() => review.reopen.mutate(thread.id)}
-                        >
-                          Открыть заново
-                        </Button>
-                      ) : null}
+                        <span className="rvp__spacer" />
+                        {canResolve && thread.status === "open" ? (
+                          <Button
+                            variant="secondary"
+                            size="s"
+                            onClick={() => setResolving({ id: thread.id, status: "accepted" })}
+                            data-testid={`resolve-${thread.id}`}
+                          >
+                            Закрыть комментарий
+                          </Button>
+                        ) : null}
+                        {canResolve && thread.status !== "open" ? (
+                          <Button
+                            variant="secondary"
+                            size="s"
+                            onClick={() => review.reopen.mutate(thread.id)}
+                          >
+                            Открыть заново
+                          </Button>
+                        ) : null}
+                        </>
+                      )}
                     </Cluster>
                   )}
                 </CardBody>

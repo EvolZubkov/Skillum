@@ -106,6 +106,12 @@
       .wf-appr-row { display: flex; align-items: center; gap: var(--ou-space-2); flex-wrap: wrap; }
       .wf-appr-row .spacer { flex: 1; }
       .wf-appr-list { display: flex; flex-direction: column; gap: var(--ou-space-2); margin-top: var(--ou-space-3); }
+      /* Действия карточки ветки в узком инспекторе: «Ответить» и меню «⋯» в одну строку; остальное - в меню. */
+      .wf-thread-actions { display: flex; align-items: center; gap: var(--ou-space-1); margin-top: var(--ou-space-2); }
+      .wf-thread-actions .spacer { flex: 1; }
+      .wf-thread-actions .wf-more { padding: 0 var(--ou-space-2); }
+      /* В работе меню - всплывающая панель поверх карточки (портал), карточку не обрезает; на эскизе показано под ней. */
+      .wf-menu-demo { display: flex; justify-content: flex-end; margin-top: calc(-1 * var(--ou-space-2)); }
       .wf-note { font: var(--ou-text-body-s); color: var(--ou-fg-muted); margin: var(--ou-space-2) 0 0; }
       [hidden] { display: none !important; }
 
@@ -177,6 +183,8 @@
       <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></symbol>
       <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></symbol>
       <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></symbol>
       <symbol id="i-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></symbol>
     </svg>
 
@@ -440,8 +448,22 @@
                     </div>
                     <span class="wf-thread-ctx">Раздел «О компании» · Вопрос 4 «Согласно «Стратегии-2030»…»</span>
                     <p class="wf-thread-text">Формулировка допускает два прочтения: доля рынка по абонентам или по выручке.</p>
+                    <!-- Узкий инспектор (окно отладки и рецензирования): одна строка действий. Ведущее действие - «Ответить»,
+                         «Перейти к вопросу» и «Закрыть комментарий» - в меню «⋯» (открыто на эскизе). В редакторе кнопки остаются в строке. -->
+                    <div class="wf-thread-actions">
+                      <button type="button" class="ou-btn ou-btn--ghost ou-btn--s"><span>Ответить</span></button>
+                      <span class="spacer"></span>
+                      <button type="button" class="ou-btn ou-btn--ghost ou-btn--s wf-more" aria-label="Другие действия" aria-haspopup="menu" aria-expanded="true"><span class="ou-btn__ico"><svg width="16" height="16"><use href="#i-more" /></svg></span></button>
+                    </div>
                   </div>
                 </div>
+                <div class="wf-menu-demo">
+                  <div class="ou-menu ou-menu--sm" role="menu">
+                    <button type="button" class="ou-menu__item" role="menuitem"><span class="ou-menu__item-ico"><svg><use href="#i-arrow-right" /></svg></span><span>Перейти к вопросу</span></button>
+                    <button type="button" class="ou-menu__item" role="menuitem"><span class="ou-menu__item-ico"><svg><use href="#i-check" /></svg></span><span>Закрыть комментарий</span></button>
+                  </div>
+                </div>
+                <div class="wf-note">Меню действий открыто для показа; в работе оно закрыто и раскрывается кликом по «⋯». Меню прижато к правому краю карточки, ширина - по самой длинной строке.</div>
 
                   </section>
                 </div>
