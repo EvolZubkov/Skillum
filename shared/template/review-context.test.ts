@@ -126,3 +126,103 @@ describe("buildReviewContext — prompt text", () => {
     expect(review.unanswered[0].prompt).toBe("Раздел «новый» — тут");
   });
 });
+
+describe("buildReviewContext — PRD-73 запрет завершения", () => {
+  const base = {
+    commitScope: "section" as const,
+    scopeTopicId: "A",
+    isTest: false,
+    scopeLabel: "Раздел «A»",
+    finishLabel: "Завершить раздел",
+  };
+
+  it("запрещает завершение раздела с пропуском и объясняет почему", () => {
+    const { review } = buildReviewContext({
+      ...base,
+      questions: sectioned,
+      statuses: { a1: "answered", a2: "skipped" },
+      requireAllAnsweredToFinish: true,
+      allowReturnToUnanswered: true,
+    });
+    expect(review.finishBlocked).toBe(true);
+    expect(review.hint).toBe("Чтобы завершить раздел, ответьте на все вопросы. Осталось без ответа: 1.");
+  });
+
+  it("считает и невыданные вопросы раздела, но в список их не выносит", () => {
+    const { review } = buildReviewContext({
+      ...base,
+      questions: [
+        { id: "a1", topicId: "A", prompt: "A one", delivered: true },
+        { id: "a2", topicId: "A", prompt: "A two", delivered: true },
+        { id: "a3", topicId: "A", prompt: "A three", delivered: false },
+        { id: "a4", topicId: "A", prompt: "A four", delivered: false },
+      ],
+      statuses: { a1: "answered", a2: "skipped" },
+      requireAllAnsweredToFinish: true,
+      allowReturnToUnanswered: true,
+    });
+    expect(review.finishBlocked).toBe(true);
+    expect(review.unansweredCount).toBe(1);
+    expect(review.hint).toContain("Осталось без ответа: 3.");
+  });
+
+  it("в сплошном тесте говорит «завершить тест»", () => {
+    const { review } = buildReviewContext({
+      questions: sectioned,
+      statuses: { a1: "answered", a2: "answered", b1: "answered" },
+      commitScope: "test",
+      isTest: true,
+      scopeLabel: "Обзор теста",
+      finishLabel: "Завершить тест",
+      requireAllAnsweredToFinish: true,
+      allowReturnToUnanswered: true,
+    });
+    expect(review.finishBlocked).toBe(true);
+    expect(review.hint.startsWith("Чтобы завершить тест, ")).toBe(true);
+  });
+
+  it("не считает вопросы чужого раздела", () => {
+    const { review } = buildReviewContext({
+      ...base,
+      questions: sectioned,
+      statuses: { a1: "answered", a2: "answered" },
+      requireAllAnsweredToFinish: true,
+      allowReturnToUnanswered: true,
+    });
+    expect(review.finishBlocked).toBe(false);
+    expect(review.hint).toBe("Все вопросы отвечены.");
+  });
+
+  it("без настройки оставляет прежнюю подсказку", () => {
+    const { review } = buildReviewContext({
+      ...base,
+      questions: sectioned,
+      statuses: { a1: "answered", a2: "skipped" },
+      requireAllAnsweredToFinish: false,
+      allowReturnToUnanswered: true,
+    });
+    expect(review.finishBlocked).toBe(false);
+    expect(review.hint).toBe("Проверьте перед завершением. Неотвеченные засчитываются как неверные.");
+  });
+
+  it("без возврата к неотвеченным не запрещает", () => {
+    const { review } = buildReviewContext({
+      ...base,
+      questions: sectioned,
+      statuses: { a1: "answered", a2: "skipped" },
+      requireAllAnsweredToFinish: true,
+      allowReturnToUnanswered: false,
+    });
+    expect(review.finishBlocked).toBe(false);
+  });
+
+  it("старый вызов без новых полей ведёт себя как прежде", () => {
+    const { review } = buildReviewContext({
+      ...base,
+      questions: sectioned,
+      statuses: { a1: "answered", a2: "skipped" },
+    });
+    expect(review.finishBlocked).toBe(false);
+    expect(review.hint).toBe("Проверьте перед завершением. Неотвеченные засчитываются как неверные.");
+  });
+});

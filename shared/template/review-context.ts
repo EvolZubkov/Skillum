@@ -6,11 +6,16 @@
  * every in-scope question is a jump target) PLUS the explicit unanswered list and
  * the «Завершить …» action. BOTH hosts call it so the обзор renders identically
  * (parity, PRD-12). Pure — reuses {@link buildQuestionProgress} for the pills.
+ *
+ * PRD-73: also decides whether the «Завершить …» may be used ({@link CtxReview.finishBlocked},
+ * the shared rule {@link isFinishBlocked}) and, while it may not, prints the reason
+ * into the existing `review.hint`.
  */
 
 import { buildQuestionProgress, type QuestionStatus, type QuestionProgressItem } from "./question-progress-context";
 import { renderPlainText } from "../text/plain";
 import type { AnswerCommitScope } from "../flow/answer-commit-scope";
+import { isFinishBlocked } from "../flow/finish-gate";
 import type { CtxReview, CtxQuestionsProgress, CtxReviewUnanswered } from "./context";
 
 /** A question for the review screen (adds the prompt for the explicit list). */
@@ -49,6 +54,13 @@ export interface BuildReviewContextInput {
   canReturn?: boolean;
   /** «Назад» button label; defaults to «Назад». */
   backLabel?: string;
+  /**
+   * PRD-73 FR-01: the author requires an answer to every question before the finish.
+   * Absent = the setting is off (a caller or a package from before PRD-73).
+   */
+  requireAllAnsweredToFinish?: boolean;
+  /** PRD-19 FR-01: returning to skipped questions is allowed; absent = on (PRD-19 default). */
+  allowReturnToUnanswered?: boolean;
 }
 
 /**
@@ -93,6 +105,21 @@ export function buildReviewContext(input: BuildReviewContextInput): {
     else unanswered.push({ index, number: pos, prompt: renderPlainText(q.prompt) });
   });
 
+  // PRD-73 FR-03: the finish is gated by EVERY question of the scope, delivered or not —
+  // otherwise a mid-flow обзор would let the learner close the section before reaching
+  // its end. The explicit list above still names only delivered questions: the learner
+  // has not seen the prompts of the others yet.
+  let unansweredInScope = 0;
+  input.questions.forEach((q) => {
+    if (sectionScope && (q.topicId ?? null) !== scopeTopicId) return;
+    if ((input.statuses[q.id] ?? "unanswered") !== "answered") unansweredInScope += 1;
+  });
+  const finishBlocked = isFinishBlocked({
+    requireAllAnsweredToFinish: input.requireAllAnsweredToFinish,
+    allowReturnToUnanswered: input.allowReturnToUnanswered,
+    hasUnanswered: unansweredInScope > 0,
+  });
+
   const review: CtxReview = {
     scopeLabel: input.scopeLabel,
     isTest: input.isTest,
@@ -101,13 +128,29 @@ export function buildReviewContext(input: BuildReviewContextInput): {
     unansweredCount: unanswered.length,
     answeredCount,
     total: pos,
-    hint:
-      unanswered.length > 0
+    hint: finishBlocked
+      ? blockedHint(input.finishLabel, unansweredInScope)
+      : unanswered.length > 0
         ? "Проверьте перед завершением. Неотвеченные засчитываются как неверные."
         : "Все вопросы отвечены.",
     canReturn: !!input.canReturn,
     backLabel: input.backLabel ?? "Назад",
+    finishBlocked,
   };
 
   return { questionsProgress, review };
+}
+
+/**
+ * PRD-73 FR-05: the reason the finish button is disabled. The verb follows the button's
+ * own label, so «Завершить тест» yields «Чтобы завершить тест, …» without a second
+ * source of truth for which finish this is.
+ *
+ * @param finishLabel The «Завершить …» label shown on the button.
+ * @param remaining Questions of the scope still without an answer, undelivered included.
+ * @returns The hint text, e.g. «Чтобы завершить раздел, ответьте на все вопросы. Осталось без ответа: 2.».
+ */
+function blockedHint(finishLabel: string, remaining: number): string {
+  const action = finishLabel.charAt(0).toLowerCase() + finishLabel.slice(1);
+  return `Чтобы ${action}, ответьте на все вопросы. Осталось без ответа: ${remaining}.`;
 }

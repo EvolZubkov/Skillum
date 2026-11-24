@@ -639,6 +639,14 @@ export interface CtxReview {
   canReturn: boolean;
   /** «Назад» button label (only meaningful when {@link canReturn}). */
   backLabel: string;
+  /**
+   * PRD-73: true while the author requires an answer to every question and the scope
+   * still holds an unanswered one (not-yet-delivered questions included). The host
+   * itself renders every `finish-review` control disabled and refuses the action, so a
+   * layout works without binding this field; it is offered for templates that want
+   * their own look of the blocked state. The reason is printed by {@link hint}.
+   */
+  finishBlocked: boolean;
 }
 
 /**
