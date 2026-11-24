@@ -11,6 +11,10 @@ const REQUIRED = [
   "buildQuestionProgress",
   "buildReviewContext",
   "shouldShowReview",
+  // PRD-73: запрет завершения обзора, действующее скрытие обзора и отключение кнопок.
+  "isFinishBlocked",
+  "reviewHiddenByAuthor",
+  "disableActions",
   "renderResultField",
   // Ревизия «Стандартный»: единая эмиссия интерактива вопросов.
   "buildPaletteBridge",
