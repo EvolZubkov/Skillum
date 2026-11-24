@@ -71,6 +71,47 @@ const FONT_PROBE_CSS =
   "{display:inline!important;vertical-align:baseline!important}";
 
 /**
+ * Межбуквенный интервал, который переводит растеризатор в ПОБУКВЕННУЮ отрисовку.
+ *
+ * Величина ничтожна (сотая пикселя, на строку — меньше пикселя) и нужна не ради интервала,
+ * а ради ветки html2canvas: при ненулевом `letter-spacing` он меряет в DOM положение КАЖДОЙ
+ * буквы и ставит её туда, а при нулевом — кладёт слово одним `fillText` и доверяет ширины
+ * глифов холсту. См. {@link pinGlyphPositions}.
+ */
+const PER_GLYPH_LETTER_SPACING = "0.01px";
+
+/**
+ * Привязать каждую букву PDF к её месту в разметке.
+ *
+ * ПРИЧИНА. Шрифт без инструкций хинтинга (фирменный RostelecomBasis шаблонов РТК) на Linux,
+ * где fontconfig велит полный хинтинг, Chromium прогоняет через автохинтер FreeType: ширины
+ * глифов мелкого кегля подгоняются под целые пиксели, и буквы внутри слова то слипаются, то
+ * расходятся. На экране это снимает `text-rendering: geometricPrecision` (его ставит
+ * контейнер отчёта и шаблон). Холст этот режим НЕ соблюдает — ни через CSS, ни через
+ * `ctx.textRendering`: проверено на Linux Chromium с полным хинтингом. А html2canvas рисует
+ * слово целиком холстом, поэтому та же порча возвращается в PDF.
+ *
+ * Обход — побуквенная ветка растеризатора: каждая буква встаёт в позицию, измеренную DOM,
+ * где хинтинг уже снят. Интервал ставится только элементам с НУЛЕВЫМ интервалом; авторская
+ * разрядка (`letter-spacing` у заголовков, подписей) остаётся какой была и тоже идёт по
+ * побуквенной ветке. Вызывается ДО раскладки по страницам, чтобы та видела итоговые строки.
+ *
+ * @param root Корень отрисованного отчёта.
+ */
+function pinGlyphPositions(root: HTMLElement): void {
+  const view = root.ownerDocument.defaultView;
+  if (!view) return;
+  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+  for (const el of elements) {
+    if (!(el instanceof view.HTMLElement)) continue;
+    const spacing = view.getComputedStyle(el).letterSpacing;
+    if (spacing === "normal" || spacing === "" || parseFloat(spacing) === 0) {
+      el.style.setProperty("letter-spacing", PER_GLYPH_LETTER_SPACING);
+    }
+  }
+}
+
+/**
  * A clickable region carried over into the PDF: a `.pdf-link-btn` chip or one line of an
  * author's `<a href>`.
  */
@@ -193,6 +234,9 @@ export async function exportReportPdf(page: ReportPage, testName: string, deps: 
   container.style.position = "absolute";
   container.style.left = "-9999px";
   container.style.top = "0";
+  // Ширины глифов без подгонки под пиксели: иначе на Linux с полным хинтингом буквы
+  // нехинтованного шрифта ложатся вразнобой (см. pinGlyphPositions). Свойство наследуется.
+  container.style.setProperty("text-rendering", "geometricPrecision");
   // Заплатка измерителя шрифта — первой: ею меряется КАЖДЫЙ снимок (см. FONT_PROBE_CSS).
   const probeFix = doc.createElement("style");
   probeFix.textContent = FONT_PROBE_CSS;
@@ -224,6 +268,7 @@ export async function exportReportPdf(page: ReportPage, testName: string, deps: 
     }
     const rendered = stage.firstElementChild as HTMLElement | null;
     if (!rendered) throw new Error("Макет отчёта ничего не отрисовал");
+    pinGlyphPositions(rendered);
 
     // Let the browser lay the page out (web fonts, grid) before rasterizing. The fonts are
     // awaited explicitly: html2canvas places every word where the layout measured it and
