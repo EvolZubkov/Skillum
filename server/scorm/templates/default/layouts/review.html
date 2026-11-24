@@ -26,7 +26,9 @@
       <div data-slot="protection-mark"></div>
       <div class="tb-scene__q">
         <h2 class="tb-scene__hero tb-scene__hero--s">{{ review.scopeLabel }}</h2>
-        <span class="tb-scene__qhint">{{ review.hint }}</span>
+        <!-- PRD-73: the finish buttons point here — while the finish is blocked the hint
+             says why («Чтобы завершить раздел, ответьте на все вопросы…»). -->
+        <span class="tb-scene__qhint" id="review-hint">{{ review.hint }}</span>
       </div>
 
       {{#if state.questionsProgress}}
@@ -68,13 +70,15 @@
     {{#if review.canReturn}}
     <!-- Opened via «К обзору» mid-flow: «Назад» (to the origin question) is the accented
          primary; «Завершить …» is demoted to a quiet ghost so it is not fired by accident. -->
-    <button type="button" class="ou-btn ou-btn--ghost ou-btn--m" data-action="finish-review">{{ review.finishLabel }}</button>
+    <button type="button" class="ou-btn ou-btn--ghost ou-btn--m" data-action="finish-review" aria-describedby="review-hint" {{#if review.finishBlocked}}disabled{{/if}}>{{ review.finishLabel }}</button>
     <div class="tb-scene__foot-spacer"></div>
     <button type="button" class="ou-btn ou-btn--primary ou-btn--l" data-action="review-back">{{ review.backLabel }}</button>
     {{/if}}
     {{#unless review.canReturn}}
     <div class="tb-scene__foot-spacer"></div>
-    <button type="button" class="ou-btn ou-btn--primary ou-btn--l" data-action="finish-review">{{ review.finishLabel }}</button>
+    <!-- PRD-73: the host disables the finish itself; the layout binds the same flag so its
+         own markup tells the truth even before the host runs. -->
+    <button type="button" class="ou-btn ou-btn--primary ou-btn--l" data-action="finish-review" aria-describedby="review-hint" {{#if review.finishBlocked}}disabled{{/if}}>{{ review.finishLabel }}</button>
     {{/unless}}
   </footer>
 </div>
