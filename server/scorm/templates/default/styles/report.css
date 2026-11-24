@@ -20,6 +20,12 @@
   /* ШРИФТ ОТЧЁТА — параметр «Шрифт» шаблона (`--font-sans`), как у экранов. Жёсткая
      гарнитура здесь печатала отчёт не тем шрифтом, что выбран у теста. */
   font-family: var(--font-sans, Inter), 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  /* БУКВЫ БЕЗ ПОДГОНКИ ПОД ПИКСЕЛИ. Шрифт выбирает автор, и веб-шрифт без инструкций хинтинга
+     (например, RostelecomBasis) на Linux с полным хинтингом автохинтер FreeType ставит
+     вразнобой: буквы мелкого кегля слипаются и расходятся внутри слова. geometricPrecision
+     снимает подгонку; на Windows и macOS ничего не меняется. PDF дополнительно чинит конвейер
+     выгрузки (холст этот режим не соблюдает). */
+  text-rendering: geometricPrecision;
   color: #ffffff;
   /* Подложку ставит МАКЕТ инлайном из `report.backgroundUrl`; без неё — этот градиент. */
   background: linear-gradient(180deg, #1c1c2b 0%, #7700ff 100%);

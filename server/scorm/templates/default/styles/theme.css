@@ -124,6 +124,12 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
   min-height: 0;
   overflow: hidden;
   font-family: var(--ou-font-family-base, var(--font-sans));
+  /* GLYPHS WITHOUT GRID-FITTING. The font is the author's choice, and a web font without
+     hinting instructions (RostelecomBasis among them) goes through the FreeType autohinter on
+     Linux when fontconfig asks for full hinting: small-size advances snap to whole pixels and
+     letters inside a word collide or drift apart. geometricPrecision turns hinting off for this
+     text; Windows and macOS do not change. */
+  text-rendering: geometricPrecision;
 }
 .tb-scene__header {
   flex: none;

@@ -8615,6 +8615,12 @@ body { background: var(--ou-bg-page); color: var(--ou-fg-default); }
   min-height: 0;
   overflow: hidden;
   font-family: var(--ou-font-family-base, var(--font-sans));
+  /* GLYPHS WITHOUT GRID-FITTING. The font is the author's choice, and a web font without
+     hinting instructions (RostelecomBasis among them) goes through the FreeType autohinter on
+     Linux when fontconfig asks for full hinting: small-size advances snap to whole pixels and
+     letters inside a word collide or drift apart. geometricPrecision turns hinting off for this
+     text; Windows and macOS do not change. */
+  text-rendering: geometricPrecision;
 }
 .tb-scene__header {
   flex: none;
@@ -10501,6 +10507,12 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
   /* ШРИФТ ОТЧЁТА — параметр «Шрифт» шаблона (`--font-sans`), как у экранов. Жёсткая
      гарнитура здесь печатала отчёт не тем шрифтом, что выбран у теста. */
   font-family: var(--font-sans, Inter), 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  /* БУКВЫ БЕЗ ПОДГОНКИ ПОД ПИКСЕЛИ. Шрифт выбирает автор, и веб-шрифт без инструкций хинтинга
+     (например, RostelecomBasis) на Linux с полным хинтингом автохинтер FreeType ставит
+     вразнобой: буквы мелкого кегля слипаются и расходятся внутри слова. geometricPrecision
+     снимает подгонку; на Windows и macOS ничего не меняется. PDF дополнительно чинит конвейер
+     выгрузки (холст этот режим не соблюдает). */
+  text-rendering: geometricPrecision;
   color: #ffffff;
   /* Подложку ставит МАКЕТ инлайном из `report.backgroundUrl`; без неё — этот градиент. */
   background: linear-gradient(180deg, #1c1c2b 0%, #7700ff 100%);
@@ -11134,7 +11146,7 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
       </div>
 
       <div class="pv-dialog-foot">
-        <span>14 экранов · 43 шаблонов контента · шаблон «Стандартный» v1.28.1</span>
+        <span>14 экранов · 43 шаблонов контента · шаблон «Стандартный» v1.28.2</span>
         <button type="button" class="pv-btn">Закрыть</button>
       </div>
     </div>
@@ -11146,7 +11158,7 @@ a.tb-rec:hover .tb-rec__ico { color: var(--ou-accent-default); }
   window.PRD1_PREVIEW_MANIFEST  = {
   "id": "default",
   "name": "Стандартный",
-  "version": "1.28.1",
+  "version": "1.28.2",
   "templateApiVersion": "1.0",
   "description": "Базовый одноколоночный плеер. Используется по умолчанию для обратной совместимости.",
   "themes": [
@@ -23404,6 +23416,19 @@ ${String(value)}` : `${String(values[key])}${String(value)}`;
   var A4_WIDTH_MM = 210;
   var A4_HEIGHT_MM = 297;
   var FONT_PROBE_CSS = 'img[src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"]{display:inline!important;vertical-align:baseline!important}';
+  var PER_GLYPH_LETTER_SPACING = "0.01px";
+  function pinGlyphPositions(root) {
+    const view = root.ownerDocument.defaultView;
+    if (!view) return;
+    const elements = [root, ...Array.from(root.querySelectorAll("*"))];
+    for (const el of elements) {
+      if (!(el instanceof view.HTMLElement)) continue;
+      const spacing = view.getComputedStyle(el).letterSpacing;
+      if (spacing === "normal" || spacing === "" || parseFloat(spacing) === 0) {
+        el.style.setProperty("letter-spacing", PER_GLYPH_LETTER_SPACING);
+      }
+    }
+  }
   var PDF_LINK_URL = /^(?:https?:\/\/|mailto:)/i;
   function collectLinks(pageRoot) {
     const pageRect = pageRoot.getBoundingClientRect();
@@ -23443,6 +23468,7 @@ ${String(value)}` : `${String(values[key])}${String(value)}`;
     container.style.position = "absolute";
     container.style.left = "-9999px";
     container.style.top = "0";
+    container.style.setProperty("text-rendering", "geometricPrecision");
     const probeFix = doc.createElement("style");
     probeFix.textContent = FONT_PROBE_CSS;
     container.appendChild(probeFix);
@@ -23465,6 +23491,7 @@ ${String(value)}` : `${String(values[key])}${String(value)}`;
       }
       const rendered = stage.firstElementChild;
       if (!rendered) throw new Error("\u041C\u0430\u043A\u0435\u0442 \u043E\u0442\u0447\u0451\u0442\u0430 \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043E\u0442\u0440\u0438\u0441\u043E\u0432\u0430\u043B");
+      pinGlyphPositions(rendered);
       await new Promise((resolve2) => setTimeout(resolve2, 100));
       await ((_c = doc.fonts) == null ? void 0 : _c.ready);
       const pages = buildReportPages(rendered, doc, stage);
