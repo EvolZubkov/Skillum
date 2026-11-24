@@ -36,6 +36,7 @@ import {
 import { TemplateContentScreen, type ContentScreenTemplate } from "./template-content-screen";
 import { buildAfterZone, buildPageSequence, contentPagesFor, type FlowContentPage } from "@shared/flow/page-sequence";
 import { shouldShowReview } from "@shared/flow/review-gate";
+import { reviewHiddenByAuthor } from "@shared/flow/finish-gate";
 import { isSystemScreenHidden } from "@shared/flow/page-sequence";
 import {
   buildRouterHubHtml,
@@ -180,6 +181,9 @@ interface SectionConditionsState {
 }
 
 const NO_SECTION_CONDITIONS: SectionConditionsState = { policy: null, byTopic: {} };
+
+/** PRD-73: the обзор action rendered inert while the finish is blocked. */
+const FINISH_REVIEW_BLOCKED: readonly string[] = ["finish-review"];
 
 /**
  * Reads `sectionConditions` / `passDecisionPolicy` off a start or resume attempt payload.
@@ -794,6 +798,8 @@ export default function TakeTestPage() {
     skipReviewWhenComplete: boolean;
     /** PRD-67: leaving a started section with a time limit closes it. */
     closeSectionOnLeave: boolean;
+    /** PRD-73: the обзор's finish stays disabled while the scope has an unanswered question. */
+    requireAllAnsweredToFinish: boolean;
     answerCommitScope: "test" | "section";
   }>({
     allowReturnToUnanswered: false,
@@ -803,6 +809,7 @@ export default function TakeTestPage() {
     showSectionResults: true,
     skipReviewWhenComplete: false,
     closeSectionOnLeave: false,
+    requireAllAnsweredToFinish: false,
     answerCommitScope: "test",
   });
   // PRD-34 (FR-01): настройки защиты текста задания. Как и navSettings, приходят с
@@ -1313,6 +1320,7 @@ export default function TakeTestPage() {
         showSectionResults: data.attempt.showSectionResults ?? true,
         skipReviewWhenComplete: data.attempt.skipReviewWhenComplete ?? false,
         closeSectionOnLeave: data.attempt.closeSectionOnLeave ?? false,
+        requireAllAnsweredToFinish: data.attempt.requireAllAnsweredToFinish ?? false,
         answerCommitScope: data.attempt.answerCommitScope ?? "test",
       });
       setProtectionSettings({
@@ -1544,6 +1552,7 @@ export default function TakeTestPage() {
       showSectionResults: data.showSectionResults ?? true,
       skipReviewWhenComplete: data.skipReviewWhenComplete ?? false,
       closeSectionOnLeave: data.closeSectionOnLeave ?? false,
+      requireAllAnsweredToFinish: data.requireAllAnsweredToFinish ?? false,
       answerCommitScope: data.answerCommitScope ?? "test",
     });
     setProtectionSettings({
@@ -2050,9 +2059,17 @@ export default function TakeTestPage() {
     () => isSystemScreenHidden(flowStructure.contentPages, "results"),
     [flowStructure.contentPages],
   );
-  /** Обзор: сперва спрашиваем, не скрыт ли экран, и лишь потом — есть ли там что делать. */
+  /**
+   * Обзор: сперва спрашиваем, не скрыт ли экран, и лишь потом — есть ли там что делать.
+   * PRD-73 §3.5: пока завершение запрещено, скрытие автора уступает — обзор остаётся
+   * единственным путём к пропущенным вопросам. Правило общее с пакетом (`finish-gate`).
+   */
   const wantsReview = (input: Parameters<typeof shouldShowReview>[0]) =>
-    !reviewScreenHidden && shouldShowReview(input);
+    !reviewHiddenByAuthor(reviewScreenHidden, {
+      requireAllAnsweredToFinish: navSettings.requireAllAnsweredToFinish,
+      allowReturnToUnanswered: input.allowReturnToUnanswered,
+      hasUnanswered: input.hasUnanswered,
+    }) && shouldShowReview(input);
 
   const isRouterMode = flowStructure.flowMode === "router_by_topics";
 
@@ -3451,6 +3468,9 @@ export default function TakeTestPage() {
       currentIndex: reviewFromButton ? currentIndex : -1,
       canReturn: reviewFromButton,
       backLabel: "Назад",
+      // PRD-73: the builder decides whether «Завершить …» may be used and, if not, says why.
+      requireAllAnsweredToFinish: navSettings.requireAllAnsweredToFinish,
+      allowReturnToUnanswered: navSettings.allowReturnToUnanswered,
     });
     // Sectional → finish the current section (freeze → section-results → next);
     // flat → finish the whole test.
@@ -3480,6 +3500,8 @@ export default function TakeTestPage() {
             state: { questionsProgress: built.questionsProgress },
             review: built.review,
           }}
+          // PRD-73 FR-04: any template's finish control renders inert while it is blocked.
+          disabledActions={built.review.finishBlocked ? FINISH_REVIEW_BLOCKED : undefined}
           onAction={(action) => {
             if (action.startsWith("goto:")) {
               const i = Number(action.slice("goto:".length));
@@ -3504,6 +3526,9 @@ export default function TakeTestPage() {
               setReviewFromButton(false);
               setShowReview(false);
             } else if (action === "finish-review") {
+              // PRD-73 FR-04: refused while blocked — a foreign template may hang the action
+              // on an element `disabled` does not stop. No confirm either (FR-07).
+              if (built.review.finishBlocked) return;
               // FR-09: confirm when finishing with unanswered questions.
               if (built.review.unansweredCount > 0) {
                 setFinishConfirm({ count: built.review.unansweredCount, label: built.review.finishLabel, onConfirm: doFinish });
