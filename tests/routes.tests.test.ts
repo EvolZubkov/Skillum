@@ -8,7 +8,7 @@
  *
  * Backward-compat scenarios for existing POST / PUT are also exercised.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
 import session from "express-session";
@@ -57,6 +57,8 @@ const { storageMock, serviceMock, dbRows } = vi.hoisted(() => ({
     createAdaptiveLevelLink: vi.fn(),
     getUser: vi.fn(),
     getUserRoles: vi.fn().mockResolvedValue(["administrator"]),
+    // Working grant of the reader on a test (canEditTest); none unless a test sets one.
+    getTestGrantForUser: vi.fn().mockResolvedValue(undefined),
     setTestOwner: vi.fn().mockResolvedValue(undefined),
     getTestAccessGrants: vi.fn().mockResolvedValue([]),
     getUserTestGrants: vi.fn().mockResolvedValue([]),
@@ -1165,5 +1167,82 @@ describe("PUT/DELETE /api/tests/:id/question-scoring/:questionId", () => {
     storageMock.deleteTestQuestionScoring.mockResolvedValue(false);
     const gone = await asAuthor(request(app).delete("/api/tests/test1/question-scoring/q1"));
     expect(gone.status).toBe(404);
+  });
+});
+
+// ─── Архив по области удаления (role-model 6.1) ─────────────────────────────
+// Держатель гранта `edit` правит и публикует чужой тест, но в архив его не убирает и из архива не
+// возвращает: это область удаления - владелец теста, владелец папки над ним, администратор. Раньше
+// `PATCH /status` и `POST /restore` стояли на праве правки, и редактор архивировал чужой тест.
+describe("архивирование и возврат из архива - только в области удаления", () => {
+  let app: express.Express;
+  const othersTest = { ...dbTest, ownerId: "owner-9", folderId: null };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    storageMock.getUser.mockResolvedValue(authorUser);
+    storageMock.getUserRoles.mockResolvedValue(["author"]);
+    storageMock.getTest.mockResolvedValue(othersTest);
+    storageMock.getTestGrantForUser.mockResolvedValue({ accessLevel: "edit" });
+    storageMock.getTestSections.mockResolvedValue([]);
+    storageMock.getAdaptiveTopicSettingsByTest.mockResolvedValue([]);
+    storageMock.getAdaptiveLevelsByTest.mockResolvedValue([]);
+    storageMock.patchTestStatus.mockResolvedValue({ ...othersTest, status: "archived" });
+    serviceMock.save.mockResolvedValue(othersTest);
+    app = makeApp();
+  });
+
+  afterEach(() => {
+    // Остальные наборы файла читают роль администратора по умолчанию.
+    storageMock.getUserRoles.mockResolvedValue(["administrator"]);
+    storageMock.getTestGrantForUser.mockResolvedValue(undefined);
+  });
+
+  it("редактор чужого теста не архивирует его через PATCH /status", async () => {
+    const res = await asAuthor(request(app).patch("/api/tests/test1/status").send({ status: "archived" }));
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("archive_owner_only");
+    expect(storageMock.patchTestStatus).not.toHaveBeenCalled();
+  });
+
+  it("редактор не возвращает тест из архива ни POST /restore, ни PATCH /status", async () => {
+    storageMock.getTest.mockResolvedValue({ ...othersTest, status: "archived" });
+    const restore = await asAuthor(request(app).post("/api/tests/test1/restore"));
+    expect(restore.status).toBe(403);
+    const patch = await asAuthor(request(app).patch("/api/tests/test1/status").send({ status: "draft" }));
+    expect(patch.status).toBe(403);
+    expect(storageMock.patchTestStatus).not.toHaveBeenCalled();
+  });
+
+  it("редактор не архивирует и не возвращает тест через сохранение PUT", async () => {
+    const archive = await asAuthor(request(app).put("/api/tests/test1").send({ title: "T", status: "archived" }));
+    expect(archive.status).toBe(403);
+    storageMock.getTest.mockResolvedValue({ ...othersTest, status: "archived" });
+    // Без поля `status` сохранение сделало бы архивный тест черновиком - это тоже возврат из архива.
+    const unarchive = await asAuthor(request(app).put("/api/tests/test1").send({ title: "T" }));
+    expect(unarchive.status).toBe(403);
+    expect(serviceMock.save).not.toHaveBeenCalled();
+  });
+
+  it("сохранение архивного теста с его статусом редактору доступно: граница не пересекается", async () => {
+    storageMock.getTest.mockResolvedValue({ ...othersTest, status: "archived" });
+    const res = await asAuthor(request(app).put("/api/tests/test1").send({ title: "T", status: "archived" }));
+    expect(res.status).not.toBe(403);
+    expect(serviceMock.save).toHaveBeenCalled();
+  });
+
+  it("смена статуса в пределах «черновик / опубликован» остаётся за правом правки", async () => {
+    storageMock.patchTestStatus.mockResolvedValue({ ...othersTest, status: "draft" });
+    storageMock.getTest.mockResolvedValue({ ...othersTest, status: "published" });
+    const res = await asAuthor(request(app).patch("/api/tests/test1/status").send({ status: "draft" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("владелец своего теста архивирует его", async () => {
+    storageMock.getTest.mockResolvedValue({ ...othersTest, ownerId: "author1" });
+    storageMock.getTestGrantForUser.mockResolvedValue(undefined);
+    const res = await asAuthor(request(app).patch("/api/tests/test1/status").send({ status: "archived" }));
+    expect(res.status).toBe(200);
+    expect(storageMock.patchTestStatus).toHaveBeenCalledWith("test1", "archived");
   });
 });

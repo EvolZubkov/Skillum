@@ -387,6 +387,39 @@ describe("<TestsListPage /> — owner column + action gating by role (PRD-13)", 
     expect(screen.queryByTestId("menu-access-t-1")).toBeNull();
   });
 
+  // role-model 6.1: архив и удаление - область удаления, а не правки.
+  it("an `edit` grantee of someone else's test sees neither «Архивировать» nor «Удалить тест»", async () => {
+    authMock.can = canForRoles([ROLES.AUTHOR]);
+    authMock.roles = [ROLES.AUTHOR];
+    authMock.userId = "current-user";
+    mockMany({
+      "/api/tests": [buildApiTestRow({ ownerId: "someone-else", canEdit: true, canDelete: false })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    fireEvent.click(screen.getByTestId("test-more-t-1"));
+    expect(screen.getByTestId("menu-edit-t-1")).toBeInTheDocument();
+    expect(screen.getByTestId("menu-move-t-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("menu-archive-t-1")).toBeNull();
+    expect(screen.queryByTestId("menu-delete-t-1")).toBeNull();
+  });
+
+  it("the owner of a test (canDelete=true) gets «Архивировать» and «Удалить тест»", async () => {
+    authMock.can = canForRoles([ROLES.AUTHOR]);
+    authMock.roles = [ROLES.AUTHOR];
+    authMock.userId = "current-user";
+    mockMany({
+      "/api/tests": [buildApiTestRow({ ownerId: "current-user", canEdit: true, canDelete: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    fireEvent.click(screen.getByTestId("test-more-t-1"));
+    expect(screen.getByTestId("menu-archive-t-1")).toBeInTheDocument();
+    expect(screen.getByTestId("menu-delete-t-1")).toBeInTheDocument();
+  });
+
   // PRD-52: рецензирование инициирует тот, кто правит тест, а не только владелец.
   it("«Отправить на рецензирование» shows for an author who edits a test they do not own", async () => {
     authMock.can = canForRoles([ROLES.AUTHOR]);

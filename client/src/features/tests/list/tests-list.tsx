@@ -154,6 +154,7 @@ function apiToEntry(row: ApiTestRow): TestListEntry {
     canAssign: (row as { canAssign?: boolean }).canAssign ?? true,
     canEdit: (row as { canEdit?: boolean }).canEdit,
     canReview: (row as { canReview?: boolean }).canReview,
+    canDelete: (row as { canDelete?: boolean }).canDelete,
   };
 }
 
@@ -355,6 +356,8 @@ export function TestsListPage(): React.JSX.Element {
     title: string;
     input: string;
     error: string | null;
+    /** Offer «Архивировать» in the dialog: the archive follows the delete scope (role-model 6.1). */
+    canArchive: boolean;
   } | null>(null);
 
   // Folder operations -------------------------------------------------------
@@ -420,6 +423,13 @@ export function TestsListPage(): React.JSX.Element {
    */
   const canInviteReviewersFor = (test: TestListEntry) =>
     canInviteReviewersCap && test.canEdit !== false;
+  /**
+   * May this user archive THIS test (role-model 6.1): the delete scope, not the edit one. The
+   * server answers 403 to an `edit` grantee, so the item is not offered to them.
+   */
+  const canArchiveFor = (test: TestListEntry) => can("tests.publish") && test.canDelete !== false;
+  /** May this user delete THIS test: the same object scope under the `tests.delete` capability. */
+  const canDeleteFor = (test: TestListEntry) => can("tests.delete") && test.canDelete !== false;
 
   // PRD-13: SCORM generation is developer/admin only — the author role holds the
   // debug run but NOT the export, so the two menu items are gated separately.
@@ -911,7 +921,7 @@ export function TestsListPage(): React.JSX.Element {
           }
           onCancel={() => setDeleteTestState(null)}
           onArchive={
-            can("tests.publish")
+            can("tests.publish") && deleteTestState.canArchive
               ? () => {
                   statusMutation.mutate({ id: deleteTestState.id, status: "archived" });
                   setDeleteTestState(null);
@@ -1320,33 +1330,41 @@ export function TestsListPage(): React.JSX.Element {
           <Folder size={14} />
           Переместить в папку
         </button>
-        <button
-          type="button"
-          className="dropdown-item"
-          role="menuitem"
-          onClick={() => {
-            setTestMenu(null);
-            statusMutation.mutate({ id: test.id, status: "archived" });
-          }}
-          data-testid={`menu-archive-${test.id}`}
-        >
-          <Archive size={14} />
-          Архивировать
-        </button>
-        <hr className="dropdown-sep" />
-        <button
-          type="button"
-          className="dropdown-item danger"
-          role="menuitem"
-          onClick={() => {
-            setTestMenu(null);
-            setDeleteTestState({ id: test.id, title: test.title, input: "", error: null });
-          }}
-          data-testid={`menu-delete-${test.id}`}
-        >
-          <Trash2 size={14} />
-          Удалить тест...
-        </button>
+        {canArchiveFor(test) && (
+          <button
+            type="button"
+            className="dropdown-item"
+            role="menuitem"
+            onClick={() => {
+              setTestMenu(null);
+              statusMutation.mutate({ id: test.id, status: "archived" });
+            }}
+            data-testid={`menu-archive-${test.id}`}
+          >
+            <Archive size={14} />
+            Архивировать
+          </button>
+        )}
+        {canDeleteFor(test) && (
+          <>
+            <hr className="dropdown-sep" />
+            <button
+              type="button"
+              className="dropdown-item danger"
+              role="menuitem"
+              onClick={() => {
+                setTestMenu(null);
+                setDeleteTestState({
+                  id: test.id, title: test.title, input: "", error: null, canArchive: canArchiveFor(test),
+                });
+              }}
+              data-testid={`menu-delete-${test.id}`}
+            >
+              <Trash2 size={14} />
+              Удалить тест...
+            </button>
+          </>
+        )}
       </div>
     );
   }

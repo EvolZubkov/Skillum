@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { isSimulation } from "@shared/questions/question-type";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -17,7 +17,9 @@ import { colorParamKeys } from "@shared/template/theme-params";
 import { resolveTemplateDir, resolveSystemScreenDir } from "../services/template-dir";
 import { requirePermission, requireUserContext } from "../middleware/auth";
 import { requireTestScope } from "../middleware/test-scope";
-import { listableTestScope, canGrantAccess, canAssignTest, canEditTest, canReviewTest, isAdminOrSuper } from "../services/test-access";
+import {
+  listableTestScope, canGrantAccess, canAssignTest, canDeleteTest, canEditTest, canReviewTest, isAdminOrSuper,
+} from "../services/test-access";
 import { folderRights, loadTestFolderNodes } from "../services/test-folder-access";
 import { accessPanelPeople, NOT_CONTENT_ACCESS_HOLDER, userMayHoldContentAccess } from "../services/access";
 import { ancestorChain, inheritedAccess } from "@shared/access";
@@ -538,6 +540,9 @@ router.get("/", requirePermission("tests.read"), async (req, res) => {
           // PRD-52: the reviewer window. True for anyone who may also edit, so the
           // client shows «Рецензировать» only when `canReview && !canEdit`.
           canReview: await canReviewTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
+          // Удаление, архивирование и возврат из архива: владелец теста, владелец папки над ним, администратор
+          // (role-model 6.1). По владельцу на клиенте не угадать - удалять может и владелец папки.
+          canDelete: await canDeleteTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test),
           sections: sectionsWithDetails,
           adaptiveSettings,
           publication,
@@ -1344,6 +1349,15 @@ router.put("/:id", requirePermission("tests.edit"), requireTestScope("edit"), as
       ? (req.body as { expectedVersion: number }).expectedVersion
       : undefined;
 
+    // Сохранение пишет статус тем же правилом, что `resolveStatus` сервиса: без поля `status` тест становится
+    // черновиком или опубликованным. Переход через границу архива этим путём - то же архивирование или возврат
+    // из архива, и область у него та же, что у `PATCH /status`.
+    const currentTest = await storage.getTest(req.params.id);
+    const nextStatus = status ?? (published ? "published" : "draft");
+    if (currentTest && crossesArchive(currentTest.status, nextStatus) && !(await ensureArchiveScope(req, res, currentTest))) {
+      return;
+    }
+
     // PRD-15 block C (FR-22/E-13): sections/levels may only cite visible topics.
     // FR-25 derived in-context read: topics already referenced by this test are
     // exempt, so a soft grant revoke does not block re-saving an existing test.
@@ -1523,6 +1537,35 @@ function publishInfeasibleBody(findings: PublishCheckFinding[]) {
   };
 }
 
+/**
+ * Пересекает ли смена статуса границу архива: в архив или из него.
+ *
+ * @param from - Статус теста до изменения.
+ * @param to - Статус после изменения.
+ * @returns `true`, если тест уходит в архив или возвращается из него.
+ */
+function crossesArchive(from: string | null | undefined, to: string): boolean {
+  return (from === "archived") !== (to === "archived");
+}
+
+/**
+ * Архивирование и возврат из архива - по области УДАЛЕНИЯ, а не правки (role-model 6.1): владелец теста,
+ * владелец папки над ним, администратор. Держатель гранта `edit` правит и публикует тест, но не убирает его
+ * из работы и не возвращает убранное владельцем. Смена статуса в пределах «черновик / опубликован» остаётся
+ * за правом правки.
+ *
+ * @returns `true`, если можно продолжать; иначе ответ 403 уже отправлен.
+ */
+async function ensureArchiveScope(
+  req: Request,
+  res: Response,
+  test: Parameters<typeof canDeleteTest>[2],
+): Promise<boolean> {
+  if (await canDeleteTest(req.effectiveRoles ?? [], req.currentUser?.id ?? "", test)) return true;
+  res.status(403).json({ error: "Forbidden", code: "archive_owner_only" });
+  return false;
+}
+
 // PATCH /api/tests/:id/status - Сменить статус (без инкремента версии, PRD-7 §9)
 router.patch("/:id/status", requirePermission("tests.publish"), requireTestScope("edit"), async (req, res) => {
   try {
@@ -1537,6 +1580,7 @@ router.patch("/:id/status", requirePermission("tests.publish"), requireTestScope
 
     const test = await storage.getTest(req.params.id);
     if (!test) return res.status(404).json({ error: "Test not found" });
+    if (crossesArchive(test.status, status as string) && !(await ensureArchiveScope(req, res, test))) return;
 
     if (expectedVersion !== undefined && test.version !== Number(expectedVersion)) {
       return res.status(409).json({
@@ -1609,6 +1653,7 @@ router.post("/:id/restore", requirePermission("tests.publish"), requireTestScope
     if (test.status !== "archived") {
       return res.status(400).json({ error: "Test is not archived", code: "not_archived" });
     }
+    if (!(await ensureArchiveScope(req, res, test))) return;
 
     await storage.patchTestStatus(req.params.id, "draft");
     res.status(204).end();

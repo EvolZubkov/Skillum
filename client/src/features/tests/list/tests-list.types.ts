@@ -65,6 +65,13 @@ export type TestListEntry = {
    * may also edit, so the row offers «Рецензировать» only when `canReview && !canEdit`.
    */
   canReview?: boolean;
+  /**
+   * May the reader delete, archive or restore THIS test? The owner of the test, the owner of a
+   * folder above it, an administrator (role-model 6.1) — not an `edit` grantee. Comes from the
+   * server's `canDeleteTest`: ownership alone is not enough to tell, a folder owner may delete too.
+   * Absence means «an older answer» and keeps the actions, like `canEdit`; the server still checks.
+   */
+  canDelete?: boolean;
 };
 
 export type FolderEntry = {
