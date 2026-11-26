@@ -26,6 +26,7 @@ import { initialsOf, when } from "./review-format";
 import { ReviewApprovalBlock, ReviewApprovalLegend } from "./review-approval-block";
 import { ReviewTab } from "./review-tab";
 import { useReviewApprovals } from "./use-review-approvals";
+import type { ReviewApprovalsView } from "./review-approval-api";
 import "./review-panel.css";
 
 export interface ReviewPanelProps {
@@ -46,6 +47,11 @@ export interface ReviewPanelProps {
   onNavigate?: (target: AnchorTarget, thread: ReviewThread) => void;
   /** Ветка, раскрытая по ссылке `?review=<id>`. */
   focusThreadId?: string;
+  /**
+   * Вид отметок «Согласовано»: окно рецензента передаёт `reviewer`, чтобы держатель гранта `review` с правом
+   * правки получил чек-боксы; отладчик автора оставляет `auto`.
+   */
+  approvalsView?: ReviewApprovalsView;
 }
 
 /** Подпись исхода ветки. */
@@ -57,13 +63,13 @@ function statusTag(thread: ReviewThread) {
 
 export function ReviewPanel({
   testId, mode, canResolve = false, currentUserId,
-  screenAnchor, screenTitle, anchorOptions, onNavigate, focusThreadId,
+  screenAnchor, screenTitle, anchorOptions, onNavigate, focusThreadId, approvalsView = "auto",
 }: ReviewPanelProps) {
   // The player window is a narrow inspector: thread actions collapse into one row with a «⋯» menu.
   const compact = mode === "player";
   const review = useReviewComments(testId);
   // Окно прогона: пункт «Согласование» в рейле есть, только когда есть рецензент, принявший приглашение.
-  const approvals = useReviewApprovals(testId, { enabled: mode === "player" });
+  const approvals = useReviewApprovals(testId, { enabled: mode === "player", view: approvalsView });
   const [composing, setComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [resolving, setResolving] = useState<{ id: string; status: "accepted" | "rejected" } | null>(null);
@@ -435,9 +441,14 @@ export function ReviewPanel({
         approvals.hasReviewers ? (
           <Stack gap={3}>
             {screenAnchor ? (
-              <ReviewApprovalBlock testId={testId} screenAnchor={screenAnchor} screenTitle={screenTitle} />
+              <ReviewApprovalBlock
+                testId={testId}
+                screenAnchor={screenAnchor}
+                screenTitle={screenTitle}
+                view={approvalsView}
+              />
             ) : null}
-            <ReviewApprovalLegend testId={testId} />
+            <ReviewApprovalLegend testId={testId} view={approvalsView} />
           </Stack>
         ) : undefined
       }

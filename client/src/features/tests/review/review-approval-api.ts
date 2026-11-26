@@ -44,11 +44,26 @@ export interface ReviewApprovalsResponse {
   reviewers?: ReviewerEntry[];
 }
 
-/** Ключ кэша отметок теста - общий для всех мест экрана. */
-export const reviewApprovalsKey = (testId: string) => ["tests", testId, "review-approvals"] as const;
+/**
+ * Какой вид отметок просит экран. `reviewer` - окно рецензирования: держатель гранта `review` получает вид
+ * рецензента, даже если у него есть право правки (администратор, соавтор). `auto` - вкладка редактора и отладчик
+ * автора: сервер решает по праву правки, как прежде.
+ */
+export type ReviewApprovalsView = "auto" | "reviewer";
 
-export async function fetchReviewApprovals(testId: string): Promise<ReviewApprovalsResponse> {
-  const res = await apiRequest("GET", `/api/tests/${testId}/review/approvals`);
+/** Префикс ключей отметок теста: сбрасывает кэш обоих видов разом. */
+export const reviewApprovalsPrefix = (testId: string) => ["tests", testId, "review-approvals"] as const;
+
+/** Ключ кэша отметок теста: общий для всех мест экрана с одним видом, у двух видов - разный. */
+export const reviewApprovalsKey = (testId: string, view: ReviewApprovalsView = "auto") =>
+  [...reviewApprovalsPrefix(testId), view] as const;
+
+export async function fetchReviewApprovals(
+  testId: string,
+  view: ReviewApprovalsView = "auto",
+): Promise<ReviewApprovalsResponse> {
+  const query = view === "reviewer" ? "?as=reviewer" : "";
+  const res = await apiRequest("GET", `/api/tests/${testId}/review/approvals${query}`);
   return (await res.json()) as ReviewApprovalsResponse;
 }
 

@@ -253,6 +253,26 @@ describe("окно прогона: рейл «Согласование / Ком�
     expect(await screen.findByTestId("review-rail-approval")).toBeInTheDocument();
   });
 
+  // Прод 2026-11-26: администратор с грантом `review` видел вид автора. Окно рецензента просит вид рецензента,
+  // отладчик автора - прежний; все места окна читают один вид, иначе блок и легенда разошлись бы.
+  it("окно рецензента запрашивает вид рецензента во всех местах панели", async () => {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "reviewer", approvals: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor, approvalsView: "reviewer" });
+    expect(await screen.findByTestId("review-approval-block")).toBeInTheDocument();
+    expect(screen.getByTestId("review-approval-legend")).toBeInTheDocument();
+    const views = approvalsApiMock.fetchReviewApprovals.mock.calls.map((call) => call[1]);
+    expect(views.length).toBeGreaterThan(0);
+    expect(views.every((view) => view === "reviewer")).toBe(true);
+  });
+
+  it("без указания вида (отладчик автора) запрашивается вид по праву правки", async () => {
+    approvalsApiMock.fetchReviewApprovals.mockResolvedValue({ viewer: "reviewer", approvals: [] });
+    renderPanel({ mode: "player", screenAnchor: anchor });
+    expect(await screen.findByTestId("review-approval-block")).toBeInTheDocument();
+    const views = approvalsApiMock.fetchReviewApprovals.mock.calls.map((call) => call[1]);
+    expect(views.every((view) => view === "auto")).toBe(true);
+  });
+
   it("пока никто не принял приглашение, пункта «Согласование» нет, остаются комментарии", async () => {
     approvalsApiMock.fetchReviewApprovals.mockResolvedValue({
       viewer: "author", approvals: [], reviewers: [{ userId: "r1", name: "Ирина Петрова", accepted: false }],

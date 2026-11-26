@@ -129,13 +129,22 @@ export async function inviteReviewers(opts: ReviewInviteOptions): Promise<Review
     try {
       const { user, created } = await resolveReviewer(row, { actorId, storage });
 
+      // Владелец теста согласование принимает, а не даёт: свой тест он не согласует.
+      // Список кандидатов его уже не предлагает, правило здесь - для списка из файла.
+      if (test.ownerId && test.ownerId === user.id) {
+        report.failed.push({
+          email: row.email ?? user.email ?? row.userId ?? "",
+          reason: "Владелец теста не может быть его рецензентом",
+        });
+        continue;
+      }
+
       // Грант рецензирования живёт в СВОЁМ слоте рядом с рабочим (PRD-52, 14.8):
-      // методист с `assign` получает `review` вторым грантом и назначать не перестаёт.
-      const existingGrant = await storage.getTestGrantForUser(testId, user.id);
-      const reviewGrant = await storage.getTestReviewGrant(testId, user.id);
-      // Уже имеющийся edit-доступ не понижаем до `review`: у автора теста и так
-      // есть всё, что даёт рецензирование, а понижение отняло бы у него правку.
-      const hadAccess = Boolean(reviewGrant) || existingGrant?.accessLevel === "edit";
+      // методист с `assign` получает `review` вторым грантом и назначать не перестаёт,
+      // соавтор с `edit` - тоже, и правку не теряет. Именно грант `review` делает
+      // человека рецензентом в окне рецензирования: без него держатель права правки
+      // видел бы там вид автора, без отметок «Согласовано».
+      const hadAccess = Boolean(await storage.getTestReviewGrant(testId, user.id));
       if (!hadAccess) {
         await storage.upsertTestAccessGrant({
           testId, userId: user.id, accessLevel: "review", grantedBy: actorId,

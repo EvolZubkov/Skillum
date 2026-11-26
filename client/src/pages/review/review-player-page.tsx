@@ -50,7 +50,8 @@ export default function ReviewPlayerPage() {
   const screenAnchor = useScreenAnchor(frameRef, snap);
   const screenTitle = useScreenTitle(frameRef, snap, screenAnchor);
   // PRD-52: бейджи «Согласовано» на карте вопросов в кадре пакета - только собственные отметки рецензента.
-  useReviewApprovalMarks(frameRef, testId, snap);
+  // Вид рецензента: держатель гранта `review` с правом правки (администратор, соавтор) иначе видел бы вид автора.
+  useReviewApprovalMarks(frameRef, testId, snap, "reviewer");
 
   // Снимок инспектора снимается по тику с ЖИВОГО рантайма пакета: подписаться не на
   // что — пакет ничего не публикует наружу, кроме своих глобалей. Тем же тиком
@@ -193,7 +194,13 @@ export default function ReviewPlayerPage() {
           />
           <div className={"dbg__ins-body" + (tab === "comments" ? " dbg__ins-body--flush" : "")}>
             {tab === "comments" ? (
-              <ReviewPanel testId={testId} mode="player" screenAnchor={screenAnchor} screenTitle={screenTitle} />
+              <ReviewPanel
+                testId={testId}
+                mode="player"
+                screenAnchor={screenAnchor}
+                screenTitle={screenTitle}
+                approvalsView="reviewer"
+              />
             ) : !snap ? (
               <PanelEmpty text="Запустите пакет — здесь появятся данные прогона." />
             ) : fullDraw ? (

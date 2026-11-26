@@ -15,6 +15,7 @@ import type { ApprovalBadge } from "@shared/review/approval-state";
 import { deliveredQuestionIds } from "./delivery-order";
 import { badgeOfQuestion } from "./review-approval-model";
 import { useReviewApprovals } from "./use-review-approvals";
+import type { ReviewApprovalsView } from "./review-approval-api";
 
 export function useApprovalMarks(
   frameRef: RefObject<HTMLIFrameElement | null>,
@@ -64,8 +65,10 @@ export function useReviewApprovalMarks(
   frameRef: RefObject<HTMLIFrameElement | null>,
   testId: string,
   tick: unknown,
+  /** Вид отметок: окно рецензента передаёт `reviewer`, отладчик автора - `auto`. */
+  view: ReviewApprovalsView = "auto",
 ): void {
-  const { viewer, approvals, circle, hasReviewers } = useReviewApprovals(testId);
+  const { viewer, approvals, circle, hasReviewers } = useReviewApprovals(testId, { view });
   const circleKey = circle.map((r) => r.userId).join(",");
   const badgeOf = useCallback(
     (questionId: string) =>

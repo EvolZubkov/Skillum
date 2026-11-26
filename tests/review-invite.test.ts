@@ -4,8 +4,9 @@
  * PRD-52 FR-06/FR-07: приглашение рецензентов. Проверяется, что человек получает
  * ГРАНТ на рецензирование и персональную ссылку с назначением «рецензирование», а
  * не назначение на прохождение, — и что уже имеющийся edit-доступ при этом не
- * понижается: у владельца теста рецензирование и так есть, а понижение отняло бы
- * у него правку.
+ * понижается: грант `review` ложится вторым, в свой слот, и именно он делает
+ * соавтора рецензентом в окне рецензирования. Владелец теста рецензентом своего
+ * теста не становится: согласование он принимает, а не даёт.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -109,11 +110,30 @@ describe("inviteReviewers", () => {
     expect(report.invited).toBe(0);
   });
 
-  it("edit-доступ не понижается до рецензирования", async () => {
+  // Без гранта `review` соавтор в окне рецензирования видел вид автора и не мог согласовать.
+  it("соавтору с edit-доступом выдаёт рецензирование ВТОРЫМ грантом, правку не трогает", async () => {
     storageMock.getUserByEmail.mockResolvedValue({ id: "author-2", email: "co@x.test", name: "Соавтор" });
     storageMock.getTestGrantForUser.mockResolvedValue({ accessLevel: "edit" });
-    await run([{ email: "co@x.test" }]);
+    const report = await run([{ email: "co@x.test" }]);
+    expect(storageMock.upsertTestAccessGrant).toHaveBeenCalledTimes(1);
+    expect(storageMock.upsertTestAccessGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author-2", accessLevel: "review" }),
+    );
+    expect(report.invited).toBe(1);
+    expect(report.alreadyHadAccess).toBe(0);
+  });
+
+  it("владельца теста рецензентом не делает: ни гранта, ни ссылки, ни письма, а строка в отчёте", async () => {
+    storageMock.getTest.mockResolvedValue({ id: "t1", title: "Сертификационный тест", ownerId: "owner-1" });
+    storageMock.getUserByEmail.mockResolvedValue({ id: "owner-1", email: "owner@x.test", name: "Владелец" });
+    const report = await run([{ email: "owner@x.test" }]);
     expect(storageMock.upsertTestAccessGrant).not.toHaveBeenCalled();
+    expect(storageMock.createAssignmentAccessToken).not.toHaveBeenCalled();
+    expect(emailMock.sendReviewInviteEmail).not.toHaveBeenCalled();
+    expect(report.invited).toBe(0);
+    expect(report.failed).toEqual([
+      { email: "owner@x.test", reason: "Владелец теста не может быть его рецензентом" },
+    ]);
   });
 
   // PRD-52 14.8: назначать и рецензировать один человек может одновременно.

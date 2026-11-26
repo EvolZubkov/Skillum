@@ -5,21 +5,30 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  fetchReviewApprovals, putReviewApproval, deleteReviewApproval, reviewApprovalsKey,
+  fetchReviewApprovals, putReviewApproval, deleteReviewApproval, reviewApprovalsKey, reviewApprovalsPrefix,
+  type ReviewApprovalsView,
 } from "./review-approval-api";
 import type { ReviewAnchor } from "@shared/review/anchor";
 
-export function useReviewApprovals(testId: string, options: { enabled?: boolean } = {}) {
+export interface UseReviewApprovalsOptions {
+  enabled?: boolean;
+  /** Вид отметок: окно рецензирования просит `reviewer`, остальные экраны - `auto` (по умолчанию). */
+  view?: ReviewApprovalsView;
+}
+
+export function useReviewApprovals(testId: string, options: UseReviewApprovalsOptions = {}) {
   const queryClient = useQueryClient();
   const enabled = options.enabled !== false && Boolean(testId);
+  const view = options.view ?? "auto";
 
   const query = useQuery({
-    queryKey: reviewApprovalsKey(testId),
-    queryFn: () => fetchReviewApprovals(testId),
+    queryKey: reviewApprovalsKey(testId, view),
+    queryFn: () => fetchReviewApprovals(testId, view),
     enabled,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: reviewApprovalsKey(testId) });
+  // Сбрасывается кэш обоих видов: у одного человека могут быть открыты оба.
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: reviewApprovalsPrefix(testId) });
 
   const approve = useMutation({
     mutationFn: (anchor: ReviewAnchor) => putReviewApproval(testId, anchor),

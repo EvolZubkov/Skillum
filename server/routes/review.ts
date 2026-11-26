@@ -306,13 +306,30 @@ router.post("/:id/review/comments/:commentId/reopen", ...resolveGate, async (req
 // фильтр выполняется здесь, а не на клиенте. Ставит и снимает отметку только держатель гранта `review`:
 // автор и владелец теста согласование принимают, а не дают.
 
+/**
+ * Кто смотрит отметки: автор (все отметки и рецензенты) или рецензент (только свои, с правом ставить).
+ *
+ * Рецензентом человека делает грант `review`, а не отсутствие права правки. Право правки бывает у приглашённого
+ * и без авторства: у администратора по роли, у соавтора по гранту или по папке. Окно рецензирования поэтому
+ * просит вид рецензента (`as=reviewer`), и держатель гранта его получает. Сессия по ссылке рецензента получает
+ * его всегда: из неё в редактор не попасть, и вид автора ей не нужен. Без гранта остаётся вид автора, как
+ * прежде; вкладка редактора параметра не передаёт и сводку автора не теряет.
+ */
+async function approvalsViewer(req: Request): Promise<"author" | "reviewer"> {
+  const userId = req.currentUser!.id;
+  const asReviewer = req.query.as === "reviewer" || req.session?.magic?.purpose === "review";
+  if (asReviewer && (await storage.getTestReviewGrant(req.params.id, userId))) return "reviewer";
+  const test = await storage.getTest(req.params.id);
+  const canEdit = Boolean(test) && (await canEditTest(req.effectiveRoles ?? [], userId, test!));
+  return canEdit ? "author" : "reviewer";
+}
+
 // GET /api/tests/:id/review/approvals — отметки теста с пометками состояния якоря.
 router.get("/:id/review/approvals", ...reviewGate, async (req: Request, res: Response) => {
   try {
     const userId = req.currentUser!.id;
-    const test = await storage.getTest(req.params.id);
-    const isAuthor = Boolean(test) && (await canEditTest(req.effectiveRoles ?? [], userId, test!));
-    const viewer = isAuthor ? "author" : "reviewer";
+    const viewer = await approvalsViewer(req);
+    const isAuthor = viewer === "author";
     await noteReviewerAccepted(req.params.id, userId);
 
     const rows = await storage.listReviewApprovals(

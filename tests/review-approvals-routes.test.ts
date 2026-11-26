@@ -66,12 +66,16 @@ import reviewRouter from "../server/routes/review";
 
 const TEST = { id: "t1", ownerId: "author-1" };
 
-/** Приложение с сессией фиксированного пользователя. */
-function makeApp(userId: string) {
+/** Приложение с сессией фиксированного пользователя; `magic` - сессия, открытая ссылкой. */
+function makeApp(userId: string, magic?: { testId: string; purpose: "review" | "attempt" }) {
   const app = express();
   app.use(express.json());
   app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-  app.use((req, _res, next) => { req.session.userId = userId; next(); });
+  app.use((req, _res, next) => {
+    req.session.userId = userId;
+    if (magic) req.session.magic = { assignmentId: null, ...magic };
+    next();
+  });
   app.use("/api/tests", reviewRouter);
   return app;
 }
@@ -218,6 +222,51 @@ describe("GET /:id/review/approvals", () => {
     accessMock.canReviewTest.mockResolvedValue(false);
     const res = await request(expertApp()).get("/api/tests/t1/review/approvals");
     expect(res.status).toBe(403);
+  });
+});
+
+// Прод 2026-11-26: администратор с грантом `review` пришёл по ссылке и увидел вид автора - без чек-боксов.
+// Рецензентом делает грант, а не отсутствие права правки.
+describe("GET /:id/review/approvals - кто смотрит при праве правки и гранте review", () => {
+  beforeEach(() => {
+    // Право правки у всех: администратор по роли, соавтор по гранту или по папке.
+    accessMock.canEditTest.mockResolvedValue(true);
+  });
+
+  it("окну рецензирования (as=reviewer) держатель гранта получает вид рецензента и только свои строки", async () => {
+    const res = await request(expertApp()).get("/api/tests/t1/review/approvals?as=reviewer");
+    expect(res.status).toBe(200);
+    expect(res.body.viewer).toBe("reviewer");
+    expect(res.body.approvals.map((a: { reviewerId: string }) => a.reviewerId)).toEqual(["expert-1"]);
+    expect(res.body.reviewers).toBeUndefined();
+    expect(storageMock.listReviewApprovals).toHaveBeenCalledWith("t1", { reviewerId: "expert-1" });
+  });
+
+  it("сессии по ссылке рецензента вид рецензента отдаётся и без параметра", async () => {
+    const app = makeApp("expert-1", { testId: "t1", purpose: "review" });
+    const res = await request(app).get("/api/tests/t1/review/approvals");
+    expect(res.body.viewer).toBe("reviewer");
+  });
+
+  it("без параметра (вкладка редактора) держатель права правки получает вид автора, как прежде", async () => {
+    const res = await request(expertApp()).get("/api/tests/t1/review/approvals");
+    expect(res.body.viewer).toBe("author");
+    expect(res.body.reviewers).toBeDefined();
+  });
+
+  it("as=reviewer без гранта review оставляет вид автора: просьба вида прав не даёт", async () => {
+    const res = await request(authorApp()).get("/api/tests/t1/review/approvals?as=reviewer");
+    expect(res.body.viewer).toBe("author");
+  });
+
+  it("держатель гранта с правом правки может поставить отметку", async () => {
+    const res = await request(expertApp())
+      .put("/api/tests/t1/review/approvals")
+      .send({ anchor: { kind: "question", questionId: "q1", topicId: "tp1" } });
+    expect(res.status).toBe(200);
+    expect(storageMock.upsertReviewApproval).toHaveBeenCalledWith(
+      expect.objectContaining({ reviewerId: "expert-1", anchorKind: "question" }),
+    );
   });
 });
 

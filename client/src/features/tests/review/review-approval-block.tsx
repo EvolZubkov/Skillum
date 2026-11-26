@@ -12,6 +12,7 @@ import type { ReviewAnchor } from "@shared/review/anchor";
 import { approvalsAt } from "./review-approval-model";
 import { ReviewApprovalCard } from "./review-approval-card";
 import { useReviewApprovals } from "./use-review-approvals";
+import type { ReviewApprovalsView } from "./review-approval-api";
 import type { ApprovalBadge } from "@shared/review/approval-state";
 
 export interface ReviewApprovalBlockProps {
@@ -20,10 +21,12 @@ export interface ReviewApprovalBlockProps {
   screenAnchor: ReviewAnchor;
   /** Заголовок карточки текущего вопроса; по умолчанию «Текущий вопрос». */
   screenTitle?: string;
+  /** Вид отметок; окно рецензента передаёт `reviewer`. */
+  view?: ReviewApprovalsView;
 }
 
-export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle }: ReviewApprovalBlockProps) {
-  const { viewer, approvals, circle, hasReviewers, approve, withdraw } = useReviewApprovals(testId);
+export function ReviewApprovalBlock({ testId, screenAnchor, screenTitle, view }: ReviewApprovalBlockProps) {
+  const { viewer, approvals, circle, hasReviewers, approve, withdraw } = useReviewApprovals(testId, { view });
   if (!viewer || !hasReviewers) return null;
 
   const busy = approve.isPending || withdraw.isPending;
@@ -78,8 +81,8 @@ const LEGEND: Record<"reviewer" | "author", { badge: ApprovalBadge; text: string
  * Легенда бейджей на карте вопросов, внизу вкладки. В строке карты при листании легенды нет, поэтому значения
  * бейджей объясняются здесь и в панели «Все вопросы».
  */
-export function ReviewApprovalLegend({ testId }: { testId: string }) {
-  const { viewer, hasReviewers } = useReviewApprovals(testId);
+export function ReviewApprovalLegend({ testId, view }: { testId: string; view?: ReviewApprovalsView }) {
+  const { viewer, hasReviewers } = useReviewApprovals(testId, { view });
   if (!viewer || !hasReviewers) return null;
   return (
     <Stack gap={2} data-testid="review-approval-legend">
