@@ -5,8 +5,9 @@
 только пользователям — 2026-06-12; роль «Разработчик» и разделение отладки
 и генерации SCORM — 2026-07-30; право `media.manage` для медиатеки — 2026-08-02;
 право `tests.review.invite` для приглашения рецензентов — 2026-09-10; чтение темы
-в контексте теста и права на действия с темой в интерфейсе — 2026-11-24)
-**Дата актуализации:** 2026-11-24
+в контексте теста и права на действия с темой в интерфейсе — 2026-11-24; область
+`tests.review.invite` — кто правит тест — 2026-11-26)
+**Дата актуализации:** 2026-11-26
 **Связанные документы:** [BRD](../brd-access-control.md),
 [PRD-13](../prd-13/role-based-access-control.md),
 [BRD владения контентом](../brd-content-ownership.md),
@@ -98,7 +99,7 @@
 | `tests.export.scorm` | Экспорт теста в SCORM-пакет | по доступу (edit) |
 | `tests.debug.play` | Тестовый прогон теста во встроенном плеере-отладчике (PRD-18) | по доступу (edit) |
 | `tests.access.grant` | Выдача и отзыв грантов доступа к тесту | владелец теста; AD/SU — любые |
-| `tests.review.invite` | Приглашение рецензентов теста: грант `review`, персональная ссылка, заведение внешней учётной записи рецензента (PRD-52) | владелец теста; AD/SU — любые |
+| `tests.review.invite` | Приглашение и отзыв рецензентов теста: грант `review`, персональная ссылка, заведение внешней учётной записи рецензента (PRD-52) | edit (владелец, грант `edit`, правка от папки); AD/SU — любые |
 | `tests.owner.change` | Смена владельца теста | нет (только AD/SU) |
 | `templates.read` | Чтение каталога активных шаблонов для выбора в тесте | нет |
 | `adminTemplates.manage` | Жизненный цикл шаблонов: загрузка, активация, удаление, экспорт | нет |
@@ -172,9 +173,13 @@
 - `topics.access.grant` для AU — только на свои темы (владелец); AD/SU — на любые.
 - `tests.access.grant` для AU — только на свои тесты (владелец); AD/SU — на любые
   (унификация PRD-15, BRC-27).
-- `tests.review.invite` — отдельное право с той же областью, что `tests.access.grant`
-  (владелец; AD/SU — любые). Отделено от него сознательно: выдать человеку доступ к тесту
-  руками и позвать его рецензировать — разные действия. У MG права нет: рецензирование не
+- `tests.review.invite` — отдельное право с областью правки теста: рецензирование инициирует
+  тот, кто правит тест, — владелец, держатель гранта `edit` (прямого или унаследованного от
+  папки), AD/SU (решение владельца 2026-11-26; до него область совпадала с `tests.access.grant`,
+  и редактор чужого теста не мог позвать рецензентов). Та же область открывает список
+  приглашённых и отзыв рецензента. Отделено от `tests.access.grant` сознательно: выдать
+  человеку доступ к тесту руками и позвать его рецензировать — разные действия, и рабочий
+  доступ по-прежнему выдаёт только владелец. У MG права нет: рецензирование не
   входит в дорожку назначений. Заведение внешней учётной записи рецензента входит в это
   право и НЕ требует `users.create` — без учётной записи комментарий нечем подписать
   (PRD-52 раздел 14).
@@ -636,7 +641,7 @@ applyRoleChange(actor, target, requestedRoles):
 | `GET /api/tests/:id/export/scorm` | `tests.export.scorm` | edit |
 | `POST/GET/DELETE /api/tests/:id/debug/*` | `tests.debug.play` | edit (PRD-18) |
 | `GET /api/tests/:id/access`, `POST /api/tests/:id/access`, `DELETE /api/tests/:id/access/:userId` | `tests.access.grant` | владелец теста; AD/SU — любые |
-| `POST /api/tests/:id/review/preview`, `POST /api/tests/:id/review/invite` | `tests.review.invite` | владелец теста; AD/SU — любые (PRD-52) |
+| `POST /api/tests/:id/review/preview`, `POST /api/tests/:id/review/invite`, `GET /api/tests/:id/review/candidates`, `GET/DELETE /api/tests/:id/review/reviewers` | `tests.review.invite` | edit (PRD-52) |
 | `PATCH /api/tests/:id/owner` | `tests.owner.change` | — |
 | `GET /api/tests/:id/design`, `GET /api/tests/:id/screen-template/:screen` | сессия | область чтения теста, включая назначение (6.4) |
 | `POST /api/tests/:id/republish-force` | `tests.publish` | edit (экстренная переопубликация, PRD-15) |
