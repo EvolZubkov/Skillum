@@ -77,6 +77,9 @@ vi.mock("../server/scorm/debug-player/assets", () => ({
   readInspectorComputeJs: runMock.readInspectorComputeJs,
 }));
 
+const inviteMock = vi.hoisted(() => ({ inviteReviewers: vi.fn() }));
+vi.mock("../server/services/review-invite", () => inviteMock);
+
 import reviewRouter from "../server/routes/review";
 
 const TEST = { id: "t1", ownerId: "author-1" };
@@ -431,7 +434,7 @@ describe("список рецензентов", () => {
     expect(res.body[0]).toMatchObject({ email: "expert@x.test", name: "Ирина", status: "new" });
   });
 
-  it("не владельцу теста отказывает", async () => {
+  it("тому, кто тест не правит, отказывает", async () => {
     const res = await request(makeApp("author-2"))
       .post("/api/tests/t1/review/preview")
       .send({ rows: [{ index: 0, email: "expert@x.test", name: null }] });
@@ -462,7 +465,7 @@ describe("список рецензентов", () => {
     expect(res.status).toBe(204);
   });
 
-  it("отметку о выгрузке не владельцу не ставит", async () => {
+  it("отметку о выгрузке тому, кто тест не правит, не ставит", async () => {
     const res = await request(makeApp("author-2"))
       .post("/api/tests/t1/review/links-exported")
       .send({ count: 3 });
@@ -502,7 +505,7 @@ describe("кандидаты в рецензенты", () => {
     expect(Object.keys(res.body[0]).sort()).toEqual(["email", "id", "name", "status"]);
   });
 
-  it("не владельцу теста отказывает", async () => {
+  it("тому, кто тест не правит, отказывает", async () => {
     const res = await request(makeApp("author-2")).get("/api/tests/t1/review/candidates");
 
     expect(res.status).toBe(403);
@@ -514,5 +517,70 @@ describe("кандидаты в рецензенты", () => {
     const res = await request(authorApp()).get("/api/tests/t1/review/candidates");
 
     expect(res.status).toBe(404);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Рецензирование инициирует тот, кто правит тест: владелец, держатель гранта `edit`
+// (прямого или унаследованного от папки), администратор. Раньше маршруты стояли на
+// `canGrantAccess`, и редактор чужого теста не мог позвать рецензентов вовсе.
+describe("рецензентов зовёт тот, кто правит тест, а не только владелец", () => {
+  /** Редактор чужого теста: правка есть, владения нет. */
+  const editorApp = () => makeApp("editor-1");
+
+  beforeEach(() => {
+    accessMock.canEditTest.mockImplementation(
+      async (_r: unknown, userId: string) => userId === "author-1" || userId === "editor-1",
+    );
+    storageMock.getUserByEmail.mockResolvedValue(undefined);
+    storageMock.getTestAssignments.mockResolvedValue([]);
+    storageMock.getGroupUsers.mockResolvedValue([]);
+    storageMock.getUsers.mockResolvedValue([
+      { id: "learner-1", email: "l1@x", name: "Анна", status: "active" },
+      { id: "author-1", email: "a1@x", name: "Автор Теста", status: "active" },
+      { id: "editor-1", email: "e1@x", name: "Редактор", status: "active" },
+    ]);
+    inviteMock.inviteReviewers.mockResolvedValue({ invited: 1, alreadyHadAccess: 0, results: [], failed: [] });
+  });
+
+  it("приглашает рецензента", async () => {
+    const res = await request(editorApp())
+      .post("/api/tests/t1/review/invite")
+      .send({ rows: [{ email: "expert@x.test" }] });
+    expect(res.status).toBe(200);
+    expect(inviteMock.inviteReviewers).toHaveBeenCalledWith(
+      expect.objectContaining({ testId: "t1", actorId: "editor-1" }),
+    );
+  });
+
+  it("разбирает список рецензентов", async () => {
+    const res = await request(editorApp())
+      .post("/api/tests/t1/review/preview")
+      .send({ rows: [{ index: 0, email: "expert@x.test", name: null }] });
+    expect(res.status).toBe(200);
+  });
+
+  it("получает кандидатов без себя и без владельца теста", async () => {
+    const res = await request(editorApp()).get("/api/tests/t1/review/candidates");
+    expect(res.status).toBe(200);
+    expect(res.body.map((u: { id: string }) => u.id)).toEqual(["learner-1"]);
+  });
+
+  it("видит приглашённых и отзывает рецензента", async () => {
+    expect((await request(editorApp()).get("/api/tests/t1/review/reviewers")).status).toBe(200);
+    const res = await request(editorApp()).delete("/api/tests/t1/review/reviewers/expert-1");
+    expect(res.status).toBe(200);
+    expect(storageMock.removeTestAccessGrant).toHaveBeenCalledWith("t1", "expert-1", "review");
+  });
+
+  it("тому, кто тест не правит, приглашение и отзыв закрыты", async () => {
+    const invite = await request(makeApp("author-2"))
+      .post("/api/tests/t1/review/invite")
+      .send({ rows: [{ email: "expert@x.test" }] });
+    expect(invite.status).toBe(403);
+    expect(inviteMock.inviteReviewers).not.toHaveBeenCalled();
+    const revoke = await request(makeApp("author-2")).delete("/api/tests/t1/review/reviewers/expert-1");
+    expect(revoke.status).toBe(403);
+    expect(storageMock.removeTestAccessGrant).not.toHaveBeenCalled();
   });
 });

@@ -412,6 +412,14 @@ export function TestsListPage(): React.JSX.Element {
   /** May this user grant access to THIS test (object scope, BRC-27). */
   const canGrantAccessFor = (test: TestListEntry) =>
     canGrantAccessCap && (isAdmin || test.ownerId === user?.id);
+  const canInviteReviewersCap = can("tests.review.invite");
+  /**
+   * May this user send THIS test out for review (PRD-52): whoever edits it — the owner,
+   * an `edit` grantee (direct or via a folder), an administrator. `canEdit` comes from the
+   * server's `canEditTest`, the same check the review routes run.
+   */
+  const canInviteReviewersFor = (test: TestListEntry) =>
+    canInviteReviewersCap && test.canEdit !== false;
 
   // PRD-13: SCORM generation is developer/admin only — the author role holds the
   // debug run but NOT the export, so the two menu items are gated separately.
@@ -1197,7 +1205,7 @@ export function TestsListPage(): React.JSX.Element {
             Выполнить отладку
           </button>
         )}
-        {canGrantAccessFor(test) && (
+        {canInviteReviewersFor(test) && (
           <button
             type="button"
             className="dropdown-item"

@@ -387,6 +387,36 @@ describe("<TestsListPage /> — owner column + action gating by role (PRD-13)", 
     expect(screen.queryByTestId("menu-access-t-1")).toBeNull();
   });
 
+  // PRD-52: рецензирование инициирует тот, кто правит тест, а не только владелец.
+  it("«Отправить на рецензирование» shows for an author who edits a test they do not own", async () => {
+    authMock.can = canForRoles([ROLES.AUTHOR]);
+    authMock.roles = [ROLES.AUTHOR];
+    authMock.userId = "current-user";
+    mockMany({
+      "/api/tests": [buildApiTestRow({ ownerId: "someone-else", canEdit: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    fireEvent.click(screen.getByTestId("test-more-t-1"));
+    expect(screen.getByTestId("menu-review-t-1")).toBeInTheDocument();
+    // «Общий доступ» — по-прежнему только владельцу.
+    expect(screen.queryByTestId("menu-access-t-1")).toBeNull();
+  });
+
+  it("«Отправить на рецензирование» is hidden when the test is not editable (canEdit=false)", async () => {
+    authMock.can = canForRoles([ROLES.AUTHOR]);
+    authMock.roles = [ROLES.AUTHOR];
+    authMock.userId = "current-user";
+    mockMany({
+      "/api/tests": [buildApiTestRow({ ownerId: "someone-else", canEdit: false, canReview: true })],
+      "/api/test-folders": [],
+    });
+    renderPage();
+    await waitFor(() => screen.getByTestId("test-row-t-1"));
+    expect(screen.queryByTestId("menu-review-t-1")).toBeNull();
+  });
+
   it("an author gets «Выполнить отладку» and «Сохранить как…» without the SCORM format", async () => {
     authMock.can = canForRoles([ROLES.AUTHOR]);
     authMock.roles = [ROLES.AUTHOR];

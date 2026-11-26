@@ -57,7 +57,7 @@ const AUTHOR_CAPABILITIES: readonly Capability[] = [
   "tests.debug.play",
   // PRD-15 BRC-27: an author grants access to tests they own (object-scoped).
   "tests.access.grant",
-  // PRD-52 раздел 14: an author sends their own test out for review. Separate
+  // PRD-52 раздел 14: an author sends a test they edit out for review. Separate
   // from `tests.access.grant` on purpose — handing someone access by hand and
   // calling them in to review are different acts — and separate from
   // `assignments.manage`, which the author does NOT hold: riding on it made the

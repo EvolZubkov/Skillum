@@ -41,7 +41,7 @@ import {
   readGivenRows,
   recipientRefusalMessage,
 } from "../services/recipient-list";
-import { canEditTest, canGrantAccess } from "../services/test-access";
+import { canEditTest } from "../services/test-access";
 import { readShimJs, readInspectorComputeJs } from "../scorm/debug-player/assets";
 import { anchorKeyOf, resolveAnchorTarget, type ReviewAnchor, type ReviewAnchorKind } from "@shared/review/anchor";
 import { audit, logger } from "../logger";
@@ -463,12 +463,15 @@ const REVIEW_LINK_DAYS = 30;
 const reviewerListUpload = workbookUploadSingle("file");
 
 /**
- * Гейт списка рецензентов: право `tests.review.invite` даёт действие в принципе,
- * `canGrantAccess` — на ЭТОТ тест (владелец; администратор — на любой).
+ * Гейт рецензентов теста: право `tests.review.invite` даёт действие в принципе,
+ * `canEditTest` — на ЭТОТ тест. Рецензирование инициирует тот, кто правит тест:
+ * владелец, держатель гранта `edit`, обладатель правки, унаследованной от папки,
+ * администратор. Выдача рабочего доступа («Общий доступ») сюда не входит и остаётся
+ * за `canGrantAccess`.
  *
- * Одна пара на все четыре маршрута списка. Предпросмотр, шаблон и отметка о
- * выгрузке показывают и обслуживают ровно то, что делает приглашение, и прятать
- * их за другой дверью — значит однажды разойтись с ним в правах (PRD-52, 14).
+ * Одна проверка на все маршруты рецензентов: приглашение, предпросмотр, кандидаты,
+ * шаблон, отметка о выгрузке, список приглашённых и отзыв. Прятать часть из них за
+ * другой дверью значит однажды разойтись с приглашением в правах (PRD-52, 14).
  *
  * @returns `true`, если можно продолжать; иначе ответ уже отправлен.
  */
@@ -478,7 +481,7 @@ async function ensureInviteScope(req: Request, res: Response): Promise<boolean> 
     res.status(404).json({ error: "Тест не найден" });
     return false;
   }
-  if (!canGrantAccess(req.effectiveRoles ?? [], req.currentUser!.id, test)) {
+  if (!(await canEditTest(req.effectiveRoles ?? [], req.currentUser!.id, test))) {
     res.status(403).json({ error: "Forbidden" });
     return false;
   }
@@ -574,18 +577,14 @@ router.post(
 );
 
 // POST /api/tests/:id/review/invite — выдать грант `review` и разослать ссылки.
-// Гейт — своё право звать рецензентов на ЭТОТ тест. Раньше здесь стояло
-// `tests.access.grant`: выдать доступ руками и позвать рецензировать — разные
-// действия, и второе не должно тянуть за собой первое (PRD-52 раздел 14).
+// Гейт — своё право звать рецензентов на ЭТОТ тест (см. `ensureInviteScope`). Раньше
+// здесь стояло `tests.access.grant`: выдать доступ руками и позвать рецензировать —
+// разные действия, и второе не должно тянуть за собой первое (PRD-52 раздел 14).
 router.post("/:id/review/invite", requirePermission("tests.review.invite"), async (req: Request, res: Response) => {
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
   if (!rows.length) return res.status(400).json({ error: "Некого приглашать" });
   try {
-    const test = await storage.getTest(req.params.id);
-    if (!test) return res.status(404).json({ error: "Тест не найден" });
-    if (!canGrantAccess(req.effectiveRoles ?? [], req.currentUser!.id, test)) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+    if (!(await ensureInviteScope(req, res))) return;
 
     const expiresAt = typeof req.body?.linkExpiresAt === "string"
       ? new Date(req.body.linkExpiresAt)
@@ -638,13 +637,10 @@ router.post("/:id/review/invite", requirePermission("tests.review.invite"), asyn
 
 // GET /api/tests/:id/review/reviewers — кто приглашён рецензировать этот тест.
 // Показывается на первой вкладке диалога: приглашённые, а не участники прохождения.
-router.get("/:id/review/reviewers", requirePermission("tests.access.grant"), async (req: Request, res: Response) => {
+// Кто может позвать, тот видит приглашённых.
+router.get("/:id/review/reviewers", requirePermission("tests.review.invite"), async (req: Request, res: Response) => {
   try {
-    const test = await storage.getTest(req.params.id);
-    if (!test) return res.status(404).json({ error: "Тест не найден" });
-    if (!canGrantAccess(req.effectiveRoles ?? [], req.currentUser!.id, test)) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+    if (!(await ensureInviteScope(req, res))) return;
 
     const grants = (await storage.getTestAccessGrants(req.params.id))
       .filter((grant) => grant.accessLevel === "review");
@@ -676,13 +672,10 @@ router.get("/:id/review/reviewers", requirePermission("tests.access.grant"), asy
 // DELETE /api/tests/:id/review/reviewers/:userId — отозвать доступ рецензента.
 // Снимается и грант, и все живые ссылки: оставить ссылку значило бы оставить дверь
 // открытой после отзыва. Комментарии человека остаются — это история приёмки.
-router.delete("/:id/review/reviewers/:userId", requirePermission("tests.access.grant"), async (req: Request, res: Response) => {
+// Кто может позвать, тот может и отозвать.
+router.delete("/:id/review/reviewers/:userId", requirePermission("tests.review.invite"), async (req: Request, res: Response) => {
   try {
-    const test = await storage.getTest(req.params.id);
-    if (!test) return res.status(404).json({ error: "Тест не найден" });
-    if (!canGrantAccess(req.effectiveRoles ?? [], req.currentUser!.id, test)) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+    if (!(await ensureInviteScope(req, res))) return;
     // Снимается только слот рецензирования: рабочий грант (`edit`/`assign`) рядом с
     // ним отзывают в панели доступа, а не здесь.
     await storage.removeTestAccessGrant(req.params.id, req.params.userId, "review");

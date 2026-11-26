@@ -97,8 +97,8 @@ export const SCOPE_AWARE_CAPABILITIES: readonly Capability[] = [
   "questions.importExport",
   // PRD-15 BRC-27: a test owner may grant access to their own test.
   "tests.access.grant",
-  // PRD-52 раздел 14: the same scope — the owner invites reviewers to their own
-  // test; an administrator to any.
+  // PRD-52 раздел 14: whoever edits the test invites its reviewers — the owner,
+  // an `edit` grantee (direct or inherited from a folder), an administrator.
   "tests.review.invite",
   "tests.read",
   "tests.edit",
